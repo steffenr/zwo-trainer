@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "zwoTrainer",
-  "version": "1.0.0",
   "identifier": "dev.steffenr.zwotrainer",
   "build": {
     "frontendDist": "../ui"
@@ -29,10 +28,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "app",
-      "dmg"
-    ],
+    "targets": "all",
     "category": "HealthcareAndFitness",
     "shortDescription": "Indoor trainer for Zwift .zwo workouts and plans",
     "icon": [
@@ -43,7 +39,26 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "minimumSystemVersion": "11.0"
+      "minimumSystemVersion": "11.0",
+      "signingIdentity": "-"
+    },
+    "copyright": "© Steffen Rühlmann",
+    "linux": {
+      "deb": {
+        "depends": [
+          "bluez"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "bluez"
+        ]
+      }
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
     }
   }
 }
