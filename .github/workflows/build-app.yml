@@ -120,6 +120,16 @@ jobs:
           pattern: zwotrainer-*
           merge-multiple: true
 
+      - name: Flatten installers
+        # upload-artifact keeps the folder structure (…/release/bundle/dmg/x.dmg), so collect
+        # the installers into one flat folder for the release upload
+        shell: bash
+        run: |
+          mkdir -p release
+          find dist -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.msi' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \) -exec cp {} release/ \;
+          ls -la release
+          test -n "$(ls -A release)"
+
       - name: Generate release notes
         shell: bash
         run: |
@@ -146,12 +156,11 @@ jobs:
               echo "${NOTES}"
             fi
           } > notes.md
-          ls -la dist
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           name: zwoTrainer ${{ github.ref_name }}
           body_path: notes.md
-          files: dist/*
+          files: release/*
           fail_on_unmatched_files: true
