@@ -1,6 +1,6 @@
 # zwoTrainer
 
-A lightweight, fast indoor-training app for macOS that rides Zwift `.zwo` workouts and turns folders of workouts into training plans. It controls your smart trainer in ERG mode, records every ride as a FIT file and uploads it to Garmin Connect (and from there to Strava).
+A lightweight, fast indoor-training app for macOS that rides Zwift `.zwo` workouts and turns folders of workouts into training plans. It controls your smart trainer in ERG mode, records every ride as a FIT file and uploads it to Garmin Connect (and from there to Strava) and Intervals.icu.
 
 No video courses, no workout builder, no music, no subscription. You get a clean workout display and your own library.
 
@@ -26,6 +26,7 @@ Built with **Tauri 2**: a Rust core and a plain HTML/CSS/JS interface, with no N
 8. [Devices](#devices)
 9. [Virtual shifting & controllers](#virtual-shifting--controllers)
 10. [Ride history, FIT files, Garmin & Strava](#ride-history-fit-files-garmin--strava)
+    - [Intervals.icu & COROS](#intervalsicu--coros)
 11. [Riders (profiles)](#riders-profiles)
 12. [Profile sync](#profile-sync)
 13. [Settings reference](#settings-reference)
@@ -210,6 +211,20 @@ Every finished ride is saved as a **FIT file** with one lap per workout segment,
 
 **Strava:** zwoTrainer has no direct Strava connection, because since 2026 Strava requires a paid subscription from the owner of an API app. Link Strava to your Garmin account once (Garmin Connect → Settings → Connected Apps → Strava) and every ride uploaded to Garmin Connect goes on to Strava. As a fallback, use **FIT** in the history and drop the file on strava.com/upload.
 
+### Intervals.icu & COROS
+
+Settings → Connections → **More platforms**.
+
+| Platform | How | Set-up |
+|---|---|---|
+| **Intervals.icu** | **Automatic upload** (official API) | intervals.icu → Settings → *Developer Settings* → create an API key and paste it into zwoTrainer. Upload mode: Off / Manual / Automatic. |
+| **COROS** | **Manual import** into the Training Hub | Turn on *Show import button*. After a ride, zwoTrainer saves it as a **ZIP** (Training Hub only accepts ZIPs), shows it in Finder and opens the Training Hub; there choose *Activity List → Import Data*. |
+
+- **After a ride:** the summary lists Garmin, Intervals.icu and COROS with *Upload* or *Import…*; automatic uploads start by themselves.
+- **In the ride history:** a ✓ marks where a ride went, and the row's **⋯** menu sends older rides to the others.
+
+Other platforms (Wahoo, TrainingPeaks, Suunto) only accept uploads from approved partner apps, so zwoTrainer doesn't offer them. TrainingPeaks and many others can be linked in Garmin Connect, which then forwards your rides.
+
 ---
 
 ## Riders (profiles)
@@ -254,7 +269,7 @@ Keep riders in sync across Macs through a folder your cloud app already syncs. N
 |---|---|
 | **Rider** | FTP, max heart rate, weight, personal bests (5 s / 1 / 5 / 20 min), zone limits (upper limit of Z1–Z4 in % FTP) |
 | **App** | Appearance (Match system / Light / Dark), countdown beeps, auto-pause, workouts folder (*Change… / Rescan*), virtual shifting (default, difficulty, gear-ratio range, start gear), paired devices overview |
-| **Connections** | Profile sync, Garmin Connect (sign in, upload mode, manual FIT import folder), Strava note |
+| **Connections** | Profile sync, Garmin Connect (sign in, upload mode, manual FIT import folder), Strava note, more platforms (Intervals.icu API key and upload mode, COROS import button) |
 
 ---
 
@@ -284,11 +299,11 @@ The limits can be changed per rider (Settings → Rider) and drive the colours, 
 | What | Where |
 |---|---|
 | Riders, settings, progress, history | `~/Library/Application Support/dev.steffenr.zwotrainer/state.json` |
-| Garmin session tokens (owner-only file) | `…/dev.steffenr.zwotrainer/secrets.json` |
+| Garmin session tokens and the Intervals.icu API key (owner-only file) | `…/dev.steffenr.zwotrainer/secrets.json` (never synced) |
 | Ride files | `…/dev.steffenr.zwotrainer/activities/<rider>/*.fit` (plus `*.garmin.fit`) |
 | Workouts | your workouts folder; zwoTrainer only reads it, except *Move to Trash* |
 
-Nothing is sent anywhere except what you enable: Garmin uploads and the cloud folder you choose for profile sync.
+Nothing is sent anywhere except what you enable: uploads to the platforms you connect, and the cloud folder you choose for profile sync.
 
 ---
 
@@ -302,6 +317,8 @@ Nothing is sent anywhere except what you enable: Garmin uploads and the cloud fo
 | Zwift Click stops after ~1 min | Unlock it once in the Zwift phone app (see above). |
 | A workout is missing | It must be a `.zwo` file inside the workouts folder; use **Settings → App → Rescan**. |
 | Garmin upload fails | Sign out and in again under Settings → Connections; use *Manual FIT import* meanwhile. |
+| Intervals.icu says the key is wrong | Create a new key under intervals.icu → Settings → Developer Settings and paste it again (no spaces). |
+| COROS import fails | Pick the **.zip** file zwoTrainer highlighted, not the .fit; processing in Training Hub can take a few minutes. |
 | Sync says "waiting for iCloud downloads" | iCloud hasn't downloaded the files yet; zwoTrainer asks it to and picks them up on the next run. |
 
 ---

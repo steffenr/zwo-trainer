@@ -32,6 +32,7 @@ src-tauri/
   src/zwo.rs                ZWO parser (authoritative), TSS estimate, zone classification
   src/fit.rs                FIT encoder (Generic + Garmin flavour)
   src/garmin.rs             Garmin SSO window → OAuth1 → OAuth2, upload
+  src/services.rs           Intervals.icu (automatic upload, API key) and COROS (manual Training Hub import, ZIP)
   src/ble.rs                btleplug: FTMS (ERG), Cycling Power, Heart Rate, reconnect
   src/shifter.rs            Zwift Ride / Click / Play protocol (RideOn handshake, button decoding)
   tauri.conf.json           window, CSP, bundle; Info.plist (Bluetooth usage, App Nap off)
@@ -61,7 +62,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 ```
 
 - **IPC:** the UI talks to Rust only through `window.__TAURI__.core.invoke` (wrapped in `ble.js` as `invoke`) and `event.listen` (`withGlobalTauri: true`). Every new capability is a `#[tauri::command]` in `lib.rs` and must be registered in `generate_handler!`.
-- **Commands** (current set): `app_state save_profile create_profile rename_profile edit_profile delete_profile switch_profile sync_targets sync_config sync_now pick_sync_dir scan_library load_workout pick_zwo_dir save_activity reveal_in_library trash_in_library export_activity garmin_import pick_garmin_dir open_url garmin_status garmin_connect garmin_disconnect garmin_upload keep_awake ble_scan ble_connect ble_disconnect ble_current trainer_set_power trainer_free_ride trainer_resume ctrl_scan ctrl_connect ctrl_disconnect ctrl_list`.
+- **Commands** (current set): `app_state save_profile create_profile rename_profile edit_profile delete_profile switch_profile sync_targets sync_config sync_now pick_sync_dir scan_library load_workout pick_zwo_dir save_activity reveal_in_library trash_in_library export_activity garmin_import pick_garmin_dir open_url garmin_status garmin_connect garmin_disconnect garmin_upload services_status service_connect service_disconnect service_upload service_manual keep_awake ble_scan ble_connect ble_disconnect ble_current trainer_set_power trainer_free_ride trainer_resume ctrl_scan ctrl_connect ctrl_disconnect ctrl_list`.
 - **Events Rust → UI:**
   - `device-status {kind: trainer|hr|controller, connected, reconnecting, name, erg, count}`
   - `sensor {power?, cadence?, speed?, hr?}`
@@ -86,9 +87,10 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
     "settings": { "ftp", "maxHr", "weight", "zones": [55,75,90,105], "bests": {s5,m1,m5,m20},
                   "theme", "mode", "beeps", "autoPause", "overlay": {power,cadence,hr},
                   "shifting": {...}, "zwoDir", "devices": {trainer, hr, controllers[]},
-                  "garmin": {mode, autoOpen, folder} },
+                  "garmin": {mode, autoOpen, folder},
+                  "services": { "<intervals|coros>": {mode: off|manual|auto} } },
     "activePlan", "plans": { "<folderId>": { startedAt, finishedAt?, entries: { "<file>": {status, at, …} } } },
-    "history": [ {file, plan, title, at, status, doneDuration, avgPower, np, …, fitPath, garmin?} ],
+    "history": [ {file, plan, title, at, status, doneDuration, avgPower, np, …, fitPath, garmin?, services?: {<id>: {id, url, at} | {error}}} ],
     "tests": [ {at, protocol, ftp, prevFtp, details, cp, wPrime, vo2, accepted} ],
     "favorites": [ "<file>" ]
   } },
@@ -136,6 +138,12 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 - **FIT:** CRC, local message definitions and the Garmin flavour (manufacturer 1, product 1036 = Edge 500) are validated against `fitdecode`. Keep the tests green when touching `fit.rs`.
 - **Garmin:** the sign-in runs on Garmin's own page in a WebviewWindow; we only read the `ST-` ticket. Never inject credentials or scrape the password field.
 - **Sync:** the newest profile wins, history and tests are unioned, deletions use tombstones, and history `*Path` fields are relocated per Mac. Changing merge rules needs a test in `sync.rs`.
+- **Other platforms (`services.rs`):**
+  - Only platforms with **automatic upload for everyone** (Intervals.icu) plus COROS's manual import are supported, to keep the app simple.
+  - Wahoo, TrainingPeaks and Suunto need approved partner apps and were removed on purpose; don't re-add them. **Never copy another app's client ids or secrets.**
+  - Intervals.icu uses the rider's personal API key (Basic auth `API_KEY:<key>`, upload `POST /api/v1/athlete/0/activities`, multipart `file`).
+  - COROS Training Hub imports only ZIPs (`zip_stored`).
+  - Secrets are stored under `svc:<id>` in `secrets.json`; per-ride results go in `history[].services[id]`; modes live in `settings.services[id].mode`.
 - **Strava:** deliberately no Strava API integration (owner subscription requirement since 2026). Strava gets rides via Garmin's partner sync. Don't re-add an API key flow.
 - **Top bar:** it is identical on every screen, including during a ride. Don't add controls there; use Settings or a "⋯" menu.
 
