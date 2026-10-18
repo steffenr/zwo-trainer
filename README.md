@@ -1,6 +1,6 @@
 # zwoTrainer
 
-A lightweight, fast indoor-training app for macOS that rides Zwift `.zwo` workouts and turns folders of workouts into training plans. It controls your smart trainer in ERG mode, records every ride as a FIT file and uploads it to Garmin Connect (and from there to Strava) and Intervals.icu.
+A lightweight, fast indoor-training app for macOS (with Windows and Linux builds) that rides Zwift `.zwo` workouts and turns folders of workouts into training plans. It controls your smart trainer in ERG mode, records every ride as a FIT file and uploads it to Garmin Connect (and from there to Strava) and Intervals.icu.
 
 No video courses, no workout builder, no music, no subscription. You get a clean workout display and your own library.
 
@@ -39,16 +39,34 @@ Built with **Tauri 2**: a Rust core and a plain HTML/CSS/JS interface, with no N
 
 ## Install & build
 
-**Requirements:** macOS 11 or later, Rust 1.82+ (`rustup`) and the Xcode command-line tools (`xcode-select --install`).
+### Download
+
+Every release on the GitHub **Releases** page has installers for all platforms. They are unsigned, so the system asks once:
+
+| Platform | File | First launch |
+|---|---|---|
+| macOS 11+ (Apple silicon) | `zwoTrainer_<version>_aarch64.dmg` | Right-click the app → **Open** (or System Settings → Privacy & Security → **Open Anyway**), then allow Bluetooth access. |
+| macOS 11+ (Intel) | `zwoTrainer_<version>_x64.dmg` | as above |
+| Windows 10/11 (x64) | `zwoTrainer_<version>_x64-setup.exe` (or `.msi`) | SmartScreen: **More info → Run anyway**. Turn Bluetooth on in Settings; no pairing needed. |
+| Linux (x64) | `.deb`, `.rpm` or `.AppImage` | Needs BlueZ (`bluetoothd`) running; the `.deb`/`.rpm` pull it in. |
+
+zwoTrainer is developed and used on macOS; the Windows and Linux builds use the same code and are compile-checked and tested in CI on every push, but get less real-world riding.
+
+### Build from source
+
+**Requirements:** Rust 1.82+ (`rustup`) plus the platform's Tauri prerequisites:
+- **macOS 11+:** the Xcode command-line tools (`xcode-select --install`).
+- **Windows 10/11:** Microsoft C++ Build Tools and WebView2 (preinstalled on Windows 11).
+- **Linux (Debian/Ubuntu):** `sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libdbus-1-dev pkg-config`.
 
 ```bash
 cargo install tauri-cli --version "^2" --locked   # once
 cd ~/Projects/zwoTrainer
 cargo tauri dev          # run in development
-cargo tauri build        # release build
+cargo tauri build        # release build for this platform
 ```
 
-The release build ends up in `src-tauri/target/release/bundle/macos/zwoTrainer.app`, with a `.dmg` next to it in `bundle/dmg/`. Drag the app into *Applications*.
+The installers end up in `src-tauri/target/release/bundle/` (`dmg/` and `macos/zwoTrainer.app` on macOS, `nsis/` and `msi/` on Windows, `deb/`, `rpm/` and `appimage/` on Linux).
 
 On the first Bluetooth search macOS asks for Bluetooth access. If you declined, allow it later under **System Settings → Privacy & Security → Bluetooth**.
 
@@ -113,7 +131,7 @@ Browse every workout across all folders and ride anything. Free rides are saved 
 - **Row ⋯ menu:** favorite, *Show in Finder*, *Open its folder*, *Move workout to Trash…*.
 - **Folder ⋯ menu** (next to the folder title): *Show in Finder*, *Use as plan…* / *Show as collection*, *Move folder to Trash…*.
 
-Deleting always goes to the macOS Trash, so it can be restored. Favorites and plan progress that point to deleted files are cleaned up; ride history stays.
+Deleting always goes to the system Trash (the Recycle Bin on Windows), so it can be restored. Favorites and plan progress that point to deleted files are cleaned up; ride history stays.
 
 ---
 
@@ -258,7 +276,7 @@ Keep riders in sync across Macs through a folder your cloud app already syncs. N
 
 | Option | Folder used |
 |---|---|
-| iCloud Drive | `~/Library/Mobile Documents/com~apple~CloudDocs` |
+| iCloud Drive | `~/Library/Mobile Documents/com~apple~CloudDocs` (macOS) or `~\iCloudDrive` (iCloud for Windows) |
 | Dropbox | `~/Library/CloudStorage/Dropbox…` or `~/Dropbox` |
 | Nextcloud | `~/Library/CloudStorage/Nextcloud…` or `~/Nextcloud` (desktop client) |
 | Other folder… | any folder another app keeps in sync |
@@ -307,7 +325,7 @@ The limits can be changed per rider (Settings → Rider) and drive the colours, 
 
 | What | Where |
 |---|---|
-| Riders, settings, progress, history | `~/Library/Application Support/dev.steffenr.zwotrainer/state.json` |
+| Riders, settings, progress, history | `state.json` in the app data folder: `~/Library/Application Support/dev.steffenr.zwotrainer/` (macOS), `%APPDATA%\dev.steffenr.zwotrainer\` (Windows), `~/.local/share/dev.steffenr.zwotrainer/` (Linux) |
 | Garmin session tokens and the Intervals.icu API key (owner-only file) | `…/dev.steffenr.zwotrainer/secrets.json` (never synced) |
 | Ride files | `…/dev.steffenr.zwotrainer/activities/<rider>/*.fit` (plus `*.garmin.fit`) |
 | Workouts | your workouts folder; zwoTrainer only reads it, except *Move to Trash* |
@@ -320,7 +338,7 @@ Nothing is sent anywhere except what you enable: uploads to the platforms you co
 
 | Problem | Try |
 |---|---|
-| Trainer / HR not found | Close Zwift, TrainerRoad and other training apps; wake the device (pedal / wet the strap); check Bluetooth permission for zwoTrainer. |
+| Trainer / HR not found | Close Zwift, TrainerRoad and other training apps; wake the device (pedal / wet the strap); check Bluetooth permission for zwoTrainer (macOS), that Bluetooth is on (Windows) or that `bluetoothd` is running (Linux). |
 | ERG doesn't react | Make sure the trainer is connected as **trainer** (FTMS), not as a power meter; "Power only" in the ride header means no ERG. |
 | Zwift Ride buttons do nothing | Connect only the **left** controller; check the *button test* in the Shifter dialog; update the Ride firmware in the Zwift Companion app. |
 | Zwift Click stops after ~1 min | Unlock it once in the Zwift phone app (see above). |
@@ -341,5 +359,15 @@ Nothing is sent anywhere except what you enable: uploads to the platforms you co
 cd src-tauri && cargo test                                                    # unit tests
 ZWO_TEST_DIR=~/Downloads/zwo cargo test scan_real_library -- --nocapture       # parse a whole library
 ```
+
+### Releases
+
+GitHub Actions builds and publishes everything (workflows in `.github/workflows/`):
+
+- **CI** (`ci.yml`, every push to `main` and every PR): tests and clippy on Linux, tests on macOS and Windows.
+- **Release** (`release.yml`): *Actions → Release → Run workflow*, pick **patch / minor / major**. It bumps the version in `src-tauri/Cargo.toml` (the only place it lives) and `Cargo.lock`, commits `chore(release): X`, tags `vX` and pushes. Needs a repository secret **`RELEASE_PAT`** (a token with *Contents: read & write*), because pushes made with the default token don't start other workflows.
+- **Build** (`build-app.yml`, on every `v*` tag): builds macOS Apple silicon + Intel, Windows x64 and Linux x64 in parallel, then publishes one GitHub release with all installers and notes generated from the commits since the previous tag. Run it by hand (*Run workflow*) for a test build: the installers are attached to the run instead.
+
+To release by hand instead: `node scripts/sync-version.mjs 1.2.0`, commit, `git tag v1.2.0 && git push --follow-tags`.
 
 Supported ZWO elements: `SteadyState`, `SolidState`, `Warmup`, `Cooldown`, `Ramp`, `IntervalsT`, `FreeRide`, `MaxEffort`, `textevent` (inside elements and at workout level) and the cadence attributes. Ramps follow Zwift's rule: `PowerLow` is the start value and `PowerHigh` the end value.

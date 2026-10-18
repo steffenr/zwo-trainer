@@ -62,8 +62,8 @@ Always use tokens (`var(--…)`), never raw hex in components. Dark values apply
 
 | Role | Font | Size / weight |
 |---|---|---|
-| UI text | `--font`: SF Pro Text / system | 15 px / 1.45, body |
-| Numbers (ride readouts, stats) | `--num`: SF Pro Rounded / `ui-rounded` | tabular figures (`font-variant-numeric: tabular-nums`) |
+| UI text | `--font`: SF Pro Text / system (Segoe UI Variable on Windows, Noto Sans / Cantarell on Linux) | 15 px / 1.45, body |
+| Numbers (ride readouts, stats) | `--num`: SF Pro Rounded / `ui-rounded` (Segoe UI / Roboto elsewhere) | tabular figures (`font-variant-numeric: tabular-nums`) |
 | Code / paths | `ui-monospace`, SF Mono, Menlo | 12 px in `code` chips |
 
 **Scale:**
@@ -126,7 +126,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 <dialog id="modal"> · #toast · #popover
 ```
 
-- **Left padding:** 92 px, leaving room for the macOS traffic lights (overlay title bar).
+- **Left padding:** 92 px on macOS (`:root[data-os="mac"]`), leaving room for the traffic lights of the overlay title bar; 24 px on Windows and Linux, which have a normal title bar.
 - **Right side:** exactly four controls, in this order:
   1. **Devices**: Bluetooth glyph and three status dots (trainer, HR, shifter), green / amber / grey.
   2. **Ride history**: calendar with a check mark.
@@ -224,10 +224,11 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
   1. live in a "⋯" menu or a secondary position;
   2. are labelled with a trailing "…";
   3. open `confirmDialog` with a clear consequence and a red confirm button.
-  Deleting files always uses the macOS Trash.
+  Deleting files always uses the system Trash (Recycle Bin on Windows).
 - **Locked items** (later plan workouts) show 🔒 and are not clickable; explain in the tooltip.
 - **Feedback:** use a toast for background results (saved, synced, uploaded), the ride hint for actions during a ride, and inline status inside the related control (upload spinners and ✓ in the ride summary and history).
 - **Motion:** 150 ms for hover/border/opacity, 200 ms for hint and popover fades, and `.4s` for gauge arcs. No bounces and no animation during ERG-critical moments. Any new decorative animation must be disabled under `prefers-reduced-motion`.
+- **Platform wording:** labels follow the OS via `PLAT` in app.js: *Show in Finder / Explorer / Files*, *Trash / Recycle Bin*, *this Mac / PC / computer*. Never hard-code the macOS terms.
 - **Text:** plain, friendly English in sentence case. Units use a thin space in tables ("250 W", "90 %"), and durations are `m:ss` / `h:mm:ss` (`fmtTime`) or "1h 05m" (`fmtDur`).
 - **Accessibility:**
   - Icon-only buttons need a `title` and an `aria-label`.

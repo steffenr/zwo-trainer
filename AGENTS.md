@@ -4,10 +4,10 @@ Guidance for coding agents (and humans) changing this repository. User documenta
 
 ## What this is
 
-A macOS desktop app (Tauri 2) for riding Zwift `.zwo` workouts on a Bluetooth smart trainer. It covers folder-based plans, free workouts, FTP tests, rider profiles, FIT recording, Garmin upload and profile sync through a cloud folder.
+A desktop app (Tauri 2) for riding Zwift `.zwo` workouts on a Bluetooth smart trainer. It is developed on macOS and also released for Windows and Linux from the same code. It covers folder-based plans, free workouts, FTP tests, rider profiles, FIT recording, Garmin upload and profile sync through a cloud folder.
 
 **Product principles** (don't break them):
-- **Lightweight and fast:** no bundler, no Node, no frontend framework, no runtime downloads. App start and library scans of ~2,600 files must stay well under a second.
+- **Lightweight and fast:** no bundler, no Node in the app (Node is only used by CI and `scripts/sync-version.mjs`), no frontend framework, no runtime downloads. App start and library scans of ~2,600 files must stay well under a second.
 - **Not in scope:** video courses, a workout builder, music, social features or a complex frontend.
 - **Clean, calm UX:** few controls, destructive actions behind "⋯" menus and confirmations, consistent top bar (see DESIGN.md).
 - **The rider's data is theirs:** local JSON files, optional sync through a folder the user chooses, no telemetry. Garmin passwords and MFA never pass through our code.
@@ -38,6 +38,11 @@ src-tauri/
   src/shifter.rs            Zwift Ride / Click / Play protocol (RideOn handshake, button decoding)
   tauri.conf.json           window, CSP, bundle; Info.plist (Bluetooth usage, App Nap off)
   capabilities/default.json Tauri permissions (keep minimal)
+scripts/sync-version.mjs    print / set the version (Cargo.toml + Cargo.lock; tauri.conf.json has none)
+.github/workflows/
+  ci.yml                    push/PR: tests + clippy (Linux), tests (macOS, Windows)
+  release.yml               manual: bump patch/minor/major, commit, tag vX, push (needs RELEASE_PAT)
+  build-app.yml             tag v*: build macOS arm64/x64, Windows, Linux → one GitHub release
 ```
 
 ## Commands
@@ -50,7 +55,16 @@ cd src-tauri && cargo test                           # all Rust tests (must pass
 cd src-tauri && cargo clippy --all-targets           # keep warning-free
 ZWO_TEST_DIR=~/Downloads/zwo cargo test scan_real_library -- --nocapture   # parse a real library
 node --check ui/js/app.js                            # quick syntax check for edited JS modules
+node scripts/sync-version.mjs [x.y.z]                # print / set the app version
 ```
+
+## Releases & platforms
+
+- **Version:** only in `src-tauri/Cargo.toml` (`[package] version`), mirrored into `Cargo.lock` by `scripts/sync-version.mjs`. Don't add `version` back to `tauri.conf.json`.
+- **Releasing:** run the *Release* workflow (bump) → it pushes tag `vX` → *Build zwoTrainer* builds all four targets and publishes the GitHub release. The Tauri CLI comes from `npx @tauri-apps/cli@^2` in CI; there is no package.json on purpose.
+- **Installers are unsigned** (macOS uses ad-hoc signing `signingIdentity: "-"`, which keeps the Bluetooth permission stable). Adding real signing/notarisation means adding secrets to `build-app.yml`.
+- **Bundles:** `targets: "all"` → `.app`/`.dmg`, NSIS `.exe`/`.msi`, `.deb`/`.rpm`/`.AppImage`. The Linux packages depend on `bluez`.
+- **Before merging platform-touching Rust:** CI must be green on all three OSes. Locally you can type-check Windows from Linux/macOS with `rustup target add x86_64-pc-windows-msvc && cargo clippy --target x86_64-pc-windows-msvc` (`ring` needs MSVC headers; `cargo xwin` or the CI job is the easy way).
 
 The minimum Rust version is **1.82** (`Option::is_none_or` is used). Builds must stay warning-free.
 
@@ -151,6 +165,12 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
   - Secrets are stored under `svc:<id>` in `secrets.json`; per-ride results go in `history[].services[id]`; modes live in `settings.services[id].mode`.
 - **Strava:** deliberately no Strava API integration (owner subscription requirement since 2026). Strava gets rides via Garmin's partner sync. Don't re-add an API key flow.
 - **Top bar:** it is identical on every screen, including during a ride. Don't add controls there; use Settings or a "⋯" menu.
+- **Cross-platform (macOS, Windows, Linux):**
+  - **Wording:** never hard-code "Finder", "macOS Trash" or "this Mac" in the UI. Use `PLAT` in app.js (`PLAT.files`, `PLAT.trash`, `PLAT.trashFull`, `PLAT.machine`, `PLAT.bt`, `PLAT.emojiKey`); `OS` is `mac` / `win` / `linux` and is also set as `<html data-os>`.
+  - **Layout:** the 92 px traffic-light gap in the top bar applies only to `:root[data-os="mac"]`; Windows and Linux have a normal title bar (`titleBarStyle`, `hiddenTitle` and `trafficLightPosition` are macOS-only keys).
+  - **Rust:** gate OS-specific code with `#[cfg(target_os = …)]` / `#[cfg(unix)]` and keep a fallback so every target compiles (e.g. `keep_awake`: `caffeinate` on macOS, `systemd-inhibit` on Linux, the web Screen Wake Lock API on Windows; `secrets.json` 0600 only on unix; `brctl` only on macOS).
+  - **Paths:** build paths with `Path::join`, never string concatenation with `/`; library-relative ids are always `/`-separated (`library::rel_string`).
+  - **Sync folders:** `sync::targets()` knows the macOS locations (`~/Library/CloudStorage`, iCloud Drive) plus `~/iCloudDrive` (Windows), `~/Dropbox` and `~/Nextcloud`.
 
 ## Commit & PR hygiene
 
