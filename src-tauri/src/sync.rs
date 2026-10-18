@@ -22,7 +22,9 @@ use crate::state::{self, Store};
 
 pub const FORMAT: u32 = 1;
 
-/// Known cloud folders on this Mac: [{ provider, label, path, found }].
+/// Known cloud folders on this computer: [{ provider, label, path, found }].
+/// macOS: iCloud Drive and File Provider folders under ~/Library/CloudStorage;
+/// Windows: ~/iCloudDrive (iCloud for Windows); everywhere: ~/Dropbox and ~/Nextcloud.
 pub fn targets() -> Vec<Value> {
     let Some(home) = dirs::home_dir() else { return vec![] };
     let cloud = home.join("Library/CloudStorage");
@@ -37,7 +39,7 @@ pub fn targets() -> Vec<Value> {
         v.into_iter().next()
     };
     let pick = |cands: Vec<Option<PathBuf>>| cands.into_iter().flatten().find(|p| p.is_dir());
-    let icloud = pick(vec![Some(home.join("Library/Mobile Documents/com~apple~CloudDocs"))]);
+    let icloud = pick(vec![Some(home.join("Library/Mobile Documents/com~apple~CloudDocs")), Some(home.join("iCloudDrive"))]);
     let dropbox = pick(vec![in_cloud("Dropbox"), Some(home.join("Dropbox"))]);
     let nextcloud = pick(vec![in_cloud("Nextcloud"), Some(home.join("Nextcloud"))]);
     [("icloud", "iCloud Drive", icloud), ("dropbox", "Dropbox", dropbox), ("nextcloud", "Nextcloud", nextcloud)]

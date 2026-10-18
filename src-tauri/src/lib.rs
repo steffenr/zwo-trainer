@@ -416,7 +416,8 @@ async fn garmin_upload(app: State<'_, App>, path: String, name: Option<String>, 
 
 // ---------------------------------------------------------------- system
 
-/// Keep the display awake during a ride (macOS `caffeinate`), released on stop or exit.
+/// Keep the display awake during a ride, released on stop or exit: `caffeinate` on macOS,
+/// `systemd-inhibit` on Linux. (Windows uses the web Screen Wake Lock API in the UI.)
 #[tauri::command]
 fn keep_awake(app: State<'_, App>, on: bool) {
     let mut g = app.awake.lock().unwrap();
@@ -424,9 +425,22 @@ fn keep_awake(app: State<'_, App>, on: bool) {
         let _ = c.kill();
         let _ = c.wait();
     }
-    if on && cfg!(target_os = "macos") {
+    #[cfg(target_os = "macos")]
+    if on {
         *g = std::process::Command::new("caffeinate").args(["-di", "-w", &std::process::id().to_string()]).spawn().ok();
     }
+    #[cfg(target_os = "linux")]
+    if on {
+        *g = std::process::Command::new("systemd-inhibit")
+            .args(["--what=idle:sleep", "--who=zwoTrainer", "--why=Workout in progress", "--mode=block", "sleep", "infinity"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .ok();
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    let _ = on;
 }
 
 // ---------------------------------------------------------------- bluetooth
