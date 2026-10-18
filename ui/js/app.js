@@ -104,6 +104,7 @@ async function boot() {
   window.addEventListener('hashchange', route);
   if (profiles.length > 1 && !params.get('profile')) await whoIsRiding();
   await loadLibrary();
+  refreshServices();
   autoConnect();
   if (params.get('sim') === '1') { trainer.startSim(); hrm.startSim(); }
 }
@@ -421,6 +422,7 @@ function profileMenu() {
 
 /** After switching/creating/deleting: reload everything that depends on the rider. */
 async function afterProfileChange(a) {
+  refreshServices();
   applyAppState(a);
   location.hash = '#/';
   // a rider with their own saved device takes it over; otherwise keep what's connected
@@ -790,6 +792,23 @@ function startTest(id) {
 }
 
 // ------------------------------------------------------------------ history
+/** ✓ badges for platforms a ride reached. */
+function svcBadges(h) {
+  return Object.entries(h.services || {}).filter(([, v]) => v && !v.error).map(([id]) => {
+    const sv = svcCache.find((x) => x.id === id);
+    const v = h.services[id];
+    return v.url ? `<a class="sync gok" data-act="open-url" data-url="${esc(v.url)}">${esc(sv?.name || id)} ✓</a>` : `<span class="sync gok">${esc(sv?.name || id)} ✓</span>`;
+  }).join('');
+}
+
+/** "⋯" with upload / import actions for the other platforms. */
+function historyMenu(h, i) {
+  const items = svcCache.filter((sv) => svcRoute(sv) && !(h.services?.[sv.id] && !h.services[sv.id].error)).map((sv) => svcRoute(sv) === 'api'
+    ? `<button data-act="h-svc" data-i="${i}" data-id="${sv.id}">Upload to ${esc(sv.name)}</button>`
+    : `<button data-act="h-svc-man" data-i="${i}" data-id="${sv.id}">Import to ${esc(sv.name)}…</button>`).join('');
+  return items ? menuBtn(items, 'Send to other platforms') : '';
+}
+
 function renderHistory() {
   const v = $('#view');
   const rows = state.history.map((h, i) => {
@@ -799,7 +818,7 @@ function renderHistory() {
       <div class="hstat">${fmtTime(h.doneDuration || 0)}</div>
       <div class="hstat">${h.avgPower ? `${h.avgPower} W` : '–'}</div>
       <div class="hstat">${h.avgHr ? `${h.avgHr} bpm` : '–'}</div>
-      <div class="hact">${h.garmin?.url ? `<a class="sync gok" data-act="open-url" data-url="${esc(h.garmin.url)}">Garmin ✓</a>` : h.fitPath ? `<button class="btn ghost sm" data-act="h-garmin" data-i="${i}" title="Upload to Garmin Connect">Garmin</button>` : ''}${h.fitPath ? `<button class="btn ghost sm" data-act="h-fit" data-i="${i}" title="Save .fit file">FIT</button>` : ''}</div>
+      <div class="hact">${h.garmin?.url ? `<a class="sync gok" data-act="open-url" data-url="${esc(h.garmin.url)}">Garmin ✓</a>` : h.fitPath ? `<button class="btn ghost sm" data-act="h-garmin" data-i="${i}" title="Upload to Garmin Connect">Garmin</button>` : ''}${svcBadges(h)}${h.fitPath ? `<button class="btn ghost sm" data-act="h-fit" data-i="${i}" title="Save .fit file">FIT</button>${historyMenu(h, i)}` : ''}</div>
     </div>`;
   }).join('');
   v.innerHTML = `
@@ -853,6 +872,12 @@ function bindActions(root) {
       case 'trash-folder': return trashItem(t.dataset.rel, true);
       case 'open-url': return invoke('open_url', { url: t.dataset.url }).catch((err) => toast(String(err)));
       case 'h-fit': return exportFit(h.fitPath);
+      case 'h-svc-man': return manualImport(t.dataset.id, h.fitPath);
+      case 'h-svc': {
+        toast('Uploading…');
+        try { await uploadToService(h, t.dataset.id); toast('Uploaded ✓'); } catch (err) { toast(String(err.message || err)); }
+        return refreshView();
+      }
       case 'h-garmin': {
         const g = await invoke('garmin_status').catch(() => ({}));
         if (!g.connected) return garminImport(h.fitPath);
@@ -1110,7 +1135,18 @@ const modeSelect = (name, cur) => `<div class="frow sync-mode">Upload <span clas
 async function openSettings(tab = 'rider') {
   const s = state.settings;
   const themeBefore = s.theme || 'system';
-  const [garmin, targets] = await Promise.all([invoke('garmin_status').catch(() => ({})), invoke('sync_targets').catch(() => [])]);
+  const [garmin, targets, svcs] = await Promise.all([invoke('garmin_status').catch(() => ({})), invoke('sync_targets').catch(() => []), refreshServices()]);
+  const svcCard = (sv) => {
+    const mode = svcMode(sv);
+    const status = sv.connected ? `Connected${sv.account ? ` as ${esc(sv.account)}` : ''}` : sv.kind === 'manual' ? 'Manual import' : 'Not connected';
+    const action = sv.connected ? `<button class="btn ghost sm" data-a="svc-off" data-id="${sv.id}">Disconnect</button>` : '';
+    let body = '';
+    if (sv.connected) body = modeSelect(`svc-${sv.id}`, mode);
+    else if (sv.kind === 'apikey') body = `<div class="cred"><input type="password" name="key-${sv.id}" placeholder="Intervals.icu API key" autocomplete="off"><button class="btn primary sm" data-a="svc-key" data-id="${sv.id}">Connect</button></div>
+      <p class="muted small">${esc(sv.hint)} <a href="#" class="link" data-a="svc-getkey">Open Intervals.icu settings</a></p>`;
+    else if (sv.manualUrl) body = `<div class="frow sync-mode">After a ride <span class="seg-ctl" data-mode-ctl="svc-${sv.id}">${[['off', 'Off'], ['manual', 'Show import button']].map(([k, l]) => `<button type="button" data-v="${k}" class="${mode === k ? 'on' : ''}">${l}</button>`).join('')}</span></div><p class="muted small">${esc(sv.hint)}</p>`;
+    return `<div class="svc svc-ext ${sv.connected ? 'on' : ''}"><div class="svc-head"><span class="svc-logo ext">${SVC_LOGO[sv.id] || sv.name[0]}</span><div><b>${esc(sv.name)}</b><small class="muted">${status}</small></div>${action}</div>${body}</div>`;
+  };
   const sp = syncOn() ? syncCfg.provider : 'off';
   const syncRow = (id, label, path, found, extra = '') => `<label class="sync-opt ${found ? '' : 'na'}"><input type="radio" name="syncp" value="${id}" ${sp === id ? 'checked' : ''} ${found ? '' : 'disabled'}><span><b>${label}</b><small class="muted">${extra || (path ? esc(path.replace(/^\/Users\/[^/]+/, '~')) : 'not found on this Mac — install the desktop app')}</small></span></label>`;
   openModal(`
@@ -1175,6 +1211,8 @@ async function openSettings(tab = 'rider') {
           <label class="check"><input type="checkbox" name="garminAuto" ${s.garmin?.autoOpen ? 'checked' : ''}> Open the manual import after every finished workout (when not signed in)</label>
         </details>
       </div>
+      <h3 class="svc-group">More platforms</h3>
+      ${svcs.map(svcCard).join('')}
     </div>
 
     <div class="modal-actions"><button class="btn ghost" data-a="cancel">Cancel</button><button class="btn primary" data-a="save">Save</button></div>`, 'small settings');
@@ -1230,6 +1268,10 @@ async function openSettings(tab = 'rider') {
       const v = $(`[data-mode-ctl=${name}] .on`, modal)?.dataset.v;
       if (v) s[svc] = { ...(s[svc] || {}), mode: v };
     }
+    for (const sv of svcs) {
+      const v = $(`[data-mode-ctl=svc-${sv.id}] .on`, modal)?.dataset.v;
+      if (v) s.services = { ...(s.services || {}), [sv.id]: { ...(s.services?.[sv.id] || {}), mode: v } };
+    }
     s.garmin = { ...(s.garmin || {}), autoOpen: f('garminAuto').checked };
     {
       const sh = shifting();
@@ -1255,6 +1297,30 @@ async function openSettings(tab = 'rider') {
       const dir = await invoke('pick_garmin_dir').catch((err) => toast(String(err)));
       if (dir) { state = (await api.appState()).profile; return openSettings('sync'); }
       return;
+    }
+    if (a === 'svc-getkey') return invoke('open_url', { url: 'https://intervals.icu/settings' }).catch((err) => toast(String(err)));
+    if (a === 'svc-key') {
+      const id = b.dataset.id;
+      const apiKey = $(`[name=key-${id}]`, modal).value.trim();
+      if (!apiKey) return toast('Paste your API key first');
+      collect(); await api.saveState();
+      const label = b.textContent;
+      b.disabled = true; b.textContent = 'Checking…';
+      try {
+        svcCache = await invoke('service_connect', { id, apiKey });
+        state.settings.services = { ...(state.settings.services || {}), [id]: { mode: 'auto' } };
+        await api.saveState();
+        const sv = svcCache.find((x) => x.id === id);
+        toast(`${sv?.name} connected${sv?.account ? ` — ${sv.account}` : ''}`);
+        return openSettings('sync');
+      } catch (err) { b.disabled = false; b.textContent = label; return toast(String(err)); }
+    }
+    if (a === 'svc-off') {
+      const sv = svcs.find((x) => x.id === b.dataset.id);
+      if (!await confirmDialog(`Disconnect ${sv.name}?`, 'Rides will no longer be uploaded there for this rider.', 'Disconnect', true)) return openSettings('sync');
+      collect(); await api.saveState();
+      svcCache = await invoke('service_disconnect', { id: sv.id }).catch((err) => { toast(String(err)); return svcCache; });
+      return openSettings('sync');
     }
     if (a === 'sync-now') { b.disabled = true; await runSync(false); return openSettings('sync'); }
     if (a === 'garmin-on') {
@@ -1406,6 +1472,43 @@ function deviceDialog(kind) {
       await api.saveState();
     }
   }));
+}
+
+// ------------------------------------------------------------------ other platforms (Intervals.icu automatic, COROS manual import)
+let svcCache = [];
+const SVC_LOGO = { intervals: 'i', coros: 'C' };
+async function refreshServices() { svcCache = await invoke('services_status').catch(() => []); return svcCache; }
+/** Upload mode per platform: 'off' | 'manual' | 'auto' (auto only for connected platforms). */
+function svcMode(sv) {
+  const m = state.settings.services?.[sv.id]?.mode;
+  if (sv.connected) return m || 'auto';
+  if (sv.manualUrl) return m === 'auto' ? 'manual' : (m || 'off');
+  return 'off';
+}
+/** Can this platform take a ride right now, and how? → 'api' | 'manual' | null */
+const svcRoute = (sv) => (sv.connected ? 'api' : sv.manualUrl ? 'manual' : null);
+
+async function uploadToService(h, id) {
+  const sv = svcCache.find((x) => x.id === id);
+  const desc = [h.plan ? planById(h.plan)?.name : null, 'Ridden with zwoTrainer'].filter(Boolean).join(' · ');
+  try {
+    const r = await invoke('service_upload', { id, path: h.fitPath, name: h.title, description: desc });
+    (h.services ||= {})[id] = { id: r.id ?? null, url: r.url ?? null, at: new Date().toISOString() };
+    await api.saveState();
+    return r;
+  } catch (e) {
+    (h.services ||= {})[id] = { error: String(e) };
+    await api.saveState();
+    throw new Error(`${sv?.name || id}: ${e}`);
+  }
+}
+
+async function manualImport(id, path) {
+  const sv = svcCache.find((x) => x.id === id);
+  try {
+    const p = await invoke('service_manual', { id, path });
+    toast(`Drag ${p.split('/').pop()} into ${sv?.name || id}${sv?.manualZip ? ' (Import Data)' : ''}`);
+  } catch (e) { toast(String(e)); }
 }
 
 // ------------------------------------------------------------------ activities & sync
@@ -1947,8 +2050,14 @@ class Ride {
         await api.saveState();
       }
     }
-    const garmin = fit ? await invoke('garmin_status').catch(() => ({})) : {};
+    const [garmin, svcs] = fit ? await Promise.all([invoke('garmin_status').catch(() => ({})), refreshServices()]) : [{}, []];
     const autoGarmin = fit && garmin.connected && syncMode('garmin') === 'auto';
+    const rideSvcs = svcs.filter((sv) => svcRoute(sv) && svcMode(sv) !== 'off');
+    const svcRow = (sv) => {
+      const auto = sv.connected && svcMode(sv) === 'auto';
+      const act = auto ? `<span class="spinner"></span> Uploading…` : sv.connected ? `<button class="btn ghost sm" data-a="svc-up" data-id="${sv.id}">Upload</button>` : `<button class="btn ghost sm" data-a="svc-man" data-id="${sv.id}">Import…</button>`;
+      return `<div class="sl-row"><span class="svc-logo ext sm">${SVC_LOGO[sv.id]}</span><span class="sl-name">${esc(sv.name)}</span><span class="sl-state" id="svc-${sv.id}">${act}</span></div>`;
+    };
 
     const plan = this.planId && planById(this.planId);
     const next = plan && planProgress(plan).next;
@@ -1969,9 +2078,10 @@ class Ride {
           ${cell('time', fmtTime(this.ridden))}${cell('avg power', st.avgPower && `${st.avgPower} W`)}${cell('NP', st.np && `${st.np} W`)}
           ${cell('avg HR', st.avgHr && `${st.avgHr} bpm`)}${cell('cadence', st.avgCadence && `${st.avgCadence} rpm`)}${cell('energy', st.kj && `${st.kj} kJ`)}
         </div>
-        ${fit ? `<div class="sync-row">
-          <span class="svc-logo garmin sm">G</span><span id="garmin-state">${autoGarmin ? '<span class="spinner"></span> Uploading to Garmin…' : garmin.connected && syncMode('garmin') !== 'off' ? '<button class="btn ghost sm" data-a="garmin-up">Upload to Garmin</button>' : '<button class="btn ghost sm" data-a="garmin">Import to Garmin</button>'}</span>
-          <button class="btn ghost sm" data-a="fit">Save .fit</button>
+        ${fit ? `<div class="sync-list">
+          <div class="sl-row"><span class="svc-logo garmin sm">G</span><span class="sl-name">Garmin Connect</span><span class="sl-state" id="garmin-state">${autoGarmin ? '<span class="spinner"></span> Uploading…' : garmin.connected && syncMode('garmin') !== 'off' ? '<button class="btn ghost sm" data-a="garmin-up">Upload</button>' : '<button class="btn ghost sm" data-a="garmin">Import…</button>'}</span></div>
+          ${rideSvcs.map(svcRow).join('')}
+          <div class="sl-row sl-file"><span class="sl-name muted">Ride file</span><span class="sl-state"><button class="btn ghost sm" data-a="fit">Save .fit</button></span></div>
         </div>` : ''}
         ${plan ? (next ? `<div class="next-card"><div class="eyebrow">Up next in ${esc(plan.name)} ${weekDay(next)}</div><h3>${esc(next.title)}</h3><div class="meta">${fmtDur(next.duration)} · TSS ~${next.tss}</div>${miniProfile(next.profile, bounds(), { width: 420, height: 48 })}</div>`
           : `<p class="done-msg">That was the last workout — plan finished! 🎉</p>`) : ''}
@@ -1986,9 +2096,19 @@ class Ride {
       if (el) el.innerHTML = '<span class="spinner"></span> Uploading to Garmin…';
       try {
         const r = await uploadToGarmin(entry);
-        if (el?.isConnected) el.innerHTML = `<a href="#" class="link" data-a="open-url" data-url="${esc(r.url)}">On Garmin ✓</a>`;
+        if (el?.isConnected) el.innerHTML = `<a href="#" class="link" data-a="open-url" data-url="${esc(r.url)}">Uploaded ✓</a>`;
       } catch (e) {
         if (el?.isConnected) el.innerHTML = `<span class="warn-text" title="${esc(String(e))}">Upload failed</span> <button class="btn ghost sm" data-a="garmin-up">Retry</button> <button class="btn ghost sm" data-a="garmin">Manual</button>`;
+      }
+    };
+    const doSvc = async (id) => {
+      const el = $(`#svc-${id}`, modal);
+      if (el) el.innerHTML = '<span class="spinner"></span> Uploading…';
+      try {
+        const r = await uploadToService(entry, id);
+        if (el?.isConnected) el.innerHTML = r.url ? `<a href="#" class="link" data-a="open-url" data-url="${esc(r.url)}">Uploaded ✓</a>` : '<span class="ok-text">Uploaded ✓</span>';
+      } catch (err) {
+        if (el?.isConnected) el.innerHTML = `<span class="warn-text" title="${esc(String(err))}">Failed</span> <button class="btn ghost sm" data-a="svc-up" data-id="${id}">Retry</button>`;
       }
     };
     modal.querySelector('.summary').onclick = (e) => {
@@ -2005,12 +2125,15 @@ class Ride {
       if (a === 'open-url') return invoke('open_url', { url: b.dataset.url });
       if (a === 'garmin') return garminImport(fit.path);
       if (a === 'garmin-up') return doGarmin();
+      if (a === 'svc-up') return doSvc(b.dataset.id);
+      if (a === 'svc-man') return manualImport(b.dataset.id, fit.path);
       if (a === 'fit') return exportFit(fit.path);
       closeModal();
       this.close();
       if (a === 'next') startRide(next.file, plan.id);
     };
     if (autoGarmin) doGarmin();
+    for (const sv of rideSvcs) if (sv.connected && svcMode(sv) === 'auto') doSvc(sv.id);
     else if (fit && !garmin.connected && state.settings.garmin?.autoOpen) garminImport(fit.path);
   }
 
