@@ -233,6 +233,71 @@ pub async fn upload(token: &str, path: &Path) -> Result<Option<i64>, String> {
     }
 }
 
+/// Give an uploaded activity the workout's name (and a short description). Garmin derives
+/// the title from the location/sport ("Indoor Cycling") because FIT has no title field, so
+/// zwoTrainer sets it afterwards — the same call the Garmin Connect app makes when you rename.
+pub async fn rename(token: &str, id: i64, name: &str, description: &str) -> Result<(), String> {
+    let mut body = json!({ "activityId": id, "activityName": name });
+    if !description.is_empty() {
+        body["description"] = json!(description);
+    }
+    let r = http()
+        .put(format!("{CONNECT_API}/activity-service/activity/{id}"))
+        .bearer_auth(token)
+        .header("NK", "NT")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    match r.status().as_u16() {
+        200..=299 => Ok(()),
+        s => Err(format!("Garmin rename failed ({s})")),
+    }
+}
+
+/// Garmin sometimes answers an upload before the activity exists. Find it among the latest
+/// activities by its start time (± 3 min), retrying for a few seconds.
+pub async fn find_by_start(token: &str, start_unix: i64) -> Option<i64> {
+    for attempt in 0..6 {
+        if attempt > 0 {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+        let Ok(r) = http()
+            .get(format!("{CONNECT_API}/activitylist-service/activities/search/activities?start=0&limit=10"))
+            .bearer_auth(token)
+            .header("NK", "NT")
+            .send()
+            .await
+        else {
+            continue;
+        };
+        let list: Value = r.json().await.unwrap_or(Value::Null);
+        let hit = list.as_array().into_iter().flatten().find(|a| {
+            a["startTimeGMT"].as_str().and_then(gmt_to_unix).is_some_and(|t| (t - start_unix).abs() <= 180)
+        });
+        if let Some(id) = hit.and_then(|a| a["activityId"].as_i64()) {
+            return Some(id);
+        }
+    }
+    None
+}
+
+/// "2026-10-18 06:19:00" (UTC) → unix seconds.
+pub fn gmt_to_unix(s: &str) -> Option<i64> {
+    let (d, t) = s.trim().split_once([' ', 'T'])?;
+    let mut dp = d.split('-').map(|x| x.parse::<i64>());
+    let (y, m, day) = (dp.next()?.ok()?, dp.next()?.ok()?, dp.next()?.ok()?);
+    let mut tp = t.trim_end_matches('Z').split(':').map(|x| x.split('.').next().unwrap_or("0").parse::<i64>());
+    let (hh, mm, ss) = (tp.next()?.ok()?, tp.next()?.ok()?, tp.next().and_then(|x| x.ok()).unwrap_or(0));
+    // days from civil (Howard Hinnant)
+    let (y2, m2) = if m <= 2 { (y - 1, m + 9) } else { (y, m - 3) };
+    let era = y2.div_euclid(400);
+    let yoe = y2 - era * 400;
+    let doy = (153 * m2 + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    Some((era * 146_097 + doe - 719_468) * 86_400 + hh * 3600 + mm * 60 + ss)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -254,6 +319,14 @@ mod tests {
             1318622958,
         );
         assert!(h.contains("oauth_signature=\"hCtSmYh%2BiHYCEqBWrE7C7hYmtUk%3D\""), "{h}");
+    }
+
+    #[test]
+    fn gmt_parsing() {
+        assert_eq!(gmt_to_unix("1970-01-01 00:00:00"), Some(0));
+        assert_eq!(gmt_to_unix("2026-10-18 06:19:00"), Some(1_792_304_340));
+        assert_eq!(gmt_to_unix("2026-10-18T06:19:00.0Z"), Some(1_792_304_340));
+        assert_eq!(gmt_to_unix("garbage"), None);
     }
 
     #[test]
