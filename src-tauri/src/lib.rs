@@ -262,6 +262,15 @@ fn open_url(handle: tauri::AppHandle, url: String) -> Res<()> {
     handle.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
 
+/// Open an http(s) link from a plan description in the default browser.
+#[tauri::command]
+fn open_link(handle: tauri::AppHandle, url: String) -> Res<()> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("Only web links can be opened".into());
+    }
+    handle.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
+}
+
 // ---------------------------------------------------------------- other platforms
 
 #[tauri::command]
@@ -378,7 +387,7 @@ fn garmin_disconnect(app: State<'_, App>) -> Res<Value> {
 
 /// Upload the Garmin-flavoured FIT of a ride; returns { activityId, url } (id may be null while Garmin processes).
 #[tauri::command]
-async fn garmin_upload(app: State<'_, App>, path: String) -> Res<Value> {
+async fn garmin_upload(app: State<'_, App>, path: String, name: Option<String>, description: Option<String>, start: Option<i64>) -> Res<Value> {
     let profile = app.store.active_id();
     let mut rec = app.store.secret(&profile, "garmin");
     let before = rec["oauth2"].clone();
@@ -389,8 +398,20 @@ async fn garmin_upload(app: State<'_, App>, path: String) -> Res<Value> {
     let src = PathBuf::from(&path);
     let gsrc = src.with_extension("garmin.fit");
     let file = if gsrc.exists() { gsrc } else { src };
-    let id = garmin::upload(&token, &file).await?;
-    Ok(json!({ "activityId": id, "url": id.map(|i| format!("https://connect.garmin.com/modern/activity/{i}")).unwrap_or_else(|| "https://connect.garmin.com/modern/activities".into()) }))
+    let mut id = garmin::upload(&token, &file).await?;
+    // Name the activity after the workout (Garmin would call it "Indoor Cycling").
+    let mut renamed = false;
+    if let Some(name) = name.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
+        if id.is_none() {
+            if let Some(t) = start {
+                id = garmin::find_by_start(&token, t).await;
+            }
+        }
+        if let Some(i) = id {
+            renamed = garmin::rename(&token, i, name, description.as_deref().unwrap_or("")).await.is_ok();
+        }
+    }
+    Ok(json!({ "activityId": id, "renamed": renamed, "url": id.map(|i| format!("https://connect.garmin.com/modern/activity/{i}")).unwrap_or_else(|| "https://connect.garmin.com/modern/activities".into()) }))
 }
 
 // ---------------------------------------------------------------- system
@@ -513,6 +534,7 @@ pub fn run() {
             garmin_import,
             pick_garmin_dir,
             open_url,
+            open_link,
             services_status,
             service_connect,
             service_disconnect,
