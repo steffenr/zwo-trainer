@@ -1,6 +1,7 @@
 import { powerAt, segmentAt, estimateTss } from './zwo.js';
 import { ZONES, FREE_COLOR, zoneOf, zoneColor, zoneInk, fmtTime, fmtDur, miniProfile, Diagram, Gauge, ProgressRing } from './render.js';
 import { Trainer, HeartRate, Controllers, bindNative, invoke } from './ble.js';
+import { renderMarkdown, markdownSummary, markdownPlain, smartTrim } from './markdown.js';
 import { DEFAULT_SHIFTING, gearTable, virtualSpeed, targetWatts } from './vshift.js';
 import { PROTOCOLS, protocolById, isTestWorkout, evaluateGeneric, classifyTest, prepareTestWorkout, vo2max } from './tests.js';
 
@@ -37,6 +38,31 @@ const wkg = (w) => (weight() && w ? (w / weight()).toFixed(2) : null);
 const mode = () => (['workouts', 'tests'].includes(state.settings.mode) ? state.settings.mode : 'plans');
 const planById = (id) => library.plans.find((p) => p.id === id);
 const allWorkouts = () => [...library.singles, ...library.plans.flatMap((p) => p.workouts)];
+/** Folder shown under Plans? Rider override first, then folders already ridden as a plan, then
+ *  the library's guess (≥ 2 weeks = plan, otherwise a collection that lives in Workouts only). */
+function isPlan(p) {
+  if (!p) return false;
+  const o = state.settings.folderKinds?.[p.id];
+  if (o) return o === 'plan';
+  if (state.activePlan === p.id || Object.keys(state.plans?.[p.id]?.entries || {}).length) return true;
+  return p.kind !== 'collection';
+}
+const planWeeks = (p) => (p.kind === 'plan' && p.weeks ? p.weeks : null);
+const planMeta = (p) => [plural(p.count, 'workout'), planWeeks(p) ? plural(planWeeks(p), 'week') : null, fmtDur(p.duration)].filter(Boolean).join(' · ');
+/** Workouts of a collection carry fake Week01_DayNN numbers — don't show them. */
+const showWeekDay = (w) => planById(folderOf(w.file))?.kind === 'plan';
+
+/** Description block: a smart-trimmed ~300-character preview that expands to the full Markdown. */
+const DESC_PREVIEW = 300;
+function descriptionBlock(md) {
+  if (!md) return '';
+  const { text, cut } = smartTrim(markdownPlain(md), DESC_PREVIEW);
+  if (!cut) return `<section class="plan-desc card"><div class="md">${renderMarkdown(md)}</div></section>`;
+  return `<section class="plan-desc card is-collapsed">
+    <div class="md md-preview"><p>${esc(text)} <a href="#" class="md-toggle" data-act="desc-toggle">Show more</a></p></div>
+    <div class="md md-full">${renderMarkdown(md)}<p><a href="#" class="md-toggle" data-act="desc-toggle">Show less</a></p></div>
+  </section>`;
+}
 let workoutIndex = new Map();
 const workoutInfo = (file) => workoutIndex.get(file);
 const folderOf = (file) => (file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '');
@@ -498,10 +524,11 @@ function renderHome() {
         </div>` : `<div class="upnext-done"><p class="done-msg">Plan finished — well done! 🎉</p><button class="btn primary" data-act="close-plan">Pick a new plan</button></div>`}
       </section>`;
   } else {
-    hero = `<section class="hero card empty"><h1>Pick a plan</h1><p>Every folder in <code>${esc(library.root)}</code> is a plan. Start one and zwoTrainer walks you through its workouts in order. Just want to ride something? Switch to <a href="#/" data-act="mode-workouts" class="link">Workouts</a>.</p></section>`;
+    hero = `<section class="hero card empty"><h1>Pick a plan</h1><p>Folders in <code>${esc(library.root)}</code> with a weekly schedule are plans. Start one and zwoTrainer walks you through its workouts in order. Just want to ride something? Switch to <a href="#/" data-act="mode-workouts" class="link">Workouts</a>.</p></section>`;
   }
 
-  const plans = library.plans;
+  const plans = library.plans.filter(isPlan);
+  const collections = library.plans.length - plans.length;
   v.innerHTML = `
     ${hero}
     <section class="section">
@@ -510,6 +537,7 @@ function renderHome() {
         <input type="search" id="plan-search" placeholder="Filter plans…" autocomplete="off">
       </div>
       <div class="plan-grid" id="plan-grid"></div>
+      ${collections ? `<p class="muted small coll-note">${plural(collections, 'more folder')} without a weekly schedule ${collections === 1 ? 'is' : 'are'} under <a href="#/" data-act="mode-workouts" class="link">Workouts</a> as collections.</p>` : ''}
     </section>`;
   const grid = $('#plan-grid');
   const draw = (q = '') => {
@@ -519,7 +547,8 @@ function renderHome() {
       const isActive = state.activePlan === p.id;
       return `<a class="plan-card card ${isActive ? 'active' : ''}" href="#/plan/${encodeURIComponent(p.id)}">
         <div class="pc-top"><h3>${esc(p.name)}</h3>${isActive ? '<span class="badge">Active</span>' : pp.finished ? '<span class="badge ok">Done</span>' : ''}</div>
-        <div class="meta">${plural(p.count, 'workout')}${p.weeks ? ` · ${plural(p.weeks, 'week')}` : ''} · ${fmtDur(p.duration)}</div>
+        <div class="meta">${planMeta(p)}</div>
+        ${p.description ? `<p class="pc-desc">${esc(markdownSummary(p.description, 110))}</p>` : ''}
         ${pp.started ? progressBar(pp) : ''}
       </a>`;
     }).join('') || '<p class="muted">No plans match.</p>';
@@ -538,10 +567,11 @@ function workoutRow(w, { status, isNext, locked, free, showFolder, note, favTool
         : locked ? '<span class="st locked" title="Do the workouts in order">🔒</span>'
           : lastRidden.has(w.file) ? '<span class="st ridden" title="Ridden before">✓</span>' : '<span class="st"></span>';
   const folder = showFolder ? (planById(folderOf(w.file))?.name || '') : '';
-  const sub = [note, folder, w.week ? `W${w.week} · D${w.day}` : '', lastRiddenText(w.file)].filter(Boolean).join(' · ');
+  const wd = w.week && showWeekDay(w);
+  const sub = [note, folder, wd ? `W${w.week} · D${w.day}` : '', lastRiddenText(w.file)].filter(Boolean).join(' · ');
   return `<div class="wrow ${isNext ? 'is-next' : ''} ${status || ''}" data-act="preview" data-file="${esc(w.file)}" tabindex="0">
     ${icon}
-    <div class="wtitle">${!showFolder && w.week ? `<span class="wd">D${w.day}</span>` : ''}<div class="wt"><span>${esc(w.title)}</span>${sub && (showFolder || note || lastRidden.has(w.file)) ? `<small>${esc(showFolder || note ? sub : lastRiddenText(w.file))}</small>` : ''}</div></div>
+    <div class="wtitle">${!showFolder && wd ? `<span class="wd">D${w.day}</span>` : ''}<div class="wt"><span>${esc(w.title)}</span>${sub && (showFolder || note || lastRidden.has(w.file)) ? `<small>${esc(showFolder || note ? sub : lastRiddenText(w.file))}</small>` : ''}</div></div>
     <div class="wprof">${miniProfile(w.profile, bounds(), { width: 200, height: 28 })}</div>
     <div class="wdur">${fmtDur(w.duration)}</div>
     <div class="wtss">${zoneTag(w.zone)}<span title="Training Stress Score (estimate)">${w.tss ?? '–'}<small> TSS</small></span></div>
@@ -560,7 +590,7 @@ function renderPlan(id) {
 
   const groups = new Map();
   for (const w of plan.workouts) {
-    const k = w.week ? `Week ${w.week}` : 'Workouts';
+    const k = planWeeks(plan) && w.week ? `Week ${w.week}` : 'Workouts';
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(w);
   }
@@ -585,11 +615,12 @@ function renderPlan(id) {
       <div>
         <div class="eyebrow">${isActive ? 'Active plan' : 'Plan'}</div>
         <h1>${esc(plan.name)}</h1>
-        <div class="meta">${plural(plan.count, 'workout')}${plan.weeks ? ` · ${plural(plan.weeks, 'week')}` : ''} · ${fmtDur(plan.duration)} total · <code>${esc(plan.id)}</code></div>
+        <div class="meta">${planMeta(plan)} total · <code>${esc(plan.id)}</code></div>
       </div>
-      <div class="plan-actions">${actions}${menuBtn(`${pp.started ? `<button data-act="reset-plan" data-plan="${esc(plan.id)}">Reset progress…</button>` : ''}<button data-act="reveal" data-rel="${esc(plan.id)}">Show in Finder</button><hr><button class="danger-text" data-act="trash-folder" data-rel="${esc(plan.id)}">Move plan folder to Trash…</button>`, 'Plan actions')}</div>
+      <div class="plan-actions">${actions}${menuBtn(`${pp.started ? `<button data-act="reset-plan" data-plan="${esc(plan.id)}">Reset progress…</button>` : ''}<button data-act="reveal" data-rel="${esc(plan.id)}">Show in Finder</button><button data-act="set-kind" data-kind="collection" data-rel="${esc(plan.id)}">Show as collection (Workouts only)</button><hr><button class="danger-text" data-act="trash-folder" data-rel="${esc(plan.id)}">Move plan folder to Trash…</button>`, 'Plan actions')}</div>
       ${pp.started ? `<div class="plan-prog">${progressBar(pp)}<span class="muted">${pp.done} done · ${pp.skipped} skipped · ${pp.total - pp.done - pp.skipped} to go</span></div>` : ''}
     </section>
+    ${descriptionBlock(plan.description)}
     ${rows}`;
   bindActions(v);
 }
@@ -638,8 +669,8 @@ function renderWorkouts() {
         <button class="wk-folder ${wf.folder === '@fav' ? 'on' : ''}" data-folder="@fav"><span>★ Favorites</span><small>${favs().filter((f) => workoutInfo(f)).length}</small></button>
         ${recentCount ? `<button class="wk-folder ${wf.folder === '@recent' ? 'on' : ''}" data-folder="@recent"><span>Recently ridden</span><small>${recentCount}</small></button>` : ''}
         ${library.singles.length ? `<button class="wk-folder ${wf.folder === '@singles' ? 'on' : ''}" data-folder="@singles"><span>Single workouts</span><small>${library.singles.length}</small></button>` : ''}
-        <div class="wk-sep">Collections</div>
-        ${folders.map((p) => `<button class="wk-folder ${wf.folder === p.id ? 'on' : ''}" data-folder="${esc(p.id)}"><span>${esc(p.name)}</span><small>${p.count}</small></button>`).join('')}
+        ${[['Plans', folders.filter(isPlan)], ['Collections', folders.filter((p) => !isPlan(p))]].filter(([, l]) => l.length).map(([label, list]) => `<div class="wk-sep">${label}</div>
+        ${list.map((p) => `<button class="wk-folder ${wf.folder === p.id ? 'on' : ''}" data-folder="${esc(p.id)}"><span>${esc(p.name)}</span><small>${p.count}</small></button>`).join('')}`).join('')}
       </aside>
       <section class="wk-main">
         <div class="wk-head" id="wk-head"></div>
@@ -658,7 +689,7 @@ function renderWorkouts() {
     const f = wf.folder;
     const plan = !f.startsWith('@') && f ? planById(f) : null;
     $('#wk-head').innerHTML = plan
-      ? `<h2>${esc(plan.name)}</h2><code>${esc(plan.id)}</code><span class="grow"></span>${menuBtn(`<button data-act="reveal" data-rel="${esc(plan.id)}">Show in Finder</button><hr><button class="danger-text" data-act="trash-folder" data-rel="${esc(plan.id)}">Move folder to Trash…</button>`, 'Folder actions')}`
+      ? `<h2>${esc(plan.name)}</h2><span class="badge muted">${isPlan(plan) ? 'Plan' : 'Collection'}</span><span class="grow"></span>${isPlan(plan) ? `<a class="btn ghost sm" href="#/plan/${encodeURIComponent(plan.id)}" data-act="open-plan">Open plan</a>` : ''}${menuBtn(`<button data-act="reveal" data-rel="${esc(plan.id)}">Show in Finder</button>${isPlan(plan) ? `<button data-act="set-kind" data-kind="collection" data-rel="${esc(plan.id)}">Show as collection</button>` : `<button data-act="set-kind" data-kind="plan" data-rel="${esc(plan.id)}">Use as plan…</button>`}<hr><button class="danger-text" data-act="trash-folder" data-rel="${esc(plan.id)}">Move folder to Trash…</button>`, 'Folder actions')}${plan.description ? `<div class="wk-desc">${descriptionBlock(plan.description)}</div>` : ''}`
       : f === '@fav' ? `<h2>Favorites</h2><span class="muted small">Star ☆ any workout to add it · ↑ ↓ to reorder</span>`
         : f === '' ? `<h2>All workouts</h2><span class="grow"></span>${menuBtn('<button data-act="reveal" data-rel="">Show library in Finder</button>', 'Library actions')}` : '';
     bindActions($('#wk-head'));
@@ -868,6 +899,28 @@ function bindActions(root) {
       }
       case 'more': return moreMenu(t, t.dataset.file);
       case 'menu': return openMenu(t);
+      case 'md-link': return invoke('open_link', { url: t.dataset.link }).catch((err) => toast(String(err)));
+      case 'desc-toggle': {
+        const box = t.closest('.plan-desc');
+        const collapsed = box.classList.toggle('is-collapsed');
+        if (collapsed && box.getBoundingClientRect().top < 0) box.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        return;
+      }
+      case 'open-plan': location.hash = `#/plan/${encodeURIComponent(wf.folder)}`; if (mode() !== 'plans') await setMode('plans'); return;
+      case 'set-kind': {
+        const id = t.dataset.rel;
+        const p = planById(id);
+        if (t.dataset.kind === 'collection' && state.activePlan === id) {
+          if (!await confirmDialog('Show as collection?', `“${p.name}” is your active plan. It will be left (progress is kept) and only appear under Workouts.`, 'Show as collection')) return;
+          state.activePlan = null;
+        }
+        state.settings.folderKinds = { ...(state.settings.folderKinds || {}), [id]: t.dataset.kind };
+        await api.saveState();
+        toast(t.dataset.kind === 'plan' ? `“${p.name}” is now a plan` : `“${p.name}” now shows under Workouts only`);
+        if (t.dataset.kind === 'plan') { if (mode() !== 'plans') await setMode('plans'); location.hash = `#/plan/${encodeURIComponent(id)}`; return; }
+        if (location.hash.startsWith('#/plan/')) location.hash = '#/';
+        return route();
+      }
       case 'reveal': return invoke('reveal_in_library', { rel: t.dataset.rel }).catch((err) => toast(String(err)));
       case 'trash-folder': return trashItem(t.dataset.rel, true);
       case 'open-url': return invoke('open_url', { url: t.dataset.url }).catch((err) => toast(String(err)));
@@ -1057,17 +1110,20 @@ async function openPreview(file) {
   const isNext = inActive && pp.next?.file === file;
   const entry = planId && state.plans[planId]?.entries[file];
 
+  // secondary "Open plan" link whenever the workout belongs to a plan (and we're not on that plan's page)
+  const onPlanPage = location.hash === `#/plan/${encodeURIComponent(planId)}`;
+  const planLink = plan && isPlan(plan) && !onPlanPage ? `<button class="btn ghost" data-a="plan" title="Go to “${esc(plan.name)}”">Open plan</button>` : '';
   let actions = '';
-  if (mode() !== 'plans') actions = `<span class="muted small">Free ride — not counted in a plan</span><button class="btn primary" data-a="free">Ride</button>`;
-  else if (isNext) actions = `<button class="btn ghost" data-a="skip">Skip</button><button class="btn primary" data-a="start">Start workout</button>`;
-  else if (inActive) actions = `<span class="muted">${entry ? `Marked ${entry.status}` : 'Locked — finish or skip the earlier workouts first.'}</span>`;
+  if (mode() !== 'plans') actions = `<span class="muted small">Free ride — not counted in a plan</span>${planLink}<button class="btn primary" data-a="free">Ride</button>`;
+  else if (isNext) actions = `${planLink}<button class="btn ghost" data-a="skip">Skip</button><button class="btn primary" data-a="start">Start workout</button>`;
+  else if (inActive) actions = `<span class="muted">${entry ? `Marked ${entry.status}` : 'Locked — finish or skip the earlier workouts first.'}</span>${planLink}`;
   else if (plan) actions = `<span class="muted small">Part of “${esc(plan.name)}”</span><button class="btn primary" data-a="plan">Open plan</button>`;
   else actions = `<button class="btn primary" data-a="free">Ride</button>`;
 
   const lr = lastRiddenText(file);
   openModal(`
     <div class="pv-head">
-      <div><div class="eyebrow">${plan ? esc(plan.name) : 'Workout'}${info?.week ? ` · Week ${info.week} · Day ${info.day}` : ''}</div><h2>${esc(info?.title || workout.name)}</h2>
+      <div><div class="eyebrow">${plan ? esc(plan.name) : 'Workout'}${info?.week && showWeekDay(info) ? ` · Week ${info.week} · Day ${info.day}` : ''}</div><h2>${esc(info?.title || workout.name)}</h2>
       <div class="meta">${fmtDur(workout.duration)} · TSS ~${estimateTss(workout.segments)} · ${workout.segments.length} segments${workout.author ? ` · ${esc(workout.author)}` : ''}${lr ? ` · <b class="lr">${lr}</b>` : ''}</div></div>
       <div class="pv-tools">${starBtn(file)}<button class="more" data-act="more" data-file="${esc(file)}" title="More" aria-label="More actions">⋯</button><button class="icon-btn" data-a="close" aria-label="Close">✕</button></div>
     </div>
@@ -1093,7 +1149,7 @@ async function openPreview(file) {
     closeModal();
     if (a === 'start') startRide(file, active.id);
     if (a === 'free') startRide(file, null);
-    if (a === 'plan') location.hash = `#/plan/${encodeURIComponent(planId)}`;
+    if (a === 'plan') { if (mode() !== 'plans') await setMode('plans'); location.hash = `#/plan/${encodeURIComponent(planId)}`; }
     if (a === 'skip' && await confirmDialog(`Skip “${info.title}”?`, 'It will be marked as skipped and the plan moves on.', 'Skip')) markEntry(active.id, file, { status: 'skipped' });
   }));
 }
@@ -1490,9 +1546,9 @@ const svcRoute = (sv) => (sv.connected ? 'api' : sv.manualUrl ? 'manual' : null)
 
 async function uploadToService(h, id) {
   const sv = svcCache.find((x) => x.id === id);
-  const desc = [h.plan ? planById(h.plan)?.name : null, 'Ridden with zwoTrainer'].filter(Boolean).join(' · ');
+  const { name, description } = rideMeta(h);
   try {
-    const r = await invoke('service_upload', { id, path: h.fitPath, name: h.title, description: desc });
+    const r = await invoke('service_upload', { id, path: h.fitPath, name, description });
     (h.services ||= {})[id] = { id: r.id ?? null, url: r.url ?? null, at: new Date().toISOString() };
     await api.saveState();
     return r;
@@ -1522,10 +1578,25 @@ async function garminImport(path) {
   catch (e) { toast(`Garmin: ${e}`); }
 }
 
+/** Activity title + description for uploads: the workout's name as shown in zwoTrainer, and
+ *  plan · week/day as context. */
+function rideMeta(h) {
+  const plan = h.plan ? planById(h.plan) : null;
+  const info = workoutInfo(h.file);
+  const wd = plan && info?.week && showWeekDay(info) ? `W${info.week} D${info.day}` : null;
+  return {
+    name: h.title || info?.title || 'zwoTrainer workout',
+    description: [[plan?.name, wd].filter(Boolean).join(' · ') || null, 'Ridden with zwoTrainer'].filter(Boolean).join(' — '),
+  };
+}
+
+/** Ride start (unix seconds) — lets Garmin uploads find the activity while it's processing. */
+const rideStart = (h) => Math.round((h.startedAt ? Date.parse(h.startedAt) : Date.parse(h.at) - (h.doneDuration || 0) * 1000) / 1000);
+
 /** Upload a history entry to Garmin Connect; updates the entry in place and saves. */
 async function uploadToGarmin(h) {
   try {
-    const r = await invoke('garmin_upload', { path: h.fitPath });
+    const r = await invoke('garmin_upload', { path: h.fitPath, ...rideMeta(h), start: rideStart(h) });
     h.garmin = { activityId: r.activityId, url: r.url, at: new Date().toISOString() };
     await api.saveState();
     return r;
@@ -1555,6 +1626,36 @@ async function startRide(file, planId) {
     return;
   }
   ride = new Ride(workout, file, planId);
+}
+
+/** Ride-screen icons (24×24, stroke = currentColor). */
+const svgI = (d, extra = '') => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"${extra}>${d}</svg>`;
+const IC = {
+  pulse: svgI('<path d="M3 12h4l2.5-6 5 12 2.5-6h4"/>', ' style="opacity:.6"'),
+  bolt: svgI('<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>'),
+  cad: svgI('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2"/><path d="M12 10V3.5M13.7 13l4.6 4.6"/>'),
+  speed: svgI('<path d="M3.5 17a9 9 0 1 1 17 0"/><path d="m12 14 4.5-4.5"/>'),
+  heart: svgI('<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/>'),
+  target: svgI('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>'),
+  watch: svgI('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M10 2h4M19 6l-1.5 1.5"/>'),
+  flag: svgI('<path d="M5 21V4M5 4h12l-2.5 4L17 12H5"/>'),
+  layers: svgI('<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>'),
+  dial: svgI('<path d="M4.5 18a9 9 0 1 1 15 0"/><path d="m12 14 3-4"/>'),
+  bars: svgI('<path d="M5 20v-8M12 20V5M19 20v-5"/>'),
+  plug: svgI('<path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5"/>'),
+};
+const SEG_KIND = { steady: 'Steady state', warmup: 'Warm-up', cooldown: 'Cool-down', ramp: 'Ramp', on: 'Power interval', off: 'Recovery', freeride: 'Free ride', maxeffort: 'Max effort' };
+const segKind = (s) => `${s.erg === false ? 'All-out effort' : SEG_KIND[s.type] || 'Segment'}${s.reps ? ` ${s.rep}/${s.reps}` : ''}`;
+/** Fill a metric bar: frac 0…1, optional target marker (0…1) and colour. */
+function setBar(el, frac, { mark = null, color = null, band = null } = {}) {
+  if (!el) return;
+  const f = el.querySelector('.fill');
+  f.style.width = `${Math.max(0, Math.min(1, frac || 0)) * 100}%`;
+  f.style.background = color || '';
+  const m = el.querySelector('.mark');
+  if (m) { m.hidden = mark == null; if (mark != null) m.style.left = `${Math.max(0, Math.min(1, mark)) * 100}%`; }
+  const b = el.querySelector('.band');
+  if (b) { b.hidden = !band; if (band) { b.style.left = `${band[0] * 100}%`; b.style.width = `${Math.max(0.01, band[1] - band[0]) * 100}%`; } }
 }
 
 const OVERLAY = [['power', 'Power'], ['cadence', 'Cadence'], ['hr', 'Heart rate']];
@@ -1604,54 +1705,55 @@ class Ride {
     rt.hidden = false;
     r.innerHTML = `
       <div class="ride-top">
-        <div class="panel perf">
-          <div class="perf-rows">
-            <div class="pr"><span class="k">rpm</span><b id="v-cad">–</b><small id="t-cad"></small></div>
-            <div class="pr"><span class="k">km/h</span><b id="v-spd">–</b><small></small></div>
-            <div class="pr"><span class="k">bpm</span><b id="v-hr">–</b><small id="t-hr"></small></div>
+        <section class="panel live">
+          <header class="ph"><span class="ph-dot" id="live-dot"></span><b>Live</b>${IC.pulse}<span class="ph-status" id="live-status"></span></header>
+          <div class="live-body">
+            <div class="metrics">
+              <div class="metric">${IC.bolt}<div class="m-txt"><span class="k">Power</span><span class="m-val"><b id="m-pow">–</b><small>W</small><em id="m-pow-t"></em></span><div class="mbar" id="b-pow"><i class="fill"></i><i class="mark"></i></div></div></div>
+              <div class="metric">${IC.cad}<div class="m-txt"><span class="k">Cadence</span><span class="m-val"><b id="v-cad">–</b><small>rpm</small><em id="t-cad"></em></span><div class="mbar" id="b-cad"><i class="band"></i><i class="fill"></i><i class="mark"></i></div></div></div>
+              <div class="metric">${IC.speed}<div class="m-txt"><span class="k">Speed</span><span class="m-val"><b id="v-spd">–</b><small>km/h</small></span><div class="mbar" id="b-spd"><i class="fill"></i></div></div></div>
+              <div class="metric">${IC.heart}<div class="m-txt"><span class="k">Heart rate</span><span class="m-val"><b id="v-hr">–</b><small>bpm</small><em id="t-hr"></em></span><div class="mbar" id="b-hr"><i class="fill"></i></div></div></div>
+            </div>
+            <button class="gauge" id="gauge" title="Click: watts ↔ % FTP">
+              <div class="gauge-mount"></div>
+              <div class="gauge-center"><span class="k" id="g-unit">watt</span><b id="v-pow">–</b><small id="t-pow">–</small></div>
+            </button>
           </div>
-          <button class="gauge" id="gauge" title="Click: watts ↔ % FTP">
-            <div class="gauge-mount"></div>
-            <div class="gauge-center"><span class="k" id="g-unit">watt</span><b id="v-pow">–</b><small id="t-pow">–</small></div>
-          </button>
-        </div>
-        <div class="panel seg">
+        </section>
+        <section class="panel seg">
+          <header class="ph">${IC.target}<b>Current segment</b><span class="ph-status" id="seg-kind"></span></header>
           <div class="seg-ring">
             <div class="ring-mount"></div>
             <div class="ring-center">
-              <span class="k" id="s-cad"></span>
               <b id="s-target">–</b>
               <small id="s-watts"></small>
             </div>
           </div>
           <div class="gearbox" id="gearbox" hidden><button class="btn round sm" data-shift="-1" title="Shift down (−)">−</button><span id="gear-lbl">Gear</span><button class="btn round sm" data-shift="1" title="Shift up (+)">+</button></div>
-          <div class="seg-times"><div><span class="k">elapsed</span><b id="s-el">0:00</b></div><div><span class="k">segment</span><b id="s-dur">0:00</b></div><div class="rem"><span class="k">remaining</span><b id="s-rem">0:00</b></div></div>
-        </div>
-        <div class="panel next">
-          <div class="next-box">
-            <div class="k">upcoming segment</div>
-            <div class="next-rows" id="next-rows"></div>
+          <div class="stat-row">
+            <div class="stat">${IC.bolt}<div><span class="k">Target power</span><b id="s-tw">–</b></div></div>
+            <div class="stat">${IC.watch}<div><span class="k">Segment</span><b id="s-dur">0:00</b><div class="sbar"><i id="s-bar"></i></div></div></div>
+            <div class="stat rem">${IC.flag}<div><span class="k">Remaining</span><b id="s-rem">0:00</b></div></div>
           </div>
-          <div class="msg" id="msg" hidden></div>
-          <div class="intensity">
-            <span class="k">intensity</span>
-            <div class="int-ctrl">
-              <button class="btn round sm" data-int="-10" title="−10 %">«</button>
-              <button class="btn round sm" data-int="-1" title="−1 %">‹</button>
-              <b id="int-val">100%</b>
-              <button class="btn round sm" data-int="1" title="+1 %">›</button>
-              <button class="btn round sm" data-int="10" title="+10 %">»</button>
-            </div>
+        </section>
+        <section class="panel next">
+          <header class="ph">${IC.layers}<b>Next segment</b></header>
+          <div class="nx-card" id="next-card"></div>
+          <div class="stat-row">
+            <div class="stat">${IC.bolt}<div><span class="k">Target power</span><b id="n-tw">–</b></div></div>
+            <div class="stat">${IC.watch}<div><span class="k">Duration</span><b id="n-dur">–</b></div></div>
+            <div class="stat int">${IC.dial}<div><span class="k">Intensity</span><b id="int-val">100%</b><span class="int-ctrl"><button class="int-btn" data-int="-1" title="−1 % (Shift: −10 %)" aria-label="Intensity −1 %">−</button><button class="int-btn" data-int="1" title="+1 % (Shift: +10 %)" aria-label="Intensity +1 %">+</button></span></div></div>
           </div>
-        </div>
+        </section>
       </div>
       <div class="ride-diagram panel">
         <div class="dg-times">
-          <div class="wt-time"><span class="k">elapsed</span><b id="d-el">0:00</b></div>
+          <div class="wt-head"><span class="ph-mini">${IC.bars}<b>Workout</b></span><div class="wt-time"><span class="k">elapsed</span><b id="d-el">0:00</b></div></div>
           <span class="overlay-toggles" id="ov">${OVERLAY.map(([k, l]) => `<button data-ov="${k}" class="ov ov-${k} ${ov[k] ? 'on' : ''}"><i></i>${l}</button>`).join('')}</span>
           <div class="wt-time rem"><span class="k">remaining</span><b id="d-rem">${fmtTime(this.w.duration)}</b><small id="d-tot">of ${fmtTime(this.w.duration)}</small></div>
         </div>
         <div class="dg-mount"></div>
+        <div class="coach-msg" id="msg" hidden></div>
         <div class="dg-tip" id="dg-tip" hidden></div>
       </div>
       <div class="ride-controls">
@@ -1687,7 +1789,7 @@ class Ride {
       const c = e.target.closest('[data-c]');
       if (c) return this.control(c.dataset.c, c);
       const i = e.target.closest('[data-int]');
-      if (i) return this.adjust(+i.dataset.int);
+      if (i) return this.adjust(+i.dataset.int * (e.shiftKey ? 10 : 1));
       if (e.target.closest('#gauge')) { this.showPct = !this.showPct; this.render(true); }
     };
     this.onDeviceStatus();
@@ -1754,6 +1856,13 @@ class Ride {
   }
 
   onDeviceStatus() {
+    const st = $('#live-status'), dot = $('#live-dot');
+    if (st) {
+      const on = trainer.connected;
+      st.innerHTML = on ? `${IC.plug}${trainer.mode === 'sim' ? 'Simulator' : 'Connected'}` : 'No trainer';
+      st.className = `ph-status ${on ? 'ok' : ''}`;
+      dot.className = `ph-dot ${on ? 'on' : ''}`;
+    }
     const e = $('#erg-state');
     if (!e) return;
     if (!trainer.connected) { e.textContent = 'No trainer — timer only'; e.className = 'erg off'; }
@@ -1929,23 +2038,46 @@ class Ride {
       ergEl.className = vsActive ? 'erg vs' : freeLike ? 'erg off' : 'erg on';
     }
 
-    // perf panel
+    // LIVE panel
     const p = fresh('power'), c = fresh('cadence'), hr = fresh('hr'), v = fresh('speed');
+    const gt = vsActive ? this.vs.watts : allOut ? null : tw;
+    $('#m-pow').textContent = p ?? '–';
+    $('#m-pow-t').textContent = gt != null ? `/ ${gt}` : '';
+    // power bar: 0…1.5× target (marker at the target), coloured by the zone you're riding in
+    const pRef = gt || F;
+    setBar($('#b-pow'), p != null ? p / (pRef * 1.5) : 0, { mark: gt ? 1 / 1.5 : null, color: p != null ? zoneColor(p / F, bounds()) : null });
+
+    // cadence vs target (Zwift: Cadence / CadenceLow+High): green on target, amber ±5–10, red beyond 10 rpm
+    const cLo = s.cadenceLow ?? s.cadence, cHi = s.cadenceHigh ?? s.cadence;
     $('#v-cad').textContent = c != null ? Math.round(c) : '–';
-    $('#t-cad').textContent = s.cadence ?? '';
-    $('#v-spd').textContent = vsSpeed != null ? vsSpeed.toFixed(1) : v != null ? v.toFixed(1) : '–';
-    $('#v-hr').textContent = hr != null ? (this.showPct ? `${Math.round((hr / maxHr()) * 100)}%` : hr) : '–';
-    $('#t-hr').textContent = hr != null ? (this.showPct ? hr : `${Math.round((hr / maxHr()) * 100)}%`) : '';
+    $('#t-cad').textContent = cLo != null ? `target ${cLo === cHi ? cLo : `${cLo}–${cHi}`}` : '';
+    const dev = c != null && cLo != null ? (c < cLo ? cLo - c : c > cHi ? c - cHi : 0) : null;
+    const cadState = dev == null ? '' : dev > 10 ? 'bad' : dev > 5 ? 'warn' : 'good';
+    const live = this.running || !this.started;
+    $('#v-cad').classList.toggle('off-target', live && cadState === 'bad');
+    $('#t-cad').className = live ? cadState : '';
+    const CMIN = 40, CMAX = 130, cf = (x) => (x - CMIN) / (CMAX - CMIN);
+    setBar($('#b-cad'), c != null ? cf(c) : 0, {
+      mark: cLo != null && cLo === cHi ? cf(cLo) : null,
+      band: cLo != null && cLo !== cHi ? [cf(cLo), cf(cHi)] : null,
+      color: cadState === 'bad' ? 'var(--danger)' : cadState === 'warn' ? 'var(--warn)' : cadState === 'good' ? 'var(--ok)' : null,
+    });
+
+    const spd = vsSpeed ?? v;
+    $('#v-spd').textContent = spd != null ? spd.toFixed(1) : '–';
+    setBar($('#b-spd'), spd != null ? spd / 60 : 0, { color: 'var(--ok)' });
+    $('#v-hr').textContent = hr ?? '–';
+    $('#t-hr').textContent = hr != null ? `${Math.round((hr / maxHr()) * 100)}%` : '';
+    setBar($('#b-hr'), hr != null ? hr / maxHr() : 0, { color: 'var(--hrline)' });
+
     $('#g-unit').textContent = this.showPct ? '% FTP' : 'watt';
     $('#v-pow').textContent = p == null ? '–' : this.showPct ? `${Math.round((p / F) * 100)}%` : p;
-    const gt = vsActive ? this.vs.watts : allOut ? null : tw;
-    $('#t-pow').textContent = gt == null ? (s.type === 'maxeffort' ? 'max' : allOut ? 'all out' : 'free') : this.showPct ? `${Math.round((gt / F) * 100)}%` : gt;
+    $('#t-pow').textContent = gt == null ? (s.type === 'maxeffort' ? 'max' : allOut ? 'all out' : 'free') : this.showPct ? `${Math.round((gt / F) * 100)}%` : `${gt} W`;
     this.gauge.update({ target: gt, actual: p, ftp: F, bounds: bounds() });
 
-    // segment panel
+    // CURRENT SEGMENT
     const color = zoneColor(tf, bounds());
     this.ring.update(Math.min(1, inSeg / s.duration), color);
-    $('#s-cad').textContent = s.cadence ? `rpm ${s.cadence}` : '';
     if (s.p0 === null) { $('#s-target').classList.remove('range'); $('#s-target').textContent = s.type === 'maxeffort' ? 'MAX' : 'FREE'; $('#s-watts').textContent = vsActive ? 'virtual shifting' : 'ride by feel'; }
     else {
       const a = Math.round(s.p0 * 100 * this.mult()), b = Math.round(s.p1 * 100 * this.mult());
@@ -1954,16 +2086,37 @@ class Ride {
       $('#s-watts').textContent = allOut ? `aim ~${tw} W · ${vsActive ? 'shift' : 'gears'}` : `${tw} W`;
     }
     $('#s-target').style.color = zoneInk(tf, bounds());
-    $('#s-el').textContent = fmtTime(inSeg);
+    $('#s-tw').textContent = gt != null ? `${gt} W` : allOut ? 'All out' : 'Free';
+    $('#s-tw').style.color = gt != null ? zoneInk(gt / F, bounds()) : '';
     $('#s-dur').textContent = fmtTime(s.duration);
+    $('#s-bar').style.width = `${Math.min(100, (inSeg / s.duration) * 100)}%`;
+    $('#s-bar').style.background = color;
     $('#s-rem').textContent = fmtTime(Math.ceil(rem));
     $('.panel.seg').classList.toggle('closing', rem <= 5 && !!n);
 
     if (segChanged || force) {
-      $('#next-rows').innerHTML = n ? `
-        <div><span class="k">rpm</span><b>${n.cadence ?? '–'}</b></div>
-        <div><span class="k">watt</span><b style="color:${zoneInk(n.p0 === null ? null : n.p0 * this.mult(), bounds())}">${targetText(n, this.mult())}</b></div>
-        <div><span class="k">time</span><b>${fmtTime(n.duration)}</b></div>` : '<div class="muted">Last segment — finish strong</div>';
+      $('#seg-kind').textContent = segKind(s);
+      // NEXT SEGMENT
+      const card = $('#next-card');
+      if (n) {
+        const m = this.mult();
+        const nf = n.p0 === null ? null : ((n.p0 + n.p1) / 2) * m;
+        const pa = n.p0 === null ? null : Math.round(n.p0 * 100 * m), pb = n.p0 === null ? null : Math.round(n.p1 * 100 * m);
+        const wa = n.p0 === null ? null : Math.round(n.p0 * F * m), wb = n.p0 === null ? null : Math.round(n.p1 * F * m);
+        const big = n.p0 === null ? (n.type === 'maxeffort' ? 'Max effort' : 'Free ride') : n.erg === false ? 'All out' : pa === pb ? `${pa}%` : `${pa}% → ${pb}%`;
+        const watts = n.p0 === null ? 'ride by feel' : wa === wb ? `${wa} W` : `${wa} → ${wb} W`;
+        const nLo = n.cadenceLow ?? n.cadence, nHi = n.cadenceHigh ?? n.cadence;
+        card.style.setProperty('--zc', zoneColor(nf, bounds()));
+        card.innerHTML = `<div class="nc-txt"><b>${big}</b><span class="nc-w" style="color:${zoneInk(nf, bounds())}">${watts}</span></div>
+          ${nLo != null ? `<span class="nc-cad" title="Target cadence">${IC.cad}<b>${nLo === nHi ? nLo : `${nLo}–${nHi}`}</b><small>rpm</small></span>` : `<span class="nc-zone" title="${nf == null ? 'Free ride' : zoneOf(nf, bounds()).name}">${IC.bars}</span>`}`;
+        $('#n-tw').textContent = n.p0 === null ? '–' : wa === wb ? `${wa} W` : `${wa}–${wb} W`;
+        $('#n-dur').textContent = fmtTime(n.duration);
+      } else {
+        card.style.setProperty('--zc', 'var(--line-strong)');
+        card.innerHTML = '<div class="nc-txt"><b>Finish strong</b><span class="nc-w muted">no more changes</span></div>';
+        $('#n-tw').textContent = '–';
+        $('#n-dur').textContent = '–';
+      }
       $('#int-val').textContent = `${this.intensity}%`;
       $('#int-val').classList.toggle('changed', this.intensity !== 100);
       this.diagram.highlight(idx);
@@ -2032,7 +2185,7 @@ class Ride {
       fit = await invoke('save_activity', { ride: { name: title, ftp: ftp(), samples: this.samples.map(({ wall, p, c, hr, v, seg }) => ({ wall, p, c, hr, v, seg })) } })
         .catch((e) => { toast(`Could not save the ride file: ${e}`); return null; });
     }
-    const entry = { file: this.file, plan: this.planId, title, at: new Date().toISOString(), ...result, fitPath: fit?.path || null, distanceKm: fit?.summary?.distanceKm ?? null };
+    const entry = { file: this.file, plan: this.planId, title, startedAt: this.startedAt?.toISOString(), at: new Date().toISOString(), ...result, fitPath: fit?.path || null, distanceKm: fit?.summary?.distanceKm ?? null };
     state.history.unshift(entry);
     state.history = state.history.slice(0, 1000);
     if (this.planId) await markEntry(this.planId, this.file, result); else await api.saveState();
