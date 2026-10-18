@@ -117,7 +117,18 @@ async fn intervals_upload(rec: &Value, path: &Path, name: &str, description: &st
         return Err(err_text(status, &body));
     }
     let v: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
+    let v = if v.is_array() { v[0].clone() } else { v };
     let id = v["id"].as_str().map(str::to_string).or_else(|| v["id"].as_i64().map(|i| i.to_string()));
+    // Make sure the activity carries the workout's name (Intervals.icu may otherwise name it
+    // from the file); harmless if the upload parameter already did.
+    if let Some(i) = &id {
+        let _ = http()
+            .put(format!("https://intervals.icu/api/v1/activity/{i}"))
+            .header("Authorization", intervals_auth(key))
+            .json(&json!({ "name": name, "description": description }))
+            .send()
+            .await;
+    }
     Ok(json!({ "id": id, "url": id.map(|i| format!("https://intervals.icu/activities/{i}")).unwrap_or_else(|| "https://intervals.icu/activities".into()) }))
 }
 
