@@ -5,6 +5,18 @@ import { renderMarkdown, markdownSummary, markdownPlain, smartTrim } from './mar
 import { DEFAULT_SHIFTING, gearTable, virtualSpeed, targetWatts } from './vshift.js';
 import { PROTOCOLS, protocolById, isTestWorkout, evaluateGeneric, classifyTest, prepareTestWorkout, vo2max } from './tests.js';
 
+// Platform wording: zwoTrainer runs on macOS, Windows and Linux; only labels differ.
+const OS = (() => {
+  const p = String(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent).toLowerCase();
+  return p.includes('mac') ? 'mac' : p.includes('win') ? 'win' : 'linux';
+})();
+document.documentElement.dataset.os = OS;
+const PLAT = {
+  mac: { files: 'Finder', trash: 'Trash', trashFull: 'the Trash', machine: 'Mac', emojiKey: ' (⌃⌘Space)', bt: 'If macOS asked for Bluetooth access, allow it in System Settings → Privacy &amp; Security → Bluetooth.' },
+  win: { files: 'Explorer', trash: 'Recycle Bin', trashFull: 'the Recycle Bin', machine: 'PC', emojiKey: ' (Win + .)', bt: 'Make sure Bluetooth is turned on in Settings → Bluetooth &amp; devices (no pairing needed — zwoTrainer connects itself).' },
+  linux: { files: 'Files', trash: 'Trash', trashFull: 'the Trash', machine: 'computer', emojiKey: '', bt: 'Make sure Bluetooth is on and the BlueZ service (bluetoothd) is running.' },
+}[OS];
+
 // ------------------------------------------------------------------ state
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -380,7 +392,7 @@ function profileEditor(p) {
         <div class="swatches" id="pe-colors">${AVATAR_COLORS.map((c) => `<button type="button" data-c="${c}" style="--sw:${c}" class="${avatarBg({ ...p, avatar: cur }) === c ? 'on' : ''}" aria-label="${c}"></button>`).join('')}<label class="sw-custom" title="Custom colour"><input type="color" id="pe-custom" value="${avatarBg(p)}">＋</label></div>
         <div class="pe-label">Emoji <small class="muted">— shown instead of the initials</small></div>
         <div class="emoji-grid" id="pe-emoji"><button type="button" data-e="" class="${cur.emoji ? '' : 'on'}" title="Initials">${esc(initials(p.name))}</button>${AVATAR_EMOJI.map((e) => `<button type="button" data-e="${e}" class="${cur.emoji === e ? 'on' : ''}">${e}</button>`).join('')}</div>
-        <input type="text" id="pe-emoji-own" class="pe-own" placeholder="…or type / paste any emoji (⌃⌘Space)" maxlength="8" value="${cur.emoji && !AVATAR_EMOJI.includes(cur.emoji) ? esc(cur.emoji) : ''}">
+        <input type="text" id="pe-emoji-own" class="pe-own" placeholder="…or type / paste any emoji${PLAT.emojiKey}" maxlength="8" value="${cur.emoji && !AVATAR_EMOJI.includes(cur.emoji) ? esc(cur.emoji) : ''}">
       </div>
     </div>
     <div class="modal-actions"><button class="btn ghost" data-a="back">Back</button><button class="btn primary" data-a="save">Save</button></div>`, 'small');
@@ -617,7 +629,7 @@ function renderPlan(id) {
         <h1>${esc(plan.name)}</h1>
         <div class="meta">${planMeta(plan)} total · <code>${esc(plan.id)}</code></div>
       </div>
-      <div class="plan-actions">${actions}${menuBtn(`${pp.started ? `<button data-act="reset-plan" data-plan="${esc(plan.id)}">Reset progress…</button>` : ''}<button data-act="reveal" data-rel="${esc(plan.id)}">Show in Finder</button><button data-act="set-kind" data-kind="collection" data-rel="${esc(plan.id)}">Show as collection (Workouts only)</button><hr><button class="danger-text" data-act="trash-folder" data-rel="${esc(plan.id)}">Move plan folder to Trash…</button>`, 'Plan actions')}</div>
+      <div class="plan-actions">${actions}${menuBtn(`${pp.started ? `<button data-act="reset-plan" data-plan="${esc(plan.id)}">Reset progress…</button>` : ''}<button data-act="reveal" data-rel="${esc(plan.id)}">Show in ${PLAT.files}</button><button data-act="set-kind" data-kind="collection" data-rel="${esc(plan.id)}">Show as collection (Workouts only)</button><hr><button class="danger-text" data-act="trash-folder" data-rel="${esc(plan.id)}">Move plan folder to ${PLAT.trash}…</button>`, 'Plan actions')}</div>
       ${pp.started ? `<div class="plan-prog">${progressBar(pp)}<span class="muted">${pp.done} done · ${pp.skipped} skipped · ${pp.total - pp.done - pp.skipped} to go</span></div>` : ''}
     </section>
     ${descriptionBlock(plan.description)}
@@ -689,9 +701,9 @@ function renderWorkouts() {
     const f = wf.folder;
     const plan = !f.startsWith('@') && f ? planById(f) : null;
     $('#wk-head').innerHTML = plan
-      ? `<h2>${esc(plan.name)}</h2><span class="badge muted">${isPlan(plan) ? 'Plan' : 'Collection'}</span><span class="grow"></span>${isPlan(plan) ? `<a class="btn ghost sm" href="#/plan/${encodeURIComponent(plan.id)}" data-act="open-plan">Open plan</a>` : ''}${menuBtn(`<button data-act="reveal" data-rel="${esc(plan.id)}">Show in Finder</button>${isPlan(plan) ? `<button data-act="set-kind" data-kind="collection" data-rel="${esc(plan.id)}">Show as collection</button>` : `<button data-act="set-kind" data-kind="plan" data-rel="${esc(plan.id)}">Use as plan…</button>`}<hr><button class="danger-text" data-act="trash-folder" data-rel="${esc(plan.id)}">Move folder to Trash…</button>`, 'Folder actions')}${plan.description ? `<div class="wk-desc">${descriptionBlock(plan.description)}</div>` : ''}`
+      ? `<h2>${esc(plan.name)}</h2><span class="badge muted">${isPlan(plan) ? 'Plan' : 'Collection'}</span><span class="grow"></span>${isPlan(plan) ? `<a class="btn ghost sm" href="#/plan/${encodeURIComponent(plan.id)}" data-act="open-plan">Open plan</a>` : ''}${menuBtn(`<button data-act="reveal" data-rel="${esc(plan.id)}">Show in ${PLAT.files}</button>${isPlan(plan) ? `<button data-act="set-kind" data-kind="collection" data-rel="${esc(plan.id)}">Show as collection</button>` : `<button data-act="set-kind" data-kind="plan" data-rel="${esc(plan.id)}">Use as plan…</button>`}<hr><button class="danger-text" data-act="trash-folder" data-rel="${esc(plan.id)}">Move folder to ${PLAT.trash}…</button>`, 'Folder actions')}${plan.description ? `<div class="wk-desc">${descriptionBlock(plan.description)}</div>` : ''}`
       : f === '@fav' ? `<h2>Favorites</h2><span class="muted small">Star ☆ any workout to add it · ↑ ↓ to reorder</span>`
-        : f === '' ? `<h2>All workouts</h2><span class="grow"></span>${menuBtn('<button data-act="reveal" data-rel="">Show library in Finder</button>', 'Library actions')}` : '';
+        : f === '' ? `<h2>All workouts</h2><span class="grow"></span>${menuBtn(`<button data-act="reveal" data-rel="">Show library in ${PLAT.files}</button>`, 'Library actions')}` : '';
     bindActions($('#wk-head'));
   };
   const draw = () => {
@@ -979,9 +991,9 @@ function moreMenu(anchor, file) {
   pop.className = 'popover';
   pop.innerHTML = `
     <button data-p="fav">${isFav(file) ? '★ Remove from favorites' : '☆ Add to favorites'}</button>
-    <button data-p="reveal">Show in Finder</button>
+    <button data-p="reveal">Show in ${PLAT.files}</button>
     <button data-p="folder">Open its folder</button>
-    <hr><button data-p="trash" class="danger-text">Move workout to Trash…</button>`;
+    <hr><button data-p="trash" class="danger-text">Move workout to ${PLAT.trash}…</button>`;
   document.body.appendChild(pop);
   pop.style.top = `${Math.min(r.bottom + 6, window.innerHeight - pop.offsetHeight - 8)}px`;
   pop.style.left = `${Math.max(8, r.right - pop.offsetWidth)}px`;
@@ -1004,11 +1016,11 @@ function moreMenu(anchor, file) {
 async function trashItem(rel, isFolder) {
   const plan = isFolder ? planById(rel) : null;
   const info = isFolder ? null : workoutInfo(rel);
-  const title = isFolder ? `Move “${plan?.name || rel}” to the Trash?` : `Move “${info?.title || rel}” to the Trash?`;
+  const title = isFolder ? `Move “${plan?.name || rel}” to ${PLAT.trashFull}?` : `Move “${info?.title || rel}” to ${PLAT.trashFull}?`;
   const text = isFolder
-    ? `The whole folder (${plan?.count ?? '?'} workouts) is moved to the macOS Trash — you can restore it from there. Plan progress for this folder is removed; your ride history stays.`
-    : 'The .zwo file is moved to the macOS Trash — you can restore it from there. Your ride history stays.';
-  if (!await confirmDialog(title, text, 'Move to Trash', true)) return;
+    ? `The whole folder (${plan?.count ?? '?'} workouts) is moved to ${PLAT.trashFull} — you can restore it from there. Plan progress for this folder is removed; your ride history stays.`
+    : `The .zwo file is moved to ${PLAT.trashFull} — you can restore it from there. Your ride history stays.`;
+  if (!await confirmDialog(title, text, `Move to ${PLAT.trash}`, true)) return;
   try { await invoke('trash_in_library', { rel }); } catch (e) { return toast(String(e)); }
   const inFolder = (f) => (isFolder ? f.startsWith(`${rel}/`) : f === rel);
   state.favorites = favs().filter((f) => !inFolder(f));
@@ -1020,7 +1032,7 @@ async function trashItem(rel, isFolder) {
     for (const ps of Object.values(state.plans)) if (ps.entries?.[rel]) delete ps.entries[rel];
   }
   await api.saveState();
-  toast('Moved to Trash');
+  toast(`Moved to ${PLAT.trash}`);
   if (isFolder && location.hash.startsWith('#/plan/')) location.hash = '#/';
   await loadLibrary();
 }
@@ -1204,7 +1216,7 @@ async function openSettings(tab = 'rider') {
     return `<div class="svc svc-ext ${sv.connected ? 'on' : ''}"><div class="svc-head"><span class="svc-logo ext">${SVC_LOGO[sv.id] || sv.name[0]}</span><div><b>${esc(sv.name)}</b><small class="muted">${status}</small></div>${action}</div>${body}</div>`;
   };
   const sp = syncOn() ? syncCfg.provider : 'off';
-  const syncRow = (id, label, path, found, extra = '') => `<label class="sync-opt ${found ? '' : 'na'}"><input type="radio" name="syncp" value="${id}" ${sp === id ? 'checked' : ''} ${found ? '' : 'disabled'}><span><b>${label}</b><small class="muted">${extra || (path ? esc(path.replace(/^\/Users\/[^/]+/, '~')) : 'not found on this Mac — install the desktop app')}</small></span></label>`;
+  const syncRow = (id, label, path, found, extra = '') => `<label class="sync-opt ${found ? '' : 'na'}"><input type="radio" name="syncp" value="${id}" ${sp === id ? 'checked' : ''} ${found ? '' : 'disabled'}><span><b>${label}</b><small class="muted">${extra || (path ? esc(path.replace(/^\/Users\/[^/]+/, '~')) : `not found on this ${PLAT.machine} — install the desktop app`)}</small></span></label>`;
   openModal(`
     <div class="pv-head"><h2>Settings <small class="muted">· ${esc(state.name)}</small></h2><button class="icon-btn" data-a="close" aria-label="Close">✕</button></div>
     <div class="tabs" id="set-tabs">${[['rider', 'Rider'], ['app', 'App'], ['sync', 'Connections']].map(([k, l]) => `<button data-tab="${k}" class="${tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>
@@ -1246,23 +1258,23 @@ async function openSettings(tab = 'rider') {
     <div class="tab-pane" data-pane="sync" ${tab === 'sync' ? '' : 'hidden'}>
       <div class="svc">
         <div class="svc-head"><span class="svc-logo sync"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/></svg></span>
-          <div><b>Profile sync</b><small class="muted" id="sync-status">${syncOn() ? `${SYNC_LABEL[sp]} · ${syncCfg.lastError ? `<span class="warn-text">${esc(syncCfg.lastError)}</span>` : syncCfg.lastSync ? `last synced ${agoText(syncCfg.lastSync)}` : 'not synced yet'}` : 'Off — riders stay on this Mac'}</small></div>
+          <div><b>Profile sync</b><small class="muted" id="sync-status">${syncOn() ? `${SYNC_LABEL[sp]} · ${syncCfg.lastError ? `<span class="warn-text">${esc(syncCfg.lastError)}</span>` : syncCfg.lastSync ? `last synced ${agoText(syncCfg.lastSync)}` : 'not synced yet'}` : `Off — riders stay on this ${PLAT.machine}`}</small></div>
           ${syncOn() ? '<button class="btn ghost sm" data-a="sync-now">Sync now</button>' : ''}</div>
         <div class="sync-opts" id="sync-opts">
-          ${syncRow('off', 'Off', null, true, 'Keep riders on this Mac only')}
+          ${syncRow('off', 'Off', null, true, `Keep riders on this ${PLAT.machine} only`)}
           ${targets.map((t) => syncRow(t.provider, t.label, t.path, t.found)).join('')}
           ${syncRow('folder', 'Other folder…', sp === 'folder' ? syncCfg.dir : null, true, sp === 'folder' ? esc(syncCfg.dir) : 'Any folder that another app keeps in sync')}
         </div>
-        <p class="muted small">Syncs all riders (avatar, FTP &amp; zones, plan progress, favorites, ride history, FTP tests) and the ride FIT files through a <code>zwoTrainer</code> folder. Paired devices, the workouts folder and the Garmin sign-in stay on each Mac. The newest change wins; ride history is merged.</p>
+        <p class="muted small">Syncs all riders (avatar, FTP &amp; zones, plan progress, favorites, ride history, FTP tests) and the ride FIT files through a <code>zwoTrainer</code> folder. Paired devices, the workouts folder and the Garmin sign-in stay on each ${PLAT.machine}. The newest change wins; ride history is merged.</p>
       </div>
       <div class="svc">
         <div class="svc-head"><span class="svc-logo garmin">G</span><div><b>Garmin Connect</b><small class="muted">${garmin.connected ? `Signed in${garmin.name ? ` as ${esc(garmin.name)}` : ''}` : 'Not signed in'}</small></div>
           ${garmin.connected ? '<button class="btn ghost sm" data-a="garmin-off">Sign out</button>' : '<button class="btn garmin" data-a="garmin-on">Sign in to Garmin</button>'}</div>
-        ${garmin.connected ? modeSelect('garminMode', syncMode('garmin')) : '<p class="muted small">Sign in once on Garmin\'s own page (MFA supported). zwoTrainer keeps only a session token for this rider on this Mac — never your password — and uploads every finished ride (Edge identity: Training Effect, VO2max, challenges).</p>'}
+        ${garmin.connected ? modeSelect('garminMode', syncMode('garmin')) : `<p class="muted small">Sign in once on Garmin's own page (MFA supported). zwoTrainer keeps only a session token for this rider on this ${PLAT.machine} — never your password — and uploads every finished ride (Edge identity: Training Effect, VO2max, challenges).</p>`}
         <p class="muted small"><b>Strava:</b> link Strava to your Garmin account once (Garmin Connect → Settings → Connected Apps → Strava) and rides go on to Strava from there.</p>
         <details class="adv">
           <summary>Manual FIT import (fallback)</summary>
-          <p class="muted small">Saves the FIT file into this folder, shows it in Finder and opens Garmin Connect's import page.</p>
+          <p class="muted small">Saves the FIT file into this folder, shows it in ${PLAT.files} and opens Garmin Connect's import page.</p>
           <div class="folder-row"><code>${esc(s.garmin?.folder || 'Downloads')}</code><button class="btn ghost sm" data-a="garmin-dir">Change…</button></div>
           <label class="check"><input type="checkbox" name="garminAuto" ${s.garmin?.autoOpen ? 'checked' : ''}> Open the manual import after every finished workout (when not signed in)</label>
         </details>
@@ -1497,7 +1509,7 @@ function deviceDialog(kind) {
           ? found.map((f) => `<button class="dev" data-id="${esc(f.id)}" data-name="${esc(f.name)}"><span>${esc(f.name)}${saved?.id === f.id ? ' <small class="muted">· last used</small>' : ''}</span><small class="muted">${f.rssi != null ? `${f.rssi} dBm` : ''}</small></button>`).join('')
           : '<p class="muted">Nothing found. Wake the device (pedal / wet the strap) and search again.</p>';
       } catch (e) {
-        list.innerHTML = `<p class="warn-text">${esc(String(e))}</p><p class="muted small">If macOS asked for Bluetooth access, allow it in System Settings → Privacy &amp; Security → Bluetooth.</p>`;
+        list.innerHTML = `<p class="warn-text">${esc(String(e))}</p><p class="muted small">${PLAT.bt}</p>`;
       }
     };
     list.onclick = async (e) => {
@@ -1872,6 +1884,8 @@ class Ride {
 
   async wake() {
     invoke('keep_awake', { on: true }).catch(() => {});
+    // Windows (WebView2) has no helper process for this — use the Screen Wake Lock API
+    if (OS === 'win' && navigator.wakeLock && !this.wakeLock) this.wakeLock = await navigator.wakeLock.request('screen').catch(() => null);
   }
 
   mult() { return this.intensity / 100; }
@@ -2293,6 +2307,8 @@ class Ride {
   close() {
     clearInterval(this.loop);
     invoke('keep_awake', { on: false }).catch(() => {});
+    this.wakeLock?.release().catch(() => {});
+    this.wakeLock = null;
     $('#ride').hidden = true;
     $('#ride').innerHTML = '';
     $('#ride').classList.remove('paused');
