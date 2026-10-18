@@ -3,12 +3,13 @@ mod fit;
 mod garmin;
 mod library;
 mod shifter;
+mod services;
 mod state;
 mod sync;
 mod zwo;
 
 use serde_json::{json, Value};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{Manager, State};
@@ -254,10 +255,67 @@ async fn pick_garmin_dir(handle: tauri::AppHandle, app: State<'_, App>) -> Res<O
 
 #[tauri::command]
 fn open_url(handle: tauri::AppHandle, url: String) -> Res<()> {
-    if !url.starts_with("https://connect.garmin.com/") {
+    const ALLOWED: &[&str] = &["https://connect.garmin.com/", "https://intervals.icu/", "https://t.coros.com/", "https://www.strava.com/"];
+    if !ALLOWED.iter().any(|p| url.starts_with(p)) {
         return Err("URL not allowed".into());
     }
     handle.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------- other platforms
+
+#[tauri::command]
+fn services_status(app: State<'_, App>) -> Vec<Value> {
+    let profile = app.store.active_id();
+    services::status(|k| app.store.secret(&profile, k))
+}
+
+/// Connect Intervals.icu with the rider's personal API key.
+#[tauri::command]
+async fn service_connect(app: State<'_, App>, id: String, api_key: Option<String>) -> Res<Vec<Value>> {
+    let s = services::get(&id)?;
+    let profile = app.store.active_id();
+    let rec = match s.kind {
+        services::Kind::ApiKey => services::intervals_connect(api_key.as_deref().unwrap_or("")).await?,
+        services::Kind::Manual => return Err(format!("{} has no account connection — use the manual import", s.name)),
+    };
+    app.store.set_secret(&profile, &services::secret_key(&id), rec)?;
+    Ok(services_status(app))
+}
+
+#[tauri::command]
+fn service_disconnect(app: State<'_, App>, id: String) -> Res<Vec<Value>> {
+    services::get(&id)?;
+    app.store.set_secret(&app.store.active_id(), &services::secret_key(&id), json!({}))?;
+    Ok(services_status(app))
+}
+
+/// Upload a stored ride to a connected platform → { id, url }.
+#[tauri::command]
+async fn service_upload(app: State<'_, App>, id: String, path: String, name: String, description: String) -> Res<Value> {
+    let s = services::get(&id)?;
+    let profile = app.store.active_id();
+    let rec = app.store.secret(&profile, &services::secret_key(&id));
+    services::upload(s, &rec, Path::new(&path), &name, &description).await
+}
+
+/// Manual route: put the FIT (COROS: a ZIP) into the export folder, show it in Finder and open
+/// the platform's upload page for drag & drop.
+#[tauri::command]
+fn service_manual(handle: tauri::AppHandle, app: State<'_, App>, id: String, path: String) -> Res<String> {
+    let s = services::get(&id)?;
+    let url = s.manual_url.ok_or_else(|| format!("{} has no manual upload page", s.name))?;
+    let folder = app.store.active_profile()["settings"]["garmin"]["folder"]
+        .as_str()
+        .filter(|f| !f.is_empty())
+        .map(state::expand)
+        .or_else(dirs::download_dir)
+        .ok_or("No folder for ride files")?;
+    let dst = services::prepare_manual(s, Path::new(&path), &folder)?;
+    let opener = handle.opener();
+    let _ = opener.reveal_item_in_dir(&dst);
+    opener.open_url(url, None::<&str>).map_err(|e| e.to_string())?;
+    Ok(dst.display().to_string())
 }
 
 // ---------------------------------------------------------------- garmin
@@ -455,6 +513,11 @@ pub fn run() {
             garmin_import,
             pick_garmin_dir,
             open_url,
+            services_status,
+            service_connect,
+            service_disconnect,
+            service_upload,
+            service_manual,
             garmin_status,
             garmin_connect,
             garmin_disconnect,
