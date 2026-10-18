@@ -628,3 +628,21 @@ details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; fon
   .ride .seg-ring { max-width: clamp(210px, 15.000vw, 336px); }
   .ride .k { font-size: clamp(11px, 0.786vw, 15px); }
 }
+
+/* ---------- other platforms (Intervals.icu, Wahoo, TrainingPeaks, Suunto, COROS) ---------- */
+.svc-group { margin: 22px 0 -4px; font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.svc-ext { padding: 12px 14px; margin-top: 10px; }
+.svc-ext .svc-head small { font-size: 12.5px; }
+.svc-ext > p, .svc-ext > .cred, .svc-ext > .sync-mode { margin: 10px 0 0; }
+.svc-ext.on { border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+.svc-ext .cred { grid-template-columns: minmax(0, 1fr) auto; }
+.svc-ext .cred input { font: inherit; font-size: 14px; color: var(--text); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 9px; padding: 7px 10px; }
+.svc-logo.ext { background: var(--surface-3); color: var(--text); font-size: 13px; font-weight: 800; letter-spacing: -.02em; outline: 1px solid var(--line-strong); }
+.svc-logo.sm { width: 26px; height: 26px; border-radius: 7px; font-size: 11px; }
+.sync-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 14px; overflow: hidden; }
+.sl-row { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 10px; padding: 8px 12px; min-height: 44px; }
+.sl-row + .sl-row { border-top: 1px solid var(--line); }
+.sl-row.sl-file { grid-template-columns: 1fr auto; }
+.sl-name { font-weight: 600; font-size: 14px; }
+.sl-state { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.hact .menu-wrap .more { width: 28px; height: 28px; }
