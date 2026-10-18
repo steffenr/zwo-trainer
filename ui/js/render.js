@@ -102,8 +102,20 @@ export class Diagram {
     this.labels = labels;
     const pct = (v) => `${((v / W) * 100).toFixed(3)}%`;
 
-    // grid: FTP line + zone boundaries
-    for (const b of this.bounds) el('line', { x1: 0, x2: W, y1: y(b / 100), y2: y(b / 100), class: 'grid' }, svg);
+    // grid: watt axis (HTML labels, nice steps) + FTP line
+    const maxW = maxP * (this.ftp || 250);
+    const step = [20, 25, 40, 50, 80, 100, 150, 200, 250, 500].find((st) => maxW / st <= 5) || 500;
+    const axis = document.createElement('div');
+    axis.className = 'dg-yaxis';
+    for (let w = 0; w <= maxW; w += step) {
+      const f = w / (this.ftp || 250);
+      if (w > 0) el('line', { x1: 0, x2: W, y1: y(f), y2: y(f), class: 'grid' }, svg);
+      const lab = document.createElement('span');
+      lab.textContent = w;
+      lab.style.top = `${(y(f) / H) * 100}%`;
+      axis.append(lab);
+    }
+    stage.append(axis);
     el('line', { x1: 0, x2: W, y1: y(1), y2: y(1), class: 'grid ftp' }, svg);
 
     this.segEls = this.w.segments.map((s, i) => {
@@ -203,7 +215,7 @@ export class Gauge {
     const svg = el('svg', { viewBox: `0 0 ${S} ${S}`, class: 'gauge-svg' }, container);
     this.svg = svg;
     el('path', { d: this.arc(86, 0, 1), class: 'g-track' }, svg);
-    el('path', { d: this.arc(68, 0, 1), class: 'g-track inner' }, svg);
+    this.innerTrack = el('path', { d: this.arc(68, 0, 1), class: 'g-track inner' }, svg);
     this.target = el('path', { d: '', class: 'g-target' }, svg);
     this.actual = el('path', { d: '', class: 'g-actual' }, svg);
     this.ftpTick = el('line', { class: 'g-ftp' }, svg);
@@ -241,8 +253,11 @@ export class ProgressRing {
   constructor(container) {
     this.g = new Gauge(container);
     this.g.svg.classList.add('progress-svg');
+    // a progress ring has a single line: segment progress (the watt gauge's inner
+    // "actual power" track, FTP tick and actual arc don't belong here)
     this.g.ftpTick.remove();
     this.g.actual.remove();
+    this.g.innerTrack.remove();
   }
   update(frac, color) {
     this.g.target.setAttribute('d', frac > 0 ? this.g.arc(86, 0, frac) : '');
