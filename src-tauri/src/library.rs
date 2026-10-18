@@ -32,10 +32,36 @@ pub struct Plan {
     pub name: String,
     pub parent: Option<String>,
     pub count: usize,
+    /// number of distinct weeks — only for real plans (see `kind`)
     pub weeks: Option<usize>,
     pub duration: u32,
+    /// "plan" (workouts spread over ≥ 2 weeks) or "collection" (just a set of workouts, e.g.
+    /// WhatsOnZwift collections exported as Week01_Day01…Day39). The UI lets riders override it.
+    pub kind: &'static str,
+    /// Markdown description from `<folder>.md` (or README.md / the only .md in the folder).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     pub workouts: Vec<WorkoutInfo>,
 }
+
+/// Plan vs. collection: a schedule needs at least two different weeks.
+pub fn folder_kind(workouts: &[WorkoutInfo]) -> &'static str {
+    let weeks: BTreeSet<u32> = workouts.iter().filter_map(|w| w.week).collect();
+    if weeks.len() >= 2 { "plan" } else { "collection" }
+}
+
+/// Pick the folder's description file: `<folder>.md`, else README.md, else the only .md.
+fn description_file(folder_name: &str, md_files: &[String]) -> Option<String> {
+    let lower = |s: &str| s.to_ascii_lowercase();
+    md_files
+        .iter()
+        .find(|f| lower(f) == lower(&format!("{folder_name}.md")))
+        .or_else(|| md_files.iter().find(|f| lower(f) == "readme.md"))
+        .or_else(|| (md_files.len() == 1).then(|| &md_files[0]))
+        .cloned()
+}
+
+const MAX_DESCRIPTION: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Library {
@@ -189,6 +215,7 @@ impl Cache {
     fn walk(&self, abs: &Path, rel: &Path, plans: &mut Vec<Plan>, singles: &mut Vec<WorkoutInfo>) {
         let Ok(rd) = std::fs::read_dir(abs) else { return };
         let mut files = vec![];
+        let mut md_files = vec![];
         let mut dirs = vec![];
         for e in rd.flatten() {
             let name = e.file_name().to_string_lossy().to_string();
@@ -200,6 +227,8 @@ impl Cache {
                 dirs.push(name);
             } else if ft.is_file() && name.to_ascii_lowercase().ends_with(".zwo") {
                 files.push(name);
+            } else if ft.is_file() && name.to_ascii_lowercase().ends_with(".md") {
+                md_files.push(name);
             }
         }
         files.sort_by(|a, b| natural_cmp(a, b));
@@ -219,13 +248,21 @@ impl Cache {
         } else if !workouts.is_empty() {
             let weeks: BTreeSet<u32> = workouts.iter().filter_map(|w| w.week).collect();
             let parent = rel.parent().map(rel_string).filter(|p| !p.is_empty());
+            let folder_name = rel.file_name().and_then(|s| s.to_str()).unwrap_or(&rel_s).to_string();
+            let kind = folder_kind(&workouts);
+            let description = description_file(&folder_name, &md_files)
+                .and_then(|f| std::fs::read_to_string(abs.join(f)).ok())
+                .map(|t| t.chars().take(MAX_DESCRIPTION).collect::<String>().trim().to_string())
+                .filter(|t| !t.is_empty());
             plans.push(Plan {
-                name: pretty_folder(rel.file_name().and_then(|s| s.to_str()).unwrap_or(&rel_s)),
+                name: pretty_folder(&folder_name),
                 id: rel_s,
                 parent,
                 count: workouts.len(),
-                weeks: if weeks.is_empty() { None } else { Some(weeks.len()) },
+                weeks: if kind == "plan" { Some(weeks.len()) } else { None },
                 duration: workouts.iter().map(|w| w.duration).sum(),
+                kind,
+                description,
                 workouts,
             });
         }
@@ -248,6 +285,26 @@ pub fn load(root: &Path, rel: &str) -> Result<LoadedWorkout, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn wi(week: Option<u32>) -> WorkoutInfo {
+        WorkoutInfo { file: String::new(), week, day: Some(1), title: String::new(), name: String::new(), duration: 60, tss: 1, zone: 2, zone_time: [0; 5], profile: vec![] }
+    }
+
+    #[test]
+    fn plan_or_collection() {
+        assert_eq!(folder_kind(&[wi(Some(1)), wi(Some(2))]), "plan");
+        assert_eq!(folder_kind(&[wi(Some(1)), wi(Some(1)), wi(Some(1))]), "collection");
+        assert_eq!(folder_kind(&[wi(None), wi(None)]), "collection");
+    }
+
+    #[test]
+    fn description_pick() {
+        let md = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(description_file("rec", &md(&["notes.md", "Rec.md"])).as_deref(), Some("Rec.md"));
+        assert_eq!(description_file("rec", &md(&["README.md", "x.md"])).as_deref(), Some("README.md"));
+        assert_eq!(description_file("rec", &md(&["only.md"])).as_deref(), Some("only.md"));
+        assert_eq!(description_file("rec", &md(&["a.md", "b.md"])), None);
+    }
 
     #[test]
     fn natural_sort() {
