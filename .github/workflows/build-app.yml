@@ -1,3 +1,4 @@
+# zwoTrainer: build all platforms and publish the release
 name: Build zwoTrainer
 
 # Builds the desktop app for macOS (Apple silicon + Intel), Windows and Linux.

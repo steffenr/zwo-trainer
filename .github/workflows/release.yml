@@ -1,3 +1,4 @@
+# zwoTrainer: one-click release (bump, tag, push)
 name: Release
 
 # One-click release. Run it from Actions -> "Release" -> "Run workflow" and pick a semantic
