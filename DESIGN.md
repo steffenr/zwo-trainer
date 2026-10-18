@@ -87,8 +87,8 @@ Headings use `letter-spacing: -0.01em`.
 | Watt gauge value | 50 px |
 | Segment target | 40 px (range 30 px) |
 | rpm / km/h / bpm | 34 px |
-| Segment remaining | 30 px |
-| Segment elapsed / duration, upcoming values | 22 px |
+| Segment elapsed / duration / remaining (equal) | 28 px |
+| Upcoming values | 22 px |
 | Intensity | 20 px |
 
 The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 0.6rem + 1.5vw, 56px)` and its total uses `clamp(12px, 0.4rem + 0.5vw, 20px)`.
@@ -141,13 +141,26 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 ### Ride screen
 
 ```
-[ perf panel: rpm/km/h/bpm + watt gauge ] [ segment ring + elapsed/segment/remaining ] [ upcoming + intensity ]
-[ chart header: ELAPSED 0:00 ······ overlay toggles ······ REMAINING 29:58 of 30:00 ]
-[ workout chart (fills remaining height), HTML labels under the bars ]
+┌ ● LIVE ∿            CONNECTED ┐ ┌ ◎ CURRENT SEGMENT   STEADY STATE ┐ ┌ ◇ NEXT SEGMENT ──────────────────┐
+│ ⚡ POWER 112 W / 100  ▬▬▬|─    │ │          ╭─ 40% ─╮               │ │ ▌ 100% → 110%             ⟳ 90 │
+│ ⟳ CADENCE 92 rpm target 80 ▬| │ │          ╰ 100 W ╯               │ │ ▌ 320 W                     rpm │
+│ ◠ SPEED 27.4 km/h ▬▬▬         │ │ ───────────────────────────────  │ │                                 │
+│ ♡ HEART RATE 128 bpm 69% ▬▬▬  │ │ ⚡TARGET │ ⏱SEGMENT │ ⚑REMAINING │ │ ⚡TARGET │ ⏱DURATION │ ◠INTENSITY │
+│                  (watt gauge) │ │  100 W   │ 4:00 ▬▬  │   3:59     │ │  320 W   │   0:30    │ 100% − + │
+└───────────────────────────────┘ └──────────────────────────────────┘ └──────────────────────────────────┘
+[ ılı WORKOUT / ELAPSED 0:00 ······ ● Power ● Cadence ● Heart rate ······ REMAINING 29:58 of 30:00 ]
+[ watt axis │ workout chart (fills remaining height), HTML labels under the bars, coach message floats on top ]
 [ ⏮  ↺  ▶/⏸  ■  ↻  ⏭ ]
 ```
 
-- **Panel grid:** three panels (1.15fr 1fr 1fr) above the chart; the chart takes the remaining height.
+- **Panel grid:** three equal panels (`repeat(3, minmax(0, 1fr))`) above the chart; the chart takes the remaining height.
+- **Panel header** `.ph`: 19 px accent icon · 12.5 px uppercase label (letter-spacing .09em) · optional status on the right (`.ph-status`, 11 px uppercase; green `ok` when connected). LIVE has a status dot (green when a trainer is connected).
+- **LIVE metrics** `.metric`: 19 px icon · uppercase label · value (`--num`, 24 px) + unit + muted extra (`/ target`, `target 80`, `69%`) · 5 px bar (`.mbar`). Power bar: 0…1.5× target, coloured by the zone you're riding in, marker at the target. Speed: 0–60 km/h, green. Heart rate: % of max HR.
+- **Cadence target** (not in the original mockup): the cadence row shows `target 80` (or `85–95`); the bar spans 40–130 rpm with a marker (or band, for ranges) at the target and turns **green** on target, **amber** 5–10 rpm off, **red** beyond 10 rpm — the value itself turns red too. The next-segment card shows the upcoming target cadence as a small chip.
+- **Current-segment ring** `ProgressRing`: a single progress arc in the zone colour (it reuses `Gauge` but removes the inner "actual power" track, the FTP tick and the actual arc — only the LIVE watt gauge has two arcs: outer = target, inner = actual).
+- **Stat rows** `.stat-row`: three columns separated by 1 px lines, icon · label · 26 px value. CURRENT: target power (zone ink) · segment duration with a progress bar in the zone colour · remaining (pulses in the last 5 s). NEXT: target power · duration · intensity with small − / + below.
+- **Next-segment card** `.nx-card`: 6 px stripe in the zone colour, big `100% → 110%` (no segment-kind label — the chart already shows it), watts in zone ink, cadence chip (or a zone icon when there's no cadence target).
+- **Controls row:** buttons centred horizontally and on one centre line (`align-items: center`), the larger play button in the middle.
 - **Chart:**
   - Bars stretch (SVG `preserveAspectRatio="none"`), but **all text is HTML layered on top** (`.dg-labels`, `.dg-free`), never SVG text, so it keeps its proportions at any size.
   - Segment labels hide when they don't fit their segment.
@@ -180,6 +193,8 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 | **Devices menu** | 300 px popover with the title "DEVICES" and one row per device kind: 34 px icon tile (`.dev-ico`, ok-tinted when connected) · name and status · action text ("Connect" / "Change"). |
 | **Avatar** `.avatar` | circle with `--av` background and white 700 initials. With an emoji, the background is 22 % `--av` mixed with the surface, plus an inset 1.5 px `--av` ring. Sizes: 28 (lists), 32 (top bar), 72–84 (`.xl`: who's riding, editor). |
 | **Toast** `.toast` | inverted (text-colour background), radius 12, bottom centre, 3.2 s. Short and plain English. |
+| **Description** `.plan-desc` + `.md` | card under the plan header (and inside the Workouts folder header): rendered Markdown in `--text-2`, 14.5 px / 1.6, max 78 ch, accent underlined links, selectable text. Longer than 300 characters → a plain-text preview, smart-trimmed at the last sentence end after ~180 characters (else at a word boundary with “…”), followed by an inline accent *Show more* link; expanded shows the full Markdown with *Show less* at the end (`smartTrim`, `markdownPlain`). Plan cards show the first sentence (2-line clamp, `.pc-desc`). |
+| **Plan / Collection badge** | muted `.badge` next to the folder title in Workouts; the sidebar groups folders under PLANS and COLLECTIONS. |
 | **Platform card** `.svc.svc-ext` | compact service card under the "MORE PLATFORMS" group label: neutral letter tile (`.svc-logo.ext`, no brand colours) · name and status ("Connected as …", "Not connected", "Manual import") · one action. Body: API-key field, upload-mode control, or "After a ride: Off / Show import button", plus a one-line hint. Connected cards get an ok-tinted border. |
 | **Sync list** `.sync-list` | ride summary: a bordered list with one 44 px row per destination (`.sl-row`: 26 px logo · name · state/action on the right). Garmin first, then Intervals.icu / COROS when enabled, then "Ride file · Save .fit". States: *Upload*, *Import…*, spinner "Uploading…", "Uploaded ✓" (link), "Failed · Retry". |
 | **Service card** `.svc` | bordered block in Settings → Connections: 34 px logo tile · name and status · action button, then the options and a short muted explanation. |

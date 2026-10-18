@@ -4,7 +4,7 @@ A lightweight, fast indoor-training app for macOS that rides Zwift `.zwo` workou
 
 No video courses, no workout builder, no music, no subscription. You get a clean workout display and your own library.
 
-- **Plans:** every folder is a plan. Start it and ride the workouts in order; skipped and done workouts are tracked and the next one is always suggested.
+- **Plans:** every folder with a weekly schedule is a plan. Start it and ride the workouts in order; skipped and done workouts are tracked and the next one is always suggested.
 - **Workouts:** browse and ride any workout freely, with search, length and intensity filters, TSS and favorites.
 - **FTP Tests:** Ramp, Ramp Lite, 20-minute, 8-minute and Power Profile tests, plus test workouts from your library. One click applies the new FTP. W/kg and VO2max estimates are included.
 - **Riders:** several profiles with their own FTP, zones, plan progress, history, avatar and devices, optionally synced through iCloud Drive, Dropbox or Nextcloud.
@@ -56,7 +56,7 @@ On the first Bluetooth search macOS asks for Bluetooth access. If you declined, 
 
 ## Getting started
 
-1. **Workouts folder.** zwoTrainer reads `~/Downloads/zwo` by default. Change it under **Settings → App → Workouts folder**. Every sub-folder is a plan; loose `.zwo` files in the root are single workouts.
+1. **Workouts folder.** zwoTrainer reads `~/Downloads/zwo` by default. Change it under **Settings → App → Workouts folder**. Sub-folders with a weekly schedule are plans, other sub-folders are collections, and loose `.zwo` files in the root are single workouts.
 2. **Your numbers.** Open **Settings → Rider** and enter FTP, max heart rate and weight. Weight is needed for W/kg, VO2max and virtual shifting.
 3. **Devices.** Click the **Bluetooth** button in the top bar and connect your trainer, heart-rate strap and (optionally) a Zwift controller. They reconnect automatically next time.
 4. **Ride.** Pick a plan and press **Start plan**, or switch to **Workouts** and ride anything. The workout starts as soon as you pedal, or press **Space**.
@@ -82,14 +82,20 @@ During a workout the bar stays the same. The mode switch is replaced by the work
 
 ## Plans
 
-- Every sub-folder of the workouts folder is a plan. Workouts are sorted by file name with natural sort, so `Week01_Day01_…`, `Week01_Day02_…`, `Week02_Day01_…` are grouped by week and day.
+- **Plans and collections:**
+  - A sub-folder whose files span **at least two weeks** (`Week01_…`, `Week02_…`) is a **plan**.
+  - Everything else (all files in one week, e.g. WhatsOnZwift collections exported as `Week01_Day01…Day39`, or no week numbering) is a **collection**. Collections appear only under **Workouts**, without fake week/day labels.
+  - A folder you have already started as a plan stays a plan.
+  - **Override** in the folder's **⋯** menu: *Use as plan* (Workouts → collection) or *Show as collection* (plan page). The choice is stored per rider and synced.
+- **Order:** workouts are sorted by file name with natural sort, so `Week01_Day01_…`, `Week01_Day02_…`, `Week02_Day01_…` are grouped by week and day.
+- **Description:** a Markdown file in the folder (`<folder>.md`, else `README.md`, else the only `.md`) is shown on the plan page and in the Workouts folder header. It supports headings, bold/italic, links (open in your browser), lists, quotes and tables; long texts start as a short preview (about 300 characters, cut at a sentence end) with *Show more* to expand the full text. Plan cards show its first sentence.
 - **Start plan** makes it the active plan. The home screen then always shows **Up next** with its profile, duration and TSS.
 - **In order.** Only the next workout can be started; later ones are locked.
 - **Skip** marks the next workout as skipped and moves on. **Undo skip** brings it back.
 - **Done.** Finishing a workout marks it done and offers **Start next now**.
 - **Ending early** gives you the choice of **Save as done**, **Count as skipped** or **Discard**.
 - **Switching plans** keeps the progress of the old plan, so you can return to it.
-- **⋯ menu** on the plan page: *Reset progress…*, *Show in Finder*, *Move plan folder to Trash…*.
+- **⋯ menu** on the plan page: *Reset progress…*, *Show in Finder*, *Show as collection (Workouts only)*, *Move plan folder to Trash…*.
 
 ---
 
@@ -97,15 +103,15 @@ During a workout the bar stays the same. The mode switch is replaced by the work
 
 Browse every workout across all folders and ride anything. Free rides are saved to your history but never change plan progress.
 
-- **Collections** (left): *All workouts*, *★ Favorites*, *Recently ridden*, *Single workouts* and every folder.
+- **Sidebar** (left): *All workouts*, *★ Favorites*, *Recently ridden*, *Single workouts*, then **Plans** and **Collections**. A selected folder shows its description and a *Plan* / *Collection* badge.
 - **Search** by title, name or file name.
 - **Length filter:** ≤ 30, 30–60, 60–90 or > 90 minutes.
 - **Intensity filter:** Z1 Recovery, Z2 Base endurance, Z3 Tempo, Z4 Threshold, Z5 VO2max. Several can be active at once (see [Zones & intensity](#zones--intensity)).
 - **Sort** by name, shortest, longest, hardest (TSS), intensity or recently ridden.
-- **Each row** shows the workout profile, duration, intensity tag and estimated TSS. Click it for details, or use **Ride**.
+- **Each row** shows the workout profile, duration, intensity tag and estimated TSS. Click it for details, or use **Ride**. For a workout that belongs to a plan, the details also offer **Open plan** next to *Ride*.
 - **Favorites:** star ☆ a workout. Favorites can be reordered with ↑ / ↓ inside the *Favorites* collection.
 - **Row ⋯ menu:** favorite, *Show in Finder*, *Open its folder*, *Move workout to Trash…*.
-- **Folder ⋯ menu** (next to the folder title): *Show in Finder*, *Move folder to Trash…*.
+- **Folder ⋯ menu** (next to the folder title): *Show in Finder*, *Use as plan…* / *Show as collection*, *Move folder to Trash…*.
 
 Deleting always goes to the macOS Trash, so it can be restored. Favorites and plan progress that point to deleted files are cleaned up; ride history stays.
 
@@ -131,9 +137,11 @@ Deleting always goes to the macOS Trash, so it can be restored. Favorites and pl
 
 ## Riding a workout
 
-**Display:** current power on a gauge (target vs. actual), the segment ring with target and segment times, the upcoming segment, coach messages and the zone-coloured workout chart with your live power, cadence and heart-rate lines. Each line can be switched on or off; the choice is remembered per rider. The workout clock (elapsed and remaining) and all readouts scale up in full screen.
+**Display:** three panels above the workout chart: **Live** (power, cadence, speed and heart rate with small bars, plus the watt gauge), **Current segment** (target %, target power, segment time with progress bar, remaining) and **Next segment** (target %, watts, target cadence, duration, and the intensity control). The chart has a watt axis, your live power, cadence and heart-rate lines (each can be switched on or off; the choice is remembered per rider) and coach messages floating on top. The workout clock (elapsed and remaining) and all readouts scale up in full screen.
 
 **Starting:** the workout starts after about 2 seconds of pedalling, or press **Space** / ▶.
+
+**Cadence check:** when a segment has a cadence target, the Live panel shows it next to your cadence (`target 80`). The bar marks the target and turns **green** when you're on it, **amber** 5–10 rpm off and **red** beyond 10 rpm (the number turns red too). The next segment's target cadence is shown in its card, so you can prepare.
 
 **Trainer control:**
 - **ERG** follows every target second by second, including ramps.
@@ -206,6 +214,7 @@ Every finished ride is saved as a **FIT file** with one lap per workout segment,
 **Garmin Connect** (Settings → Connections):
 - **Sign in:** click **Sign in to Garmin**. Garmin's own login page opens in a small window, MFA supported. zwoTrainer stores only the resulting session token for that rider, never your password.
 - **Upload mode:** *Off*, *Manual* (a button after each ride and in the history) or *Automatic*.
+- **Activity name:** every upload is named after the workout you rode (e.g. *“5x6 Sweet Spot 1B”*), with plan and week/day in the description. Garmin would otherwise call it *“Indoor Cycling”*; Strava, fed from Garmin, gets the same name. Intervals.icu uploads are named the same way.
 - **Edge identity:** the uploaded file identifies as a Garmin Edge, so Garmin computes Training Effect and VO2max and counts the ride for challenges.
 - **Unofficial interface:** this is the same approach as the Garmin Connect mobile app, not Garmin's official partner API, so it may change. If it fails, the **manual FIT import** fallback saves the file, shows it in Finder and opens Garmin's import page.
 

@@ -20,6 +20,7 @@ ui/                         frontend — static files served by Tauri (frontendD
   css/styles.css            ALL styles; theme tokens on :root (light) + dark overrides
   js/app.js                 app controller: boot, routing, modes, riders, settings, sync, Ride class
   js/render.js              zones, colours, mini profiles, Diagram (workout chart), Gauge, ProgressRing
+  js/markdown.js            tiny safe Markdown renderer (plan descriptions); escapes everything, links via open_link
   js/zwo.js                 client-side ZWO helpers: parse, powerAt, segmentAt, TSS, zone classification
   js/tests.js               FTP test protocols, evaluation, VO2max, test-workout detection
   js/vshift.js              virtual drivetrain + flat-road physics (virtual shifting)
@@ -28,7 +29,7 @@ src-tauri/
   src/lib.rs                Tauri commands (the only IPC surface) + App state
   src/state.rs              Store: state.json (profiles) + secrets.json, atomic writes, migrations
   src/sync.rs               profile sync through a cloud-synced folder
-  src/library.rs            workouts-folder scan, natural sort, mtime cache, path-traversal guard
+  src/library.rs            workouts-folder scan, natural sort, mtime cache, path-traversal guard, plan vs collection, .md descriptions
   src/zwo.rs                ZWO parser (authoritative), TSS estimate, zone classification
   src/fit.rs                FIT encoder (Generic + Garmin flavour)
   src/garmin.rs             Garmin SSO window → OAuth1 → OAuth2, upload
@@ -62,7 +63,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 ```
 
 - **IPC:** the UI talks to Rust only through `window.__TAURI__.core.invoke` (wrapped in `ble.js` as `invoke`) and `event.listen` (`withGlobalTauri: true`). Every new capability is a `#[tauri::command]` in `lib.rs` and must be registered in `generate_handler!`.
-- **Commands** (current set): `app_state save_profile create_profile rename_profile edit_profile delete_profile switch_profile sync_targets sync_config sync_now pick_sync_dir scan_library load_workout pick_zwo_dir save_activity reveal_in_library trash_in_library export_activity garmin_import pick_garmin_dir open_url garmin_status garmin_connect garmin_disconnect garmin_upload services_status service_connect service_disconnect service_upload service_manual keep_awake ble_scan ble_connect ble_disconnect ble_current trainer_set_power trainer_free_ride trainer_resume ctrl_scan ctrl_connect ctrl_disconnect ctrl_list`.
+- **Commands** (current set): `open_link app_state save_profile create_profile rename_profile edit_profile delete_profile switch_profile sync_targets sync_config sync_now pick_sync_dir scan_library load_workout pick_zwo_dir save_activity reveal_in_library trash_in_library export_activity garmin_import pick_garmin_dir open_url garmin_status garmin_connect garmin_disconnect garmin_upload services_status service_connect service_disconnect service_upload service_manual keep_awake ble_scan ble_connect ble_disconnect ble_current trainer_set_power trainer_free_ride trainer_resume ctrl_scan ctrl_connect ctrl_disconnect ctrl_list`.
 - **Events Rust → UI:**
   - `device-status {kind: trainer|hr|controller, connected, reconnecting, name, erg, count}`
   - `sensor {power?, cadence?, speed?, hr?}`
@@ -88,7 +89,8 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
                   "theme", "mode", "beeps", "autoPause", "overlay": {power,cadence,hr},
                   "shifting": {...}, "zwoDir", "devices": {trainer, hr, controllers[]},
                   "garmin": {mode, autoOpen, folder},
-                  "services": { "<intervals|coros>": {mode: off|manual|auto} } },
+                  "services": { "<intervals|coros>": {mode: off|manual|auto} },
+                  "folderKinds": { "<folderId>": "plan" | "collection" } },   // rider override of library kind
     "activePlan", "plans": { "<folderId>": { startedAt, finishedAt?, entries: { "<file>": {status, at, …} } } },
     "history": [ {file, plan, title, at, status, doneDuration, avgPower, np, …, fitPath, garmin?, services?: {<id>: {id, url, at} | {error}}} ],
     "tests": [ {at, protocol, ftp, prevFtp, details, cp, wPrime, vo2, accepted} ],
@@ -133,9 +135,12 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 ## Things that are easy to get wrong
 
 - **Ramps:** `PowerLow` is the start and `PowerHigh` the end (cooldowns descend). `IntervalsT` expands into on/off segments with `rep` / `reps`.
+- **Plans vs collections:** `library::folder_kind` says `plan` only when a folder spans ≥ 2 weeks; converters name collections `Week01_Day01…DayNN`, so "1 week" is meaningless. The UI decides with `isPlan()`: rider override (`settings.folderKinds`) → active/started plan → library kind. Don't show week/day labels for collections (`showWeekDay`).
+- **Descriptions:** `<folder>.md` (else README.md, else the only `.md`), capped at 64 KB, rendered by `markdown.js`. Never inject description HTML unescaped; links only open via `open_link` (http/https).
 - **Free-ride segments** have `p0 === null`; all-out efforts are `erg: false` with a measurement window. Both must release ERG (free ride or virtual shifting).
 - **Zwift Ride:** only the **left** controller needs a connection. The sync-RX characteristic accepts write-without-response only; the handshake picks the write type from the characteristic properties. Button bits are **cleared** when pressed.
 - **FIT:** CRC, local message definitions and the Garmin flavour (manufacturer 1, product 1036 = Edge 500) are validated against `fitdecode`. Keep the tests green when touching `fit.rs`.
+- **Activity names:** FIT has no title field. After a Garmin upload, `garmin::rename` sets `activityName` / `description` (`PUT /activity-service/activity/{id}`). If Garmin hasn't returned an id yet, `find_by_start` matches the latest activities by start time (the UI passes `start`). Intervals.icu gets `name` on upload plus a `PUT /api/v1/activity/{id}`. Names come from `rideMeta()` in app.js.
 - **Garmin:** the sign-in runs on Garmin's own page in a WebviewWindow; we only read the `ST-` ticket. Never inject credentials or scrape the password field.
 - **Sync:** the newest profile wins, history and tests are unioned, deletions use tombstones, and history `*Path` fields are relocated per Mac. Changing merge rules needs a test in `sync.rs`.
 - **Other platforms (`services.rs`):**
