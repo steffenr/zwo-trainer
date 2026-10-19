@@ -39,10 +39,12 @@ src-tauri/
   tauri.conf.json           window, CSP, bundle; Info.plist (Bluetooth usage, App Nap off)
   capabilities/default.json Tauri permissions (keep minimal)
 scripts/sync-version.mjs    print / set the version (Cargo.toml + Cargo.lock; tauri.conf.json has none)
+site/                       static website (home, features, download) with dark/light screenshots in site/img; no build step
 .github/workflows/
   ci.yml                    push/PR: tests + clippy (Linux), tests (macOS, Windows)
   release.yml               manual: bump patch/minor/major, commit, tag vX, push (needs RELEASE_PAT)
   build-app.yml             tag v*: build macOS arm64/x64, Windows, Linux → one GitHub release
+  pages.yml                 site/ change on develop, successful release build, manual: deploy site/ to GitHub Pages
 ```
 
 ## Commands

@@ -377,6 +377,7 @@ GitHub Actions builds and publishes everything (workflows in `.github/workflows/
 - **CI** (`ci.yml`, every push to `main` and every PR): tests and clippy on Linux, tests on macOS and Windows.
 - **Release** (`release.yml`): *Actions → Release → Run workflow*, pick **patch / minor / major**. It bumps the version in `src-tauri/Cargo.toml` (the only place it lives) and `Cargo.lock`, commits `chore(release): X`, tags `vX` and pushes. Needs a repository secret **`RELEASE_PAT`** (a token with *Contents: read & write*), because pushes made with the default token don't start other workflows.
 - **Build** (`build-app.yml`, on every `v*` tag): builds macOS Apple silicon + Intel, Windows x64 and Linux x64 in parallel, then publishes one GitHub release with all installers and notes generated from the commits since the previous tag. Run it by hand (*Run workflow*) for a test build: the installers are attached to the run instead.
+- **Website** (`pages.yml`): publishes the static site in `site/` to GitHub Pages on every push to `develop` that changes it, after each successful release build (the download page then shows the new version) and by hand. One-time setup: *Settings → Pages → Build and deployment → Source: GitHub Actions*.
 
 To release by hand instead: `node scripts/sync-version.mjs 1.2.0`, commit, `git tag v1.2.0 && git push --follow-tags`.
 
