@@ -1,0 +1,72 @@
+name: Deploy site
+
+# Publishes the website in site/ to GitHub Pages.
+#  - push to develop that changes site/ -> redeploy
+#  - after "Build zwoTrainer" has published a release (tag push) -> redeploy from that tag,
+#    so the download page names the new version once its installers are online
+#  - workflow_dispatch -> manual redeploy
+#
+# workflow_run is used instead of a tag trigger: it runs on the default branch, which the
+# github-pages environment allows, and only after the release assets exist.
+#
+# One-time setup: Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_run:
+    workflows: ['Build zwoTrainer']
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: deploy site
+    # for workflow_run: only successful release builds (tag pushes), not build-only runs
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Setup Node (for the version script)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Fill in the current version
+        shell: bash
+        run: |
+          VERSION=$(node scripts/sync-version.mjs)
+          echo "Site version: ${VERSION}"
+          sed -i "s/&lt;version&gt;/${VERSION}/g" site/download.html
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
