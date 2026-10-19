@@ -1,5 +1,7 @@
-//! Minimal FIT activity encoder (indoor cycling): file_id, events, 1 Hz records,
-//! one lap per workout segment, session and activity messages. Readable by Garmin Connect,
+//! Minimal FIT activity encoder (indoor cycling): file_id, workout + workout steps (the
+//! workout's name — Garmin Connect names the activity after it, and that name is what Garmin
+//! forwards to Strava), events, 1 Hz records, one lap per workout segment, session and activity
+//! messages. Readable by Garmin Connect,
 //! intervals.icu, TrainingPeaks and the official FIT SDK.
 
 use serde::Deserialize;
@@ -22,40 +24,76 @@ pub struct Sample {
     pub seg: Option<i64>,
 }
 
+/// One planned workout segment (written as a FIT workout_step).
+#[derive(Debug, Clone, Deserialize)]
+pub struct Step {
+    /// seconds
+    pub duration: u32,
+    /// target power range in watts (None = free ride / open target)
+    pub lo: Option<u32>,
+    pub hi: Option<u32>,
+    /// "warmup" | "cooldown" | "rest" | anything else = active
+    #[serde(default)]
+    pub kind: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Ride {
     pub name: String,
     pub ftp: Option<u32>,
     pub samples: Vec<Sample>,
+    /// the planned workout (optional; older callers send none)
+    #[serde(default)]
+    pub steps: Vec<Step>,
 }
 
-#[derive(Clone, Copy)]
+/// FIT devices and Garmin Connect cap workouts at 100 steps; longer ones keep only the name.
+const MAX_STEPS: usize = 100;
+/// Longest workout name written (bytes, without the terminating NUL).
+const MAX_NAME: usize = 63;
+
+#[derive(Clone)]
 enum V {
     Enum(Option<u8>),
     U8(Option<u8>),
     U16(Option<u16>),
     U32(Option<u32>),
     U32z(Option<u32>),
+    /// NUL-terminated UTF-8 string (the bytes include the terminator)
+    Str(Vec<u8>),
 }
 
 impl V {
-    fn base(self) -> (u8, u8) {
+    fn base(&self) -> (u8, u8) {
         match self {
             V::Enum(_) => (1, 0x00),
             V::U8(_) => (1, 0x02),
             V::U16(_) => (2, 0x84),
             V::U32(_) => (4, 0x86),
             V::U32z(_) => (4, 0x8C),
+            V::Str(b) => (b.len() as u8, 0x07),
         }
     }
-    fn write(self, out: &mut Vec<u8>) {
+    fn write(&self, out: &mut Vec<u8>) {
         match self {
             V::Enum(v) | V::U8(v) => out.push(v.unwrap_or(0xFF)),
             V::U16(v) => out.extend(v.unwrap_or(0xFFFF).to_le_bytes()),
             V::U32(v) => out.extend(v.unwrap_or(0xFFFF_FFFF).to_le_bytes()),
             V::U32z(v) => out.extend(v.unwrap_or(0).to_le_bytes()),
+            V::Str(b) => out.extend(b),
         }
+    }
+    /// A FIT string: trimmed, cut to `max` bytes on a character boundary, NUL-terminated.
+    fn text(s: &str, max: usize) -> V {
+        let s = s.trim();
+        let mut end = s.len().min(max);
+        while !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        let mut b = s.as_bytes()[..end].to_vec();
+        b.push(0);
+        V::Str(b)
     }
 }
 
@@ -244,6 +282,39 @@ pub fn encode(ride: &Ride, flavor: Flavor) -> Result<(Vec<u8>, Summary), String>
         (3, V::U32z(Some(3_920_261_017))), // serial number
         (4, V::U32(Some(start))),       // time_created
     ]);
+    // workout + steps: Garmin Connect names the activity after the workout when the file
+    // carries one (like a structured workout ridden on an Edge), before it syncs to Strava
+    if !ride.name.trim().is_empty() {
+        let steps: &[Step] = if ride.steps.len() <= MAX_STEPS { &ride.steps } else { &[] };
+        w.msg(6, 26, &[
+            (4, V::Enum(Some(2))),  // sport = cycling
+            (11, V::Enum(Some(6))), // sub_sport = indoor_cycling
+            (6, V::U16(Some(steps.len() as u16))),
+            (8, V::text(&ride.name, MAX_NAME)),
+        ]);
+        for (i, st) in steps.iter().enumerate() {
+            let (target, lo, hi) = match (st.lo, st.hi) {
+                (Some(a), Some(b)) => (4u8, Some(a.min(b) + 1000), Some(a.max(b) + 1000)), // power, custom range (watts + 1000)
+                _ => (2u8, None, None),                                                       // open
+            };
+            let intensity = match st.kind.as_deref() {
+                Some("warmup") => 2,
+                Some("cooldown") => 3,
+                Some("rest") => 1,
+                _ => 0,
+            };
+            w.msg(7, 27, &[
+                (254, V::U16(Some(i as u16))), // message_index
+                (1, V::Enum(Some(0))),         // duration_type = time
+                (2, V::U32(Some(st.duration.saturating_mul(1000)))),
+                (3, V::Enum(Some(target))),
+                (4, V::U32(Some(0))),          // target_value 0 → custom range
+                (5, V::U32(lo)),
+                (6, V::U32(hi)),
+                (7, V::Enum(Some(intensity))),
+            ]);
+        }
+    }
     // timer start
     w.msg(2, 21, &[(253, V::U32(Some(start))), (0, V::Enum(Some(0))), (1, V::Enum(Some(0)))]);
 
@@ -373,7 +444,10 @@ mod tests {
                 seg: Some(i / 120),
             })
             .collect();
-        Ride { name: "Test".into(), ftp: Some(250), samples }
+        let steps = (0..5)
+            .map(|i| Step { duration: 120, lo: Some(if i % 2 == 0 { 250 } else { 150 }), hi: Some(if i % 2 == 0 { 250 } else { 150 }), kind: None })
+            .collect();
+        Ride { name: "Test".into(), ftp: Some(250), samples, steps }
     }
 
     #[test]
@@ -405,5 +479,39 @@ mod tests {
         if let Ok(p) = std::env::var("FIT_TEST_OUT") {
             std::fs::write(p, &bytes).unwrap();
         }
+    }
+
+    #[test]
+    fn carries_workout_name_and_steps() {
+        let mut r = sample_ride();
+        r.name = "Sweet Spot 3×10 – Wk 4 · Dïe".into();
+        let (g, _) = encode(&r, Flavor::Garmin).unwrap();
+        assert_eq!(crc16(&g), 0);
+        // the name is stored NUL-terminated
+        let name = b"Sweet Spot 3\xc3\x9710 \xe2\x80\x93 Wk 4 \xc2\xb7 D\xc3\xafe\0";
+        assert!(g.windows(name.len()).any(|w| w == name));
+        // definitions for workout (26) and workout_step (27): header 0x40|local, reserved, arch, global LE
+        assert!(g.windows(5).any(|w| w == [0x46, 0, 0, 26, 0]));
+        assert!(g.windows(5).any(|w| w == [0x47, 0, 0, 27, 0]));
+        if let Ok(p) = std::env::var("FIT_TEST_OUT") {
+            std::fs::write(format!("{p}.workout.fit"), &g).unwrap();
+        }
+    }
+
+    #[test]
+    fn long_names_and_many_steps() {
+        let mut r = sample_ride();
+        r.name = "ä".repeat(40); // 80 bytes → cut to 63 on a char boundary (62 bytes)
+        r.steps = (0..150).map(|_| Step { duration: 30, lo: None, hi: None, kind: None }).collect();
+        let (g, _) = encode(&r, Flavor::Garmin).unwrap();
+        assert_eq!(crc16(&g), 0);
+        let mut name = "ä".repeat(31).into_bytes();
+        name.push(0);
+        assert!(g.windows(name.len()).any(|w| w == name.as_slice()));
+        assert!(!g.windows(5).any(|w| w == [0x47, 0, 0, 27, 0])); // > 100 steps: name only
+        // no name → no workout message at all
+        r.name = "  ".into();
+        let (g, _) = encode(&r, Flavor::Garmin).unwrap();
+        assert!(!g.windows(5).any(|w| w == [0x46, 0, 0, 26, 0]));
     }
 }
