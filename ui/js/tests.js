@@ -33,6 +33,31 @@ export function bestAvg(samples, secs, filter = () => true) {
   return Math.round(best / secs);
 }
 
+/** An effort counts as completed when at least this share of it was ridden. */
+export const COMPLETE = 0.95;
+const mmss = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
+
+/** Power of one tagged effort: { power, ridden, dur, done }. power is only set when the effort was
+ *  completed — an abandoned effort must never turn into a (too low) FTP. */
+export function effort(samples, tag, dur) {
+  const ridden = samples.filter((s) => s.measure === tag).length;
+  const done = ridden >= dur * COMPLETE;
+  return { ridden, dur, done, power: done ? bestAvg(samples, Math.min(dur, ridden), (s) => s.measure === tag) : null };
+}
+
+/** Result for a test whose FTP effort was not completed: no FTP, an explanation, bests kept. */
+function incomplete(label, e, bests = {}, extra = []) {
+  const text = e.ridden
+    ? `You rode ${mmss(e.ridden)} of the ${label}.`
+    : `The ${label} wasn't reached.`;
+  return {
+    ftp: null,
+    incomplete: { label, ridden: e.ridden, needed: e.dur, text },
+    details: [[label[0].toUpperCase() + label.slice(1), e.ridden ? `not completed — ${mmss(e.ridden)} of ${mmss(e.dur)}` : 'not reached'], ...extra],
+    bests,
+  };
+}
+
 export const PROTOCOLS = [
   {
     id: 'ramp',
@@ -44,7 +69,7 @@ export const PROTOCOLS = [
     build: (ftp) => {
       const steps = [];
       const top = Math.max(400, Math.round(ftp * 2.0 / 20) * 20); // well beyond the typical failure point (~FTP / 0.75)
-      for (let w = 120; w <= top; w += 20) steps.push(seg('ramp-step', 60, w / ftp, w / ftp, { ramp: true }));
+      for (let w = 120; w <= top; w += 20) steps.push(seg('ramp-step', 60, w / ftp, w / ftp, { ramp: true, measure: 'ramp' }));
       steps[0].texts.push(say(0, 'Ramp starts — +20 W every minute. Stay seated, steady cadence.'));
       return finalize('Ramp Test', [
         seg('warmup', 300, 100 / ftp, 100 / ftp, { texts: [say(0, 'Easy 5 minutes at 100 W'), say(240, 'Ramp begins in 1 minute')] }),
@@ -52,8 +77,19 @@ export const PROTOCOLS = [
       ]);
     },
     evaluate: (samples) => {
-      const m1 = bestAvg(samples, 60);
-      return m1 && { ftp: Math.round(m1 * 0.75), details: [['Best 1 min', `${m1} W`], ['× 0.75', '']], bests: { m1 } };
+      // the ramp ends when you can't go on, so any ramp ≥ 1 minute is a valid test — but the
+      // best minute must come from the ramp itself, not from the warm-up
+      const ridden = samples.filter((s) => s.measure === 'ramp').length;
+      if (ridden < 60) {
+        const r = incomplete('ramp', { ridden, dur: 60 });
+        if (ridden) {
+          r.incomplete.text = `The ramp was stopped after ${mmss(ridden)} — at least 1 minute of ramp is needed.`;
+          r.details = [['Ramp', `stopped after ${mmss(ridden)}`]];
+        }
+        return r;
+      }
+      const m1 = bestAvg(samples, 60, (s) => s.measure === 'ramp');
+      return m1 && { ftp: Math.round(m1 * 0.75), details: [['Best 1 min', `${m1} W`], ['× 0.75', ''], ['Ramp ridden', mmss(ridden)]], bests: { m1 } };
     },
   },
   {
@@ -66,7 +102,7 @@ export const PROTOCOLS = [
     build: (ftp) => {
       const steps = [];
       const top = Math.max(300, Math.round(ftp * 1.8 / 10) * 10);
-      for (let w = 90; w <= top; w += 10) steps.push(seg('ramp-step', 60, w / ftp, w / ftp, { ramp: true }));
+      for (let w = 90; w <= top; w += 10) steps.push(seg('ramp-step', 60, w / ftp, w / ftp, { ramp: true, measure: 'ramp' }));
       steps[0].texts.push(say(0, 'Ramp starts — +10 W every minute. Stay seated, steady cadence.'));
       return finalize('Ramp Test Lite', [
         seg('warmup', 300, 80 / ftp, 80 / ftp, { texts: [say(0, 'Easy 5 minutes at 80 W'), say(240, 'Ramp begins in 1 minute')] }),
@@ -96,9 +132,10 @@ export const PROTOCOLS = [
       seg('cooldown', 600, 0.60, 0.45, { texts: [say(0, 'Done! Cool down')] }),
     ]),
     evaluate: (samples) => {
-      const m20 = bestAvg(samples, 1200, (s) => s.measure === '20') ?? bestAvg(samples, 1200);
       const m5 = bestAvg(samples, 300);
-      return m20 && { ftp: Math.round(m20 * 0.95), details: [['20-min average', `${m20} W`], ['× 0.95', '']], bests: { m20, m5 } };
+      const e = effort(samples, '20', 1200);
+      if (!e.done) return incomplete('20-minute effort', e, { m5 }, m5 ? [['Best 5 min', `${m5} W`]] : []);
+      return { ftp: Math.round(e.power * 0.95), details: [['20-min average', `${e.power} W`], ['× 0.95', '']], bests: { m20: e.power, m5 } };
     },
   },
   {
@@ -116,10 +153,17 @@ export const PROTOCOLS = [
       seg('cooldown', 600, 0.55, 0.40, { texts: [say(0, 'Done! Cool down')] }),
     ]),
     evaluate: (samples) => {
-      const a = bestAvg(samples, 480, (s) => s.measure === 'a');
-      const b = bestAvg(samples, 480, (s) => s.measure === 'b');
-      const best = Math.max(a || 0, b || 0) || bestAvg(samples, 480);
-      return best && { ftp: Math.round(best * 0.9), details: [['Effort 1', a ? `${a} W` : '–'], ['Effort 2', b ? `${b} W` : '–'], ['Better × 0.90', `${best} W`]], bests: {} };
+      const a = effort(samples, 'a', 480);
+      const b = effort(samples, 'b', 480);
+      const show = (e) => (e.done ? `${e.power} W` : e.ridden ? `not completed — ${mmss(e.ridden)} of 8:00` : 'not ridden');
+      const best = Math.max(a.power || 0, b.power || 0);
+      if (!best) {
+        const r = incomplete('8-minute effort', a.ridden >= b.ridden ? a : b);
+        r.details = [['Effort 1', show(a)], ['Effort 2', show(b)]];
+        if (a.ridden && b.ridden) r.incomplete.text = 'Neither 8-minute effort was completed.';
+        return r;
+      }
+      return { ftp: Math.round(best * 0.9), details: [['Effort 1', show(a)], ['Effort 2', show(b)], ['Better × 0.90', `${best} W`]], bests: {} };
     },
   },
   {
@@ -150,8 +194,12 @@ export const PROTOCOLS = [
       const s5 = bestAvg(samples, 5);
       const m1 = bestAvg(samples, 60);
       const m5 = bestAvg(samples, 300);
-      const m20 = bestAvg(samples, 1200, (s) => s.measure === 'm20') ?? bestAvg(samples, 1200);
-      if (!m20) return m5 ? { ftp: null, details: [['5 s', `${s5} W`], ['1 min', `${m1} W`], ['5 min', `${m5} W`], ['20 min', 'not completed']], bests: { s5, m1, m5 } } : null;
+      const e20 = effort(samples, 'm20', 1200);
+      const m20 = e20.power;
+      if (!e20.done) {
+        const extra = [['5 s', s5 ? `${s5} W` : '–'], ['1 min', m1 ? `${m1} W` : '–'], ['5 min', m5 ? `${m5} W` : '–']].filter(([, v]) => v !== '–');
+        return incomplete('20-minute effort', e20, Object.fromEntries(Object.entries({ s5, m1, m5 }).filter(([, v]) => v)), extra);
+      }
       // Monod & Scherrer two-parameter model from the 5- and 20-minute efforts
       const cp = Math.round((m20 * 1200 - m5 * 300) / 900);
       const wPrime = Math.round(((m5 - cp) * 300) / 100) / 10; // kJ
@@ -197,15 +245,15 @@ export function cpModel(p1, t1, p2, t2) {
 
 // add VO2max bases to the built-in protocols
 const withVo2 = {
-  ramp: (r, s) => r && { ...r, vo2: { method: 'ppo', power: r.bests.m1 } },
-  'ramp-lite': (r) => r && { ...r, vo2: { method: 'ppo', power: r.bests.m1 } },
+  ramp: (r) => (r?.ftp ? { ...r, vo2: { method: 'ppo', power: r.bests.m1 } } : r),
+  'ramp-lite': (r) => (r?.ftp ? { ...r, vo2: { method: 'ppo', power: r.bests.m1 } } : r),
   '20min': (r) => {
-    if (!r) return r;
+    if (!r?.ftp) return r;
     const m = cpModel(r.bests.m5, 300, r.bests.m20, 1200);
     return m ? { ...r, cp: m.cp, wPrime: m.wPrime, vo2: { method: 'p8', power: m.p8 }, details: [...r.details, ['Critical Power (5 + 20 min)', `${m.cp} W`]] } : r;
   },
   '8min': (r, samples) => {
-    if (!r) return r;
+    if (!r?.ftp) return r;
     const best = Math.round(r.ftp / 0.9);
     return { ...r, vo2: { method: 'p8', power: best }, bests: { ...r.bests, m5: bestAvg(samples, 300) } };
   },
@@ -257,10 +305,10 @@ export function prepareTestWorkout(workout) {
 
 /** Evaluate a library test from the efforts actually ridden. */
 export function evaluateGeneric(samples, workout) {
-  const efforts = workout.segments
-    .filter((s) => s.measure)
-    .map((s) => ({ dur: s.duration, power: bestAvg(samples, Math.min(s.duration, samples.filter((x) => x.measure === s.measure).length || 1), (x) => x.measure === s.measure), ridden: samples.filter((x) => x.measure === s.measure).length }))
-    .filter((e) => e.power && e.ridden >= e.dur * 0.9);
+  const all = workout.segments.filter((s) => s.measure).map((s) => effort(samples, s.measure, s.duration));
+  const efforts = all.filter((e) => e.done && e.power).map((e) => ({ dur: e.dur, power: e.power, ridden: e.ridden }));
+  // the longest FTP-relevant effort (≥ 8 min) that was started but abandoned
+  const abandoned = all.filter((e) => !e.done && e.ridden > 0 && e.dur >= 480).sort((a, b) => b.dur - a.dur)[0];
   const bests = { s5: bestAvg(samples, 5), m1: bestAvg(samples, 60), m5: bestAvg(samples, 300), m20: bestAvg(samples, 1200) };
   const details = efforts.map((e) => [`${e.dur >= 60 ? `${Math.round(e.dur / 60)}-min` : `${e.dur}-s`} effort`, `${e.power} W`]);
   const long = efforts.filter((e) => e.dur >= 1140).sort((a, b) => b.power - a.power)[0];
@@ -281,8 +329,12 @@ export function evaluateGeneric(samples, workout) {
   }
   if (!vo2 && mid && mid.dur <= 600) vo2 = { method: 'p8', power: mid.power };
   if (!vo2 && method.includes('ramp')) vo2 = { method: 'ppo', power: bests.m1 };
+  const clean = Object.fromEntries(Object.entries(bests).filter(([, v]) => v));
+  if (!ftp && abandoned) {
+    const r = incomplete(`${Math.round(abandoned.dur / 60)}-minute effort`, abandoned, clean, details);
+    return { ...r, cp, wPrime, vo2 };
+  }
   if (!ftp && !efforts.length && !bests.m1) return null;
   if (!ftp) details.push(['FTP', 'needs a ≥ 8-min all-out effort — bests saved']);
-  const clean = Object.fromEntries(Object.entries(bests).filter(([, v]) => v));
   return { ftp, details, bests: clean, cp, wPrime, vo2 };
 }
