@@ -11,7 +11,7 @@
 //!  5. Upload: `upload-service/upload` (multipart FIT).
 
 use base64::Engine;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde_json::{json, Value};
 use sha1::Sha1;
 use std::path::Path;
