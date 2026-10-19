@@ -242,7 +242,7 @@ Every finished ride is saved as a **FIT file** with one lap per workout segment,
 **Garmin Connect** (Settings → Connections):
 - **Sign in:** click **Sign in to Garmin**. Garmin's own login page opens in a small window, MFA supported. zwoTrainer stores only the resulting session token for that rider, never your password.
 - **Upload mode:** *Off*, *Manual* (a button after each ride and in the history) or *Automatic*.
-- **Activity name:** every upload is named after the workout you rode (e.g. *“5x6 Sweet Spot 1B”*), with plan and week/day in the description. Garmin would otherwise call it *“Indoor Cycling”*; Strava, fed from Garmin, gets the same name. Intervals.icu uploads are named the same way.
+- **Activity name:** every upload is named after the workout you rode (e.g. *“5x6 Sweet Spot 1B”*), with plan and week/day in the description. Garmin would otherwise call it *“Indoor Cycling”*. The workout name and its segments are also written into the FIT file (like a structured workout ridden on a Garmin), so Garmin can name the activity before it passes it on to Strava. The description and later renames don't reach Strava: Garmin forwards a ride only once, right after the upload. Intervals.icu uploads are named the same way.
 - **Edge identity:** the uploaded file identifies as a Garmin Edge, so Garmin computes Training Effect and VO2max and counts the ride for challenges.
 - **Unofficial interface:** this is the same approach as the Garmin Connect mobile app, not Garmin's official partner API, so it may change. If it fails, the **manual FIT import** fallback saves the file, shows it in Finder and opens Garmin's import page.
 
