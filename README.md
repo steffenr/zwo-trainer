@@ -1,3 +1,7 @@
+<h1 align="center">
+    <img width="250" alt="zwotrainer-logo-with-text" src="https://github.com/user-attachments/assets/1cc4ccb5-bf43-4cce-83c5-4fb7bd7a90dc" />
+</h1>
+
 # zwoTrainer
 
 A lightweight, fast indoor-training app for macOS (with Windows and Linux builds) that rides Zwift `.zwo` workouts and turns folders of workouts into training plans. It controls your smart trainer in ERG mode, records every ride as a FIT file and uploads it to Garmin Connect (and from there to Strava) and Intervals.icu.
