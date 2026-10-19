@@ -2276,7 +2276,16 @@ class Ride {
     // store the ride as FIT (for Garmin / export)
     let fit = null;
     if (this.samples.length) {
-      fit = await invoke('save_activity', { ride: { name: title, ftp: ftp(), samples: this.samples.map(({ wall, p, c, hr, v, seg }) => ({ wall, p, c, hr, v, seg })) } })
+      // the planned workout goes into the FIT file as well: Garmin names the activity after it
+      // (and forwards that name to Strava) — the rename after the upload comes too late for Strava
+      const F = ftp(), m = this.mult();
+      const steps = this.w.segments.map((sg) => ({
+        duration: Math.max(1, Math.round(sg.duration)),
+        lo: sg.p0 == null || sg.erg === false ? null : Math.round(sg.p0 * F * m),
+        hi: sg.p0 == null || sg.erg === false ? null : Math.round(sg.p1 * F * m),
+        kind: sg.type === 'warmup' ? 'warmup' : sg.type === 'cooldown' ? 'cooldown' : sg.type === 'off' ? 'rest' : null,
+      }));
+      fit = await invoke('save_activity', { ride: { name: title, ftp: F, steps, samples: this.samples.map(({ wall, p, c, hr, v, seg }) => ({ wall, p, c, hr, v, seg })) } })
         .catch((e) => { toast(`Could not save the ride file: ${e}`); return null; });
     }
     const entry = { file: this.file, plan: this.planId, title, startedAt: this.startedAt?.toISOString(), at: new Date().toISOString(), ...result, fitPath: fit?.path || null, distanceKm: fit?.summary?.distanceKm ?? null };
