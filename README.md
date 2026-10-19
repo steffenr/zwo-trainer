@@ -143,13 +143,19 @@ Deleting always goes to the system Trash (the Recycle Bin on Windows), so it can
 
 | Test | Protocol | Result |
 |---|---|---|
-| **Ramp Test** | 5 min at 100 W, then +20 W per minute in ERG until you can't hold it; ends automatically | 75 % of the best 1-minute power |
+| **Ramp Test** | 5 min at 100 W, then +20 W per minute in ERG until you can't hold it; then an automatic 5-minute cool-down | 75 % of the best 1-minute power |
 | **Ramp Test Lite** | the same with +10 W per minute, for beginners and lighter riders | 75 % of the best 1-minute power |
 | **20-Minute Test** | Allen & Coggan: warm-up with spin-ups, 5 min all-out, recovery, 20 min all-out | 95 % of the 20-minute average |
 | **8-Minute Test** | 2 × 8 min all-out with 10 min recovery (CTS) | 90 % of the better effort |
 | **Power Profile Test** | 8 s sprint, then 1, 5 and 20 min maximal efforts | FTP, 5 s / 1 / 5 / 20 min bests, Critical Power and W′ |
 
 - **ALL OUT efforts** are ridden off ERG: the trainer simulates a flat road and you set the power with your gears, or with virtual shifting. A pacing target is still shown.
+- **Live pacing:** in efforts of 5 minutes or longer, the Current segment panel shows your running effort average and, for the 8- and 20-minute efforts, the estimated FTP so far. After the first minute it warns "too fast · ease off" when you're more than 10 % above the pacing target.
+- **End of the ramp:** when you can't hold the target any more (cadence below 30 rpm or power below half the target for 10 s), the ramp ends there and the trainer switches to an easy 5-minute cool-down. Press ⏹ any time to see your result.
+- **During measured parts** (the ramp and the all-out efforts) auto-pause is off, so stopping counts as 0 W instead of being left out, and skipping is blocked. Skipping before an effort (e.g. to shorten the warm-up) is fine; a jump never lands in the middle of an effort.
+- **How the result is measured:** the ramp uses the best 60 seconds of the ramp itself (never the warm-up). The 20- and 8-minute tests use only the all-out effort, and it counts as completed when at least 95 % of it was ridden.
+- **Effort not completed:** if you stop or skip an all-out effort early (or a ramp test before its first full minute), there is no FTP — an incomplete effort would give a value that's too low. The summary says how much you rode, your FTP stays unchanged, and your power bests from the ride are still saved. The test history marks it *Not completed*.
+- **Plausibility check:** if the new FTP differs from your current one by more than 15 %, the result shows a note (trainer calibration, which device measured the power, fatigue) before you apply it.
 - **The result** appears as "Your FTP is ~X W". **Use X W as my FTP** applies it and recalculates the zones in watts. Personal bests (5 s, 1, 5, 20 min) are updated automatically.
 - **Test history** lists every result with its change against the previous FTP and a small FTP trend chart. An older result can still be applied later.
 - **Tests in your library:** test-themed ZWO files (FTP Test, Ramp Test, Critical Power, Best effort, Benchmarking, …) are recognised automatically, including inside plans. Following Zwift's convention, their free-ride blocks are the all-out efforts. Ramp-test files that lack the actual ramp (a known WhatsOnZwift export issue) start the built-in Ramp Test instead.
