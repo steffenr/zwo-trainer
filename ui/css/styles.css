@@ -157,6 +157,7 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-so
 .pc-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
 .badge { font-size: 11px; font-weight: 700; background: var(--accent); color: var(--accent-ink); padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
 .badge.ok { background: var(--ok-soft); color: var(--ok); }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
 .badge.muted { background: var(--surface-3); color: var(--muted); }
 
 /* ---------- workout rows ---------- */
@@ -457,6 +458,12 @@ dialog.settings { width: min(540px, calc(100vw - 32px)); }
 .ftp-result b { font-size: 40px; font-family: var(--num); }
 .ftp-result small.up { color: var(--ok); font-weight: 600; }
 .ftp-result small.down { color: var(--warn); font-weight: 600; }
+.ftp-result.incomplete { border-color: var(--warn); background: var(--warn-soft); }
+.ftp-check { margin: 4px 0 12px; padding: 10px 12px; border-radius: 10px; background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); font-size: 13.5px; }
+.ftp-check b { font-size: inherit; font-family: inherit; }
+.ftp-result.incomplete .k { color: var(--warn); }
+.ftp-result.incomplete p { margin: 8px 0 0; }
+.ftp-result.incomplete p b { font-size: inherit; font-family: inherit; white-space: nowrap; }
 .ftp-result dl, .ftp-dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; margin: 12px 0; font-size: 13.5px; }
 .ftp-result dt, .ftp-dl dt { color: var(--muted); }
 .ftp-result dd, .ftp-dl dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -750,3 +757,7 @@ details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; fon
 @media (max-width: 980px) {
   .ride-top .panel.next { grid-column: 1 / -1; }
 }
+
+/* power ranges (e.g. 150–113) need a smaller size to fit their stat column */
+.ride .stat b.range { font-size: 20px; }
+@media (min-width: 1400px) { .ride .stat b.range { font-size: clamp(20px, 1.43vw, 32px); } }
