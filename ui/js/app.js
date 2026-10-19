@@ -765,7 +765,7 @@ function renderTests() {
       <div class="ftp-now">
         <div class="eyebrow">Current FTP · ${esc(state.name)}</div>
         <div class="ftp-val"><b>${F}</b> W${wkg(F) ? ` <span class="wkg">${wkg(F)} W/kg</span>` : ''}</div>
-        <div class="meta">${last ? `Last test ${relDate(last.at)}: ${esc(last.name)} → ${last.ftp} W${last.accepted ? '' : ' (not applied)'}` : 'No test yet — pick one below to find your FTP.'}</div>
+        <div class="meta">${last ? `Last test ${relDate(last.at)}: ${esc(last.name)} → ${last.ftp} W${last.accepted ? '' : ' (not applied)'}` : `${tests.length ? 'No completed test yet' : 'No test yet'} — pick one below to find your FTP.`}</div>
       </div>
       <div class="ftp-side">
         ${ftpSparkline(tests)}
@@ -803,7 +803,7 @@ function renderTests() {
         ${tests.map((t, i) => `<div class="hrow trow">
           <div class="hdate">${new Date(t.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</div>
           <div class="htitle"><b>${esc(t.name)}</b><small class="muted">${esc([...(t.details || []).filter((d) => d[1]).map((d) => `${d[0]} ${d[1]}`), t.vo2 ? `VO2max ~${t.vo2} ml/kg/min` : ''].filter(Boolean).join(' · '))}</small></div>
-          <div class="hstat"><b>${t.ftp ? `${t.ftp} W` : '–'}</b></div>
+          <div class="hstat">${t.ftp ? `<b>${t.ftp} W</b>` : t.incomplete ? '<span class="badge warn">Not completed</span>' : '<b>–</b>'}</div>
           <div class="hstat">${t.ftp && t.prevFtp ? `${t.ftp >= t.prevFtp ? '+' : ''}${Math.round(((t.ftp - t.prevFtp) / t.prevFtp) * 100)} %` : ''}</div>
           <div class="hact">${t.accepted ? '<span class="badge ok">Applied</span>' : t.ftp ? `<button class="btn ghost sm" data-act="apply-ftp" data-i="${i}">Use ${t.ftp} W</button>` : ''}</div>
         </div>`).join('')}</div>` : '<p class="muted">Your test results will appear here.</p>'}
@@ -1656,6 +1656,19 @@ const IC = {
   bars: svgI('<path d="M5 20v-8M12 20V5M19 20v-5"/>'),
   plug: svgI('<path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5"/>'),
 };
+/** Plausibility note for a test result that differs a lot (> 15 %) from the current FTP. */
+function ftpCheck(next, cur, source) {
+  if (!next || !cur) return '';
+  const d = (next - cur) / cur;
+  if (Math.abs(d) <= 0.15) return '';
+  const pct = `${Math.round(Math.abs(d) * 100)} %`;
+  const src = source ? `the power came from <b>${esc(source)}</b>` : 'the right device measured your power';
+  const why = d > 0
+    ? `That's ${pct} above your current FTP. Before applying it, check that ${src} and that the trainer was calibrated (spin-down) recently — uncalibrated trainers often read high.`
+    : `That's ${pct} below your current FTP. Fatigue, illness or pacing can cost a lot of watts, and an uncalibrated trainer can read low. Check that ${src} — or repeat the test when you're fresh.`;
+  return `<p class="ftp-check">${why}</p>`;
+}
+
 const SEG_KIND = { steady: 'Steady state', warmup: 'Warm-up', cooldown: 'Cool-down', ramp: 'Ramp', on: 'Power interval', off: 'Recovery', freeride: 'Free ride', maxeffort: 'Max effort' };
 const segKind = (s) => `${s.erg === false ? 'All-out effort' : SEG_KIND[s.type] || 'Segment'}${s.reps ? ` ${s.rep}/${s.reps}` : ''}`;
 /** Fill a metric bar: frac 0…1, optional target marker (0…1) and colour. */
@@ -1743,7 +1756,7 @@ class Ride {
           </div>
           <div class="gearbox" id="gearbox" hidden><button class="btn round sm" data-shift="-1" title="Shift down (−)">−</button><span id="gear-lbl">Gear</span><button class="btn round sm" data-shift="1" title="Shift up (+)">+</button></div>
           <div class="stat-row">
-            <div class="stat">${IC.bolt}<div><span class="k">Target power</span><b id="s-tw">–</b></div></div>
+            <div class="stat">${IC.bolt}<div><span class="k" id="s-tw-k">Target power</span><b id="s-tw">–</b></div></div>
             <div class="stat">${IC.watch}<div><span class="k">Segment</span><b id="s-dur">0:00</b><div class="sbar"><i id="s-bar"></i></div></div></div>
             <div class="stat rem">${IC.flag}<div><span class="k">Remaining</span><b id="s-rem">0:00</b></div></div>
           </div>
@@ -1841,8 +1854,8 @@ class Ride {
       }
       case 'int+': this.adjust(1); return this.hint(`Intensity ${this.intensity}%`);
       case 'int-': this.adjust(-1); return this.hint(`Intensity ${this.intensity}%`);
-      case 'next': this.control('next'); return this.hint('Next segment ⏭');
-      case 'prev': this.control('prev'); return this.hint('⏮ Previous segment');
+      case 'next': if (this.control('next') !== false) this.hint('Next segment ⏭'); return;
+      case 'prev': if (this.control('prev') !== false) this.hint('⏮ Previous segment'); return;
       case 'play': this.toggle(); return this.hint(this.running ? '▶ Running' : '⏸ Paused');
       case 'pct': this.showPct = !this.showPct; this.render(true); return this.hint(this.showPct ? '% FTP' : 'Watts');
     }
@@ -1895,6 +1908,24 @@ class Ride {
     this.render(true);
   }
 
+  /** Seek with test rules: no skipping inside a measured effort (ramp or all-out), and a jump never
+   *  lands in the middle of one — forward snaps to its start, backward to its end — so efforts are
+   *  always ridden in one piece and never counted twice. Returns false when blocked. */
+  go(t) {
+    if (!this.test) return this.seek(t);
+    const segs = this.w.segments;
+    if (segs[this.segIdx]?.measure && !this.cooling) { this.hint('Skipping is off during a test effort'); return false; }
+    const k = segmentAt(segs, Math.max(0, Math.min(t, this.w.duration - 0.01)));
+    const s = segs[k];
+    if (s?.measure && t > s.start) {
+      let a = k, b = k;
+      while (a > 0 && segs[a - 1].measure === s.measure) a--;
+      while (b < segs.length - 1 && segs[b + 1].measure === s.measure) b++;
+      t = t >= this.t ? segs[a].start : segs[b].start + segs[b].duration;
+    }
+    return this.seek(t);
+  }
+
   seek(t) {
     this.t = Math.max(0, Math.min(this.w.duration - 0.01, t));
     this.beeped.clear();
@@ -1906,18 +1937,19 @@ class Ride {
     switch (c) {
       case 'play': return this.toggle();
       case 'stop': return this.stop();
-      case 'back': return this.seek(this.t - 60);
-      case 'fwd': return this.seek(this.t + 60);
+      case 'back': return this.go(this.t - 60);
+      case 'fwd': return this.go(this.t + 60);
       case 'prev': {
         const inSeg = this.t - seg.start;
         const target = inSeg > 3 || this.segIdx === 0 ? seg.start : this.w.segments[this.segIdx - 1].start;
-        return this.seek(target);
+        return this.go(target);
       }
       case 'next': {
         const n = this.w.segments[this.segIdx + 1];
-        return n ? this.seek(n.start) : this.finish(true);
+        if (this.test && seg?.measure && !this.cooling) return this.go(this.t + 1); // blocked → hint
+        return n ? this.go(n.start) : this.finish(true);
       }
-      case 'goto': $('#dg-tip').hidden = true; return this.seek(this.w.segments[+elm.dataset.i].start);
+      case 'goto': $('#dg-tip').hidden = true; return this.go(this.w.segments[+elm.dataset.i].start);
     }
   }
 
@@ -1939,7 +1971,9 @@ class Ride {
     const pedalling = (p != null && p > 15) || (c != null && c > 15);
     if (this.running) {
       const cs = this.w.segments[this.segIdx];
-      if (cs?.ramp) { this.idleFor = 0; return; } // ramp tests end by themselves
+      // ramp tests end by themselves, and in a measured test effort a stop must count as 0 W —
+      // pausing would leave the rest out and make the effort average too high
+      if (cs?.ramp || (this.test && cs?.measure)) { this.idleFor = 0; return; }
       this.idleFor = pedalling ? 0 : (this.idleFor || 0) + realDt;
       if (this.idleFor >= 3) { this.toggle(true); this.hint('⏸ Auto-paused — pedal to continue'); }
     } else if (this.autoPaused) {
@@ -1984,6 +2018,8 @@ class Ride {
           const i = Math.max(0, segmentAt(this.w.segments, Math.min(t, this.w.duration - 0.01)));
           const wall = SPEED > 1 ? (this.startedAt.getTime() + this.samples.length * 1000) : Date.now();
           this.samples.push({ t, p: fresh('power'), c: fresh('cadence'), hr: fresh('hr'), v: this.vsSpeed ?? fresh('speed'), tp: this.targetW, seg: i, measure: this.w.segments[i]?.measure, wall });
+          const tag = this.w.segments[i]?.measure;
+          if (tag) { const acc = ((this.effAcc ||= {})[tag] ||= { sum: 0, n: 0 }); acc.sum += this.samples[this.samples.length - 1].p || 0; acc.n++; }
         }
       }
       if (this.t >= this.w.duration) return this.finish(true);
@@ -1992,10 +2028,31 @@ class Ride {
       if (this.test && cs?.ramp && trainer.connected && this.t - this.w.segments.find((x) => x.ramp).start > 60) {
         const p = fresh('power'), c = fresh('cadence'), tw = this.targetW;
         this.lowCount = ((c != null && c < 30) || (p != null && tw && p < tw * 0.5)) ? this.lowCount + dt : 0;
-        if (this.lowCount >= 10) return this.finish(true);
+        if (this.lowCount >= 10) this.rampCooldown();
       }
     }
     this.render(false);
+  }
+
+  /** The rider can't hold the ramp any more: end the ramp here and continue with an easy
+   *  5-minute cool-down (still recorded) instead of stopping abruptly. Stop shows the result. */
+  rampCooldown() {
+    if (this.cooling) return;
+    this.cooling = true;
+    const segs = this.w.segments;
+    const i = this.segIdx;
+    segs[i].duration = Math.max(1, Math.round(this.t - segs[i].start));
+    const easy = segs[0].p0 ?? 100 / ftp(); // the warm-up power (100 W / 80 W)
+    const cool = { type: 'cooldown', duration: 300, p0: easy, p1: easy * 0.8, texts: [{ t: 0, msg: 'Ramp done! Cool down easy — press ⏹ any time for your result' }] };
+    this.w.segments = [...segs.slice(0, i + 1), cool];
+    let t = 0;
+    this.w.segments.forEach((x, k) => { x.idx = k + 1; x.label = String(k + 1); x.start = t; t += x.duration; });
+    this.w.duration = t;
+    this.diagram.w = this.w;
+    this.diagram.draw();
+    $('#d-tot').textContent = `of ${fmtTime(t)}`;
+    this.hint('Ramp complete — cooling down');
+    this.render(true);
   }
 
   get targetFrac() {
@@ -2102,6 +2159,25 @@ class Ride {
     $('#s-target').style.color = zoneInk(tf, bounds());
     $('#s-tw').textContent = gt != null ? `${gt} W` : allOut ? 'All out' : 'Free';
     $('#s-tw').style.color = gt != null ? zoneInk(gt / F, bounds()) : '';
+    // live pacing in long all-out test efforts: running average, projected FTP, "too fast" warning
+    const pacing = this.test && allOut && s.measure && s.duration >= 300;
+    $('#s-tw-k').textContent = pacing ? (s.duration >= 480 ? 'Est. FTP' : 'Effort avg') : 'Target power';
+    $('#s-watts').classList.remove('warn-text');
+    if (pacing) {
+      const acc = this.effAcc?.[s.measure];
+      const avg = acc && acc.n >= 5 ? Math.round(acc.sum / acc.n) : null;
+      const factor = s.duration >= 1140 ? 0.95 : s.duration >= 480 ? 0.9 : null;
+      const fast = !!(avg && tw && acc.n >= 60 && avg > tw * 1.1);
+      $('#s-target').textContent = avg ? `${avg} W` : 'ALL OUT';
+      $('#s-target').classList.toggle('range', !avg);
+      if (avg) $('#s-target').style.color = zoneInk(avg / F, bounds());
+      $('#s-watts').textContent = !avg ? `aim ~${tw ?? '–'} W · ${vsActive ? 'shift' : 'gears'}` : fast ? 'too fast · ease off' : tw ? `avg · aim ~${tw} W` : 'effort average';
+      $('#s-watts').classList.toggle('warn-text', fast);
+      if (fast && !this.paceWarned?.[s.measure]) { (this.paceWarned ||= {})[s.measure] = true; this.hint('Too fast — ease off a little, it\'s a long effort'); }
+      const proj = avg && factor && acc.n >= 30 ? Math.round(avg * factor) : null;
+      $('#s-tw').textContent = factor ? (proj ? `${proj} W` : '–') : (avg ? `${avg} W` : '–');
+      $('#s-tw').style.color = '';
+    }
     $('#s-dur').textContent = fmtTime(s.duration);
     $('#s-bar').style.width = `${Math.min(100, (inSeg / s.duration) * 100)}%`;
     $('#s-bar').style.background = color;
@@ -2123,11 +2199,14 @@ class Ride {
         card.style.setProperty('--zc', zoneColor(nf, bounds()));
         card.innerHTML = `<div class="nc-txt"><b>${big}</b><span class="nc-w" style="color:${zoneInk(nf, bounds())}">${watts}</span></div>
           ${nLo != null ? `<span class="nc-cad" title="Target cadence">${IC.cad}<b>${nLo === nHi ? nLo : `${nLo}–${nHi}`}</b><small>rpm</small></span>` : `<span class="nc-zone" title="${nf == null ? 'Free ride' : zoneOf(nf, bounds()).name}">${IC.bars}</span>`}`;
-        $('#n-tw').textContent = n.p0 === null ? '–' : wa === wb ? `${wa} W` : `${wa}–${wb} W`;
+        $('#n-tw').textContent = n.p0 === null ? '–' : wa === wb ? `${wa} W` : `${wa}–${wb}`;
+        $('#n-tw').classList.toggle('range', n.p0 !== null && wa !== wb);
         $('#n-dur').textContent = fmtTime(n.duration);
       } else {
         card.style.setProperty('--zc', 'var(--line-strong)');
-        card.innerHTML = '<div class="nc-txt"><b>Finish strong</b><span class="nc-w muted">no more changes</span></div>';
+        card.innerHTML = this.cooling
+          ? '<div class="nc-txt"><b>Test done</b><span class="nc-w muted">press ⏹ for your result</span></div>'
+          : '<div class="nc-txt"><b>Finish strong</b><span class="nc-w muted">no more changes</span></div>';
         $('#n-tw').textContent = '–';
         $('#n-dur').textContent = '–';
       }
@@ -2151,6 +2230,7 @@ class Ride {
     const wasRunning = this.running;
     if (wasRunning) this.toggle();
     if (!this.started) return this.close();
+    if (this.test && this.cooling) return this.finish(true); // the ramp is over — show the result
     if (this.test) {
       const c = await choiceDialog('End test?', this.w.segments[this.segIdx]?.ramp ? 'Your FTP is calculated from the ramp so far.' : `You rode ${fmtTime(this.ridden)}. The result is calculated from what you've done.`, [
         ['resume', 'Resume', 'ghost'], ['discard', 'Discard', 'ghost'], ['save', 'Finish & evaluate', 'primary']]);
@@ -2213,7 +2293,7 @@ class Ride {
         const bests = { ...(state.settings.bests || {}) };
         for (const [k, val] of Object.entries(testResult.bests || {})) if (val && (!bests[k] || val > bests[k])) bests[k] = val;
         state.settings.bests = bests;
-        state.tests = [{ at: new Date().toISOString(), protocol: this.test.protocol?.id || 'library', name: this.test.protocol?.name || title, ftp: testResult.ftp, prevFtp: ftp(), details: testResult.details, cp: testResult.cp ?? null, wPrime: testResult.wPrime ?? null, vo2: testResult.vo2est?.rel ?? null, vo2abs: testResult.vo2est?.abs ?? null, weight: weight(), accepted: false }, ...(state.tests || [])].slice(0, 200);
+        state.tests = [{ at: new Date().toISOString(), protocol: this.test.protocol?.id || 'library', name: this.test.protocol?.name || title, ftp: testResult.ftp, incomplete: !!testResult.incomplete, prevFtp: ftp(), details: testResult.details, cp: testResult.cp ?? null, wPrime: testResult.wPrime ?? null, vo2: testResult.vo2est?.rel ?? null, vo2abs: testResult.vo2est?.abs ?? null, weight: weight(), accepted: false }, ...(state.tests || [])].slice(0, 200);
         await api.saveState();
       }
     }
@@ -2239,7 +2319,13 @@ class Ride {
           <dl>${testResult.details.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}
             ${wkg(testResult.ftp) ? `<dt>FTP per kg</dt><dd>${wkg(testResult.ftp)} W/kg</dd>` : ''}
             ${testResult.vo2est ? `<dt>VO2max (estimate)</dt><dd>${testResult.vo2est.rel} ml/kg/min · ${testResult.vo2est.abs} L/min <small class="muted">${esc(testResult.vo2est.method)}</small></dd>` : testResult.vo2 && !weight() ? '<dt>VO2max</dt><dd class="muted">add your weight in Settings → Rider</dd>' : ''}</dl>
+          ${ftpCheck(testResult.ftp, ftp(), trainer.connected ? trainer.name : null)}
           <div class="ftp-actions"><button class="btn primary" data-a="apply">Use ${testResult.ftp} W as my FTP</button><button class="btn ghost" data-a="keep">Keep ${ftp()} W</button></div>
+        </div>` : testResult?.incomplete ? `<div class="ftp-result incomplete">
+          <div><span class="k">Effort not completed</span></div>
+          <p>${esc(testResult.incomplete.text)} An FTP from an incomplete effort would be too low, so your FTP stays at <b>${ftp()} W</b>.${Object.keys(testResult.bests || {}).length ? ' Your power bests from this ride are saved.' : ''}</p>
+          <dl>${testResult.details.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+          <p class="muted small">Repeat the test when you're fresh — pace the effort a little lower at the start.</p>
         </div>` : testResult?.details ? `<div class="ftp-result"><div><span class="k">Power bests saved</span></div><dl>${testResult.details.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}${testResult.vo2est ? `<dt>VO2max (estimate)</dt><dd>${testResult.vo2est.rel} ml/kg/min</dd>` : ''}</dl></div>` : `<p class="warn-text">Not enough power data to calculate an FTP${testResult?.details ? '' : ' — was a power source connected?'}.</p>${testResult?.details ? `<dl class="ftp-dl">${testResult.details.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : ''}`) : ''}
         <div class="stats">
           ${cell('time', fmtTime(this.ridden))}${cell('avg power', st.avgPower && `${st.avgPower} W`)}${cell('NP', st.np && `${st.np} W`)}
