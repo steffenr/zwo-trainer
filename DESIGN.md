@@ -159,6 +159,8 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 - **Cadence target** (not in the original mockup): the cadence row shows `target 80` (or `85–95`); the bar spans 40–130 rpm with a marker (or band, for ranges) at the target and turns **green** on target, **amber** 5–10 rpm off, **red** beyond 10 rpm — the value itself turns red too. The next-segment card shows the upcoming target cadence as a small chip.
 - **Current-segment ring** `ProgressRing`: a single progress arc in the zone colour (it reuses `Gauge` but removes the inner "actual power" track, the FTP tick and the actual arc — only the LIVE watt gauge has two arcs: outer = target, inner = actual).
 - **Stat rows** `.stat-row`: three columns separated by 1 px lines, icon · label · 26 px value. CURRENT: target power (zone ink) · segment duration with a progress bar in the zone colour · remaining (pulses in the last 5 s). NEXT: target power · duration · intensity with small − / + below.
+- **Test pacing** (all-out test efforts ≥ 5 min): the ring centre shows the running effort average in zone ink, the line below it "avg · aim ~263 W" (or "too fast · ease off" in `--warn` after 1 min at > 110 % of the aim), and the first stat becomes **Est. FTP** (8/20-min efforts) or **Effort avg**. Keep both lines short so they fit inside the ring.
+- **Power ranges in stat values** (e.g. `150–113`) drop the unit and use `.stat b.range` (20 px) so they fit their column.
 - **Next-segment card** `.nx-card`: 6 px stripe in the zone colour, big `100% → 110%` (no segment-kind label — the chart already shows it), watts in zone ink, cadence chip (or a zone icon when there's no cadence target).
 - **Controls row:** buttons centred horizontally and on one centre line (`align-items: center`), the larger play button in the middle.
 - **Chart:**
@@ -185,7 +187,9 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 | **Workout row** `.wrow` | grid: status · title (+ meta) · mini profile 200 × 28 · duration · intensity tag + TSS · actions (☆, ⋯, primary action). Radius 11, hover border `--line-strong`. The next workout in a plan gets the accent border and a soft gradient. |
 | **Intensity tag** `.ztag` | zone fill, black 11 px 650 text "Z1–Z5", radius 5, min-width 26. |
 | **Zone filter** `.zone-filter` | outlined chips with a 9 px zone dot; when active the border is the zone colour, the background is 16 % zone colour, and the zone name is shown. |
-| **Badge** `.badge` | 11 px 700, radius 6. Default is accent; `.ok`, `.muted` and `.test` (Z4 ink) variants. |
+| **Badge** `.badge` | 11 px 700, radius 6. Default is accent; `.ok`, `.warn` (e.g. *Not completed* in the test history), `.muted` and `.test` (Z4 ink) variants. |
+| **Plausibility note** `.ftp-check` | inside the FTP result box, above the buttons, when the new FTP differs > 15 % from the current one: `--warn-soft` background, thin warn border, 13.5 px text. |
+| **FTP result box** `.ftp-result` | accent border + `--accent-soft` for a new FTP; `.incomplete` switches to `--warn` / `--warn-soft` with an "Effort not completed" heading, an explanation and the effort details. |
 | **ERG pill** `.erg` | 11.5 px 700 uppercase-ish, radius 6: `.on` ok, `.off` warn, `.vs` virtual gears. |
 | **Dialog** `dialog` | radius 18, `--shadow-lg`, blurred `--backdrop`. Widths: default 560, `.small` 460, `.settings` 540, `.wide` 960. Header `.pv-head` has the title left and ✕ right; actions go in `.modal-actions` on the right with cancel/back as ghost and the confirm button last. |
 | **Popover / menu** `.popover` | radius 12, `--shadow-lg`, 6 px padding, 220 px minimum. Items are full-width rows with radius 8 and hover `--surface-2`; separate destructive items with `<hr>` and mark them `.danger-text` with a trailing "…". |
