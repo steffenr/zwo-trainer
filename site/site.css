@@ -276,3 +276,24 @@ code { font: 14px var(--mono); background: var(--bg-2); border: 1px solid var(--
 .js .rv { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s ease; }
 .js .rv.in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) { .rv { opacity: 1; transform: none; transition: none; } html { scroll-behavior: auto; } .hero-shot .frame { transform: none; } }
+
+/* support / buy me a coffee */
+.support { display: grid; grid-template-columns: 1.4fr 1fr; gap: clamp(28px, 5vw, 64px); align-items: center; border: 1px solid var(--line); border-radius: 28px; padding: clamp(32px, 6vw, 72px); background:
+  radial-gradient(70% 90% at 100% 100%, color-mix(in srgb, var(--z4) 16%, transparent), transparent 70%), var(--card); }
+.support h2 { margin: 14px 0 18px; }
+.support p { color: var(--muted); margin: 0 0 14px; max-width: 56ch; }
+.support .small-note { font-size: 15px; color: var(--faint); }
+.support-cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 26px; }
+.btn.bmc { background: var(--z4); border-color: var(--z4); color: #1a1400; }
+.btn.bmc:hover { background: color-mix(in srgb, var(--z4) 88%, #000); }
+.support-art { display: grid; place-items: center; gap: 22px; }
+.support-art .cup { font-size: clamp(72px, 10vw, 120px); line-height: 1; filter: drop-shadow(0 18px 30px color-mix(in srgb, var(--z4) 35%, transparent)); }
+.fuel { width: min(280px, 100%); display: grid; gap: 8px; }
+.fuel span { font: 600 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.fuel-bar { height: 12px; border-radius: 999px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.fuel-bar i { display: block; height: 100%; width: 18%; border-radius: inherit; background: linear-gradient(90deg, var(--z5), var(--z4)); animation: fuel 3.2s ease-in-out infinite alternate; }
+.fuel small { color: var(--z5); font-size: 12px; }
+@keyframes fuel { to { width: 34%; } }
+@media (prefers-reduced-motion: reduce) { .fuel-bar i { animation: none; } }
+footer .bmc-link { color: var(--text); font-weight: 600; }
+@media (max-width: 820px) { .support { grid-template-columns: 1fr; } .support-art { order: -1; justify-items: start; } }
