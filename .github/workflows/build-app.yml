@@ -46,10 +46,10 @@ jobs:
             test: true
     runs-on: ${{ matrix.settings.platform }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node (for the Tauri CLI and the version script)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -88,7 +88,7 @@ jobs:
           npx --yes "$TAURI_CLI" build "${ARGS[@]}"
 
       - name: Upload installers
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: zwotrainer-${{ matrix.settings.name }}
           if-no-files-found: error
@@ -108,13 +108,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # full history + tags so the notes can diff against the previous tag
           fetch-depth: 0
 
       - name: Collect installers
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           pattern: zwotrainer-*
@@ -158,7 +158,7 @@ jobs:
           } > notes.md
 
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: zwoTrainer ${{ github.ref_name }}
           body_path: notes.md
