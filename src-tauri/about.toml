@@ -1,0 +1,28 @@
+# cargo-about: licences of the Rust crates shipped in the zwoTrainer installers.
+# The release workflow (build-app.yml) renders them with about.hbs into
+# THIRD-PARTY-NOTICES.html and attaches it to every GitHub release.
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "0BSD",
+    "Unlicense",
+    "BSL-1.0",
+    "CC0-1.0",
+    "MIT-0",
+    "Unicode-3.0",
+    "MPL-2.0",
+    "CDLA-Permissive-2.0",
+]
+# only the crates of the platforms we ship
+targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+]
+ignore-build-dependencies = true
+ignore-dev-dependencies = true

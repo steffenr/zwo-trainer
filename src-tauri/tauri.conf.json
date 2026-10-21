@@ -42,7 +42,10 @@
       "minimumSystemVersion": "11.0",
       "signingIdentity": "-"
     },
-    "copyright": "© Steffen Rühlmann",
+    "copyright": "© 2026 SteffenR",
+    "publisher": "SteffenR",
+    "license": "MIT",
+    "homepage": "https://steffenr.github.io/zwo-trainer/",
     "linux": {
       "deb": {
         "depends": [

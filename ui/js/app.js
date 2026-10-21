@@ -1253,6 +1253,14 @@ async function openSettings(tab = 'rider') {
       </div>
       <h3>Devices</h3>
       <p class="muted small">Trainer: ${esc(s.devices?.trainer?.name || 'none')} · Heart rate: ${esc(s.devices?.hr?.name || 'none')} · Shifter: ${esc((s.devices?.controllers || []).map((c) => c.name).join(' + ') || 'none')} — pair or forget them with the buttons in the top bar.</p>
+      <h3>About</h3>
+      <p class="muted small">zwoTrainer <span id="app-ver"></span> · MIT License · © 2026 SteffenR</p>
+      <div class="about-links">
+        <button class="btn ghost sm" data-a="link" data-url="https://steffenr.github.io/zwo-trainer/">Website</button>
+        <button class="btn ghost sm" data-a="link" data-url="https://github.com/steffenr/zwo-trainer">Source code</button>
+        <button class="btn ghost sm" data-a="link" data-url="https://github.com/steffenr/zwo-trainer/releases/latest/download/THIRD-PARTY-NOTICES.html">Third-party licences</button>
+        <button class="btn ghost sm" data-a="link" data-url="https://buymeacoffee.com/steffenr">☕ Buy me a coffee</button>
+      </div>
     </div>
 
     <div class="tab-pane" data-pane="sync" ${tab === 'sync' ? '' : 'hidden'}>
@@ -1354,10 +1362,12 @@ async function openSettings(tab = 'rider') {
       };
     }
   };
+  window.__TAURI__?.app?.getVersion?.().then((v) => { const el = $('#app-ver', modal); if (el) el.textContent = v; }).catch(() => {});
   $$('[data-a]', modal).forEach((b) => (b.onclick = async (e) => {
     e.preventDefault();
     const a = b.dataset.a;
     if (a === 'close' || a === 'cancel') { if (s.theme !== themeBefore) setTheme(themeBefore); return closeModal(); }
+    if (a === 'link') return invoke('open_link', { url: b.dataset.url }).catch((err) => toast(String(err)));
     if (a === 'dir') { closeModal(); return pickDir(); }
     if (a === 'rescan') { closeModal(); await loadLibrary(); return toast(`${library.plans.length} plans found`); }
     if (a === 'garmin-dir') {

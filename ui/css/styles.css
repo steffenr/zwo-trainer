@@ -219,6 +219,7 @@ dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(3px); }
 .seg-ctl { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 2px; }
 .seg-ctl button { all: unset; padding: 5px 12px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; }
 .seg-ctl button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); outline: 1px solid var(--line); }
+.about-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .folder-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; }
 .folder-row code { flex: 1; padding: 6px 8px; }
 .dev-list { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; min-height: 58px; }

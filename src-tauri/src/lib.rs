@@ -271,6 +271,42 @@ fn open_link(handle: tauri::AppHandle, url: String) -> Res<()> {
     handle.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
 
+// ---------------------------------------------------------------- macOS app menu
+
+#[cfg(target_os = "macos")]
+const WEBSITE: &str = "https://steffenr.github.io/zwo-trainer/";
+#[cfg(target_os = "macos")]
+const SOURCE: &str = "https://github.com/steffenr/zwo-trainer";
+
+/// Tauri's default macOS menu with the licence in "About zwoTrainer" and links to the
+/// website and the source code in the Help menu.
+#[cfg(target_os = "macos")]
+fn app_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    use tauri::menu::{AboutMetadata, Menu, MenuItem, MenuItemKind, PredefinedMenuItem, HELP_SUBMENU_ID};
+    let menu = Menu::default(app)?;
+    if let Some(MenuItemKind::Submenu(app_menu)) = menu.items()?.into_iter().next() {
+        let pkg = app.package_info();
+        let about = PredefinedMenuItem::about(
+            app,
+            None,
+            Some(AboutMetadata {
+                name: Some(pkg.name.clone()),
+                version: Some(pkg.version.to_string()),
+                copyright: app.config().bundle.copyright.clone(),
+                credits: Some("MIT License".into()),
+                ..Default::default()
+            }),
+        )?;
+        app_menu.remove_at(0)?;
+        app_menu.insert(&about, 0)?;
+    }
+    if let Some(MenuItemKind::Submenu(help)) = menu.get(HELP_SUBMENU_ID) {
+        help.append(&MenuItem::with_id(app, "website", "zwoTrainer Website", true, None::<&str>)?)?;
+        help.append(&MenuItem::with_id(app, "source", "Source Code on GitHub", true, None::<&str>)?)?;
+    }
+    Ok(menu)
+}
+
 // ---------------------------------------------------------------- other platforms
 
 #[tauri::command]
@@ -524,6 +560,18 @@ pub fn run() {
                 ble,
                 awake: Mutex::new(None),
             });
+            #[cfg(target_os = "macos")]
+            {
+                app.set_menu(app_menu(app.handle())?)?;
+                app.on_menu_event(|app, event| {
+                    let url = match event.id().as_ref() {
+                        "website" => WEBSITE,
+                        "source" => SOURCE,
+                        _ => return,
+                    };
+                    let _ = app.opener().open_url(url, None::<&str>);
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

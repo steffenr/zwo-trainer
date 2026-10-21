@@ -8,6 +8,8 @@ A lightweight, fast indoor-training app for macOS (with Windows and Linux builds
 
 No video courses, no workout builder, no music, no subscription. You get a clean workout display and your own library.
 
+**Website:** [steffenr.github.io/zwo-trainer](https://steffenr.github.io/zwo-trainer/) · **Download:** [latest release](https://github.com/steffenr/zwo-trainer/releases/latest) · **License:** [MIT](LICENSE)
+
 - **Plans:** every folder with a weekly schedule is a plan. Start it and ride the workouts in order; skipped and done workouts are tracked and the next one is always suggested.
 - **Workouts:** browse and ride any workout freely, with search, length and intensity filters, TSS and favorites.
 - **FTP Tests:** Ramp, Ramp Lite, 20-minute, 8-minute and Power Profile tests, plus test workouts from your library. One click applies the new FTP. W/kg and VO2max estimates are included.
@@ -38,6 +40,7 @@ Built with **Tauri 2**: a Rust core and a plain HTML/CSS/JS interface, with no N
 15. [Where your data lives](#where-your-data-lives)
 16. [Troubleshooting](#troubleshooting)
 17. [For developers](#for-developers)
+18. [License](#license)
 
 ---
 
@@ -307,7 +310,7 @@ Keep riders in sync across Macs through a folder your cloud app already syncs. N
 | Tab | Setting |
 |---|---|
 | **Rider** | FTP, max heart rate, weight, personal bests (5 s / 1 / 5 / 20 min), zone limits (upper limit of Z1–Z4 in % FTP) |
-| **App** | Appearance (Match system / Light / Dark), countdown beeps, auto-pause, workouts folder (*Change… / Rescan*), virtual shifting (default, difficulty, gear-ratio range, start gear), paired devices overview |
+| **App** | Appearance (Match system / Light / Dark), countdown beeps, auto-pause, workouts folder (*Change… / Rescan*), virtual shifting (default, difficulty, gear-ratio range, start gear), paired devices overview, *About* (version, licence, links to the website, source code, third-party licences and Buy Me a Coffee) |
 | **Connections** | Profile sync, Garmin Connect (sign in, upload mode, manual FIT import folder), Strava note, more platforms (Intervals.icu API key and upload mode, COROS import button) |
 
 ---
@@ -378,10 +381,18 @@ GitHub Actions builds and publishes everything (workflows in `.github/workflows/
 
 - **CI** (`ci.yml`, every push to `main` and every PR): tests and clippy on Linux, tests on macOS and Windows.
 - **Release** (`release.yml`): *Actions → Release → Run workflow*, pick **patch / minor / major**. It bumps the version in `src-tauri/Cargo.toml` (the only place it lives) and `Cargo.lock`, commits `chore(release): X`, tags `vX` and pushes. Needs a repository secret **`RELEASE_PAT`** (a token with *Contents: read & write*), because pushes made with the default token don't start other workflows.
-- **Build** (`build-app.yml`, on every `v*` tag): builds macOS Apple silicon + Intel, Windows x64 and Linux x64 in parallel, then publishes one GitHub release with all installers and notes generated from the commits since the previous tag. Run it by hand (*Run workflow*) for a test build: the installers are attached to the run instead.
+- **Build** (`build-app.yml`, on every `v*` tag): builds macOS Apple silicon + Intel, Windows x64 and Linux x64 in parallel, then publishes one GitHub release with all installers, notes generated from the commits since the previous tag and `THIRD-PARTY-NOTICES.html` (the licences of all bundled Rust crates, generated with [cargo-about](https://github.com/EmbarkStudios/cargo-about) from `src-tauri/about.toml` and `about.hbs`). Run it by hand (*Run workflow*) for a test build: the installers are attached to the run instead.
 - **Website** (`pages.yml`): publishes the static site in `site/` to GitHub Pages on every push to `develop` that changes it, after each successful release build (the download page then shows the new version) and by hand. One-time setup: *Settings → Pages → Build and deployment → Source: GitHub Actions*.
 - **Dependabot** (`.github/dependabot.yml`): opens monthly pull requests against `develop`. All GitHub Actions updates come in one PR, minor and patch updates of the Rust crates in another, and each major crate update (e.g. `tauri`, `btleplug`) in its own. CI runs on every PR.
 
 To release by hand instead: `node scripts/sync-version.mjs 1.2.0`, commit, `git tag v1.2.0 && git push --follow-tags`.
 
 Supported ZWO elements: `SteadyState`, `SolidState`, `Warmup`, `Cooldown`, `Ramp`, `IntervalsT`, `FreeRide`, `MaxEffort`, `textevent` (inside elements and at workout level) and the cadence attributes. Ramps follow Zwift's rule: `PowerLow` is the start value and `PowerHigh` the end value.
+
+---
+
+## License
+
+zwoTrainer is free and open source under the [MIT License](LICENSE) © 2026 SteffenR.
+
+The installers bundle open-source Rust crates under their own licences (MIT, Apache-2.0, BSD, ISC, MPL-2.0 and others). Their notices are attached to every release as `THIRD-PARTY-NOTICES.html` and linked in the app under *Settings → App → About*. Zwift, Garmin, Strava, Intervals.icu and COROS are trademarks of their owners; zwoTrainer isn't affiliated with them.

@@ -130,6 +130,16 @@ jobs:
           ls -la release
           test -n "$(ls -A release)"
 
+      - name: Install cargo-about
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about
+
+      - name: Generate third-party notices
+        # licences of every Rust crate in the installers (config: src-tauri/about.toml)
+        working-directory: src-tauri
+        run: cargo about generate --locked -c about.toml about.hbs -o ../release/THIRD-PARTY-NOTICES.html
+
       - name: Generate release notes
         shell: bash
         run: |

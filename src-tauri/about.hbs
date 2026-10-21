@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zwoTrainer – third-party licences</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 860px; margin: 0 auto; padding: 32px 20px; }
+  h1 { font-size: 24px; } h2 { font-size: 18px; margin-top: 40px; }
+  ul.overview { columns: 2; }
+  ul.crates { padding-left: 18px; font-size: 14px; }
+  pre { white-space: pre-wrap; font-size: 12.5px; padding: 14px; border: 1px solid #8884; border-radius: 8px; }
+  a { color: #00a3c4; }
+</style>
+</head>
+<body>
+<h1>Third-party licences</h1>
+<p>zwoTrainer is released under the MIT License (© SteffenR). It is built with the open-source Rust crates listed below, under their own licences.</p>
+<h2>Overview</h2>
+<ul class="overview">
+{{#each overview}}<li><a href="#{{id}}">{{name}}</a> ({{count}})</li>
+{{/each}}</ul>
+{{#each licenses}}
+<h2 id="{{id}}">{{name}}</h2>
+<p>Used by:</p>
+<ul class="crates">
+{{#each used_by}}<li><a href="{{#if crate.repository}}{{crate.repository}}{{else}}https://crates.io/crates/{{crate.name}}{{/if}}">{{crate.name}} {{crate.version}}</a></li>
+{{/each}}</ul>
+<pre>{{text}}</pre>
+{{/each}}
+</body>
+</html>
