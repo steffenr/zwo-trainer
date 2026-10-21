@@ -1733,42 +1733,42 @@ class Ride {
         <section class="panel live">
           <header class="ph"><span class="ph-dot" id="live-dot"></span><b>Live</b>${IC.pulse}<span class="ph-status" id="live-status"></span></header>
           <div class="live-body">
-            <div class="metrics">
-              <div class="metric">${IC.bolt}<div class="m-txt"><span class="k">Power</span><span class="m-val"><b id="m-pow">–</b><small>W</small><em id="m-pow-t"></em></span><div class="mbar" id="b-pow"><i class="fill"></i><i class="mark"></i></div></div></div>
-              <div class="metric">${IC.cad}<div class="m-txt"><span class="k">Cadence</span><span class="m-val"><b id="v-cad">–</b><small>rpm</small><em id="t-cad"></em></span><div class="mbar" id="b-cad"><i class="band"></i><i class="fill"></i><i class="mark"></i></div></div></div>
-              <div class="metric">${IC.speed}<div class="m-txt"><span class="k">Speed</span><span class="m-val"><b id="v-spd">–</b><small>km/h</small></span><div class="mbar" id="b-spd"><i class="fill"></i></div></div></div>
-              <div class="metric">${IC.heart}<div class="m-txt"><span class="k">Heart rate</span><span class="m-val"><b id="v-hr">–</b><small>bpm</small><em id="t-hr"></em></span><div class="mbar" id="b-hr"><i class="fill"></i></div></div></div>
-            </div>
             <button class="gauge" id="gauge" title="Click: watts ↔ % FTP">
               <div class="gauge-mount"></div>
               <div class="gauge-center"><span class="k" id="g-unit">watt</span><b id="v-pow">–</b><small id="t-pow">–</small></div>
             </button>
+            <div class="metrics">
+              <div class="metric">${IC.bolt}<div class="m-txt"><span class="k">Power</span><span class="m-val"><b id="m-pow">–</b><small>W</small></span><div class="mbar" id="b-pow"><i class="fill"></i><i class="mark"></i></div></div></div>
+              <div class="metric">${IC.cad}<div class="m-txt"><span class="k">Cadence</span><span class="m-val"><b id="v-cad">–</b><em id="t-cad"></em><small>rpm</small></span><div class="mbar" id="b-cad"><i class="band"></i><i class="fill"></i><i class="mark"></i></div></div></div>
+              <div class="metric">${IC.speed}<div class="m-txt"><span class="k">Speed</span><span class="m-val"><b id="v-spd">–</b><small>km/h</small></span><div class="mbar" id="b-spd"><i class="fill"></i></div></div></div>
+              <div class="metric">${IC.heart}<div class="m-txt"><span class="k">Heart rate</span><span class="m-val"><b id="v-hr">–</b><small>bpm</small><em id="t-hr"></em></span><div class="mbar" id="b-hr"><i class="fill"></i></div></div></div>
+            </div>
           </div>
         </section>
         <section class="panel seg">
           <header class="ph">${IC.target}<b>Current segment</b><span class="ph-status" id="seg-kind"></span></header>
-          <div class="seg-ring">
-            <div class="ring-mount"></div>
-            <div class="ring-center">
-              <b id="s-target">–</b>
-              <small id="s-watts"></small>
+          <div class="seg-body">
+            <div class="seg-left">
+              <div class="seg-ring">
+                <div class="ring-mount"></div>
+                <div class="ring-center">
+                  <b id="s-target">–</b>
+                  <small id="s-watts"></small>
+                </div>
+              </div>
+              <div class="gearbox" id="gearbox" hidden><button class="btn round sm" data-shift="-1" title="Shift down (−)">−</button><span id="gear-lbl">Gear</span><button class="btn round sm" data-shift="1" title="Shift up (+)">+</button></div>
             </div>
-          </div>
-          <div class="gearbox" id="gearbox" hidden><button class="btn round sm" data-shift="-1" title="Shift down (−)">−</button><span id="gear-lbl">Gear</span><button class="btn round sm" data-shift="1" title="Shift up (+)">+</button></div>
-          <div class="stat-row">
-            <div class="stat">${IC.bolt}<div><span class="k" id="s-tw-k">Target power</span><b id="s-tw">–</b></div></div>
-            <div class="stat">${IC.watch}<div><span class="k">Segment</span><b id="s-dur">0:00</b><div class="sbar"><i id="s-bar"></i></div></div></div>
-            <div class="stat rem">${IC.flag}<div><span class="k">Remaining</span><b id="s-rem">0:00</b></div></div>
+            <div class="seg-stats">
+              <div class="stat">${IC.bolt}<div><span class="k" id="s-tw-k">Target power</span><b id="s-tw">–</b></div></div>
+              <div class="stat cad">${IC.cad}<div><span class="k">Target cadence</span><b id="s-cad">–</b></div></div>
+              <div class="stat">${IC.watch}<div><span class="k">Segment</span><b id="s-dur">0:00</b><div class="sbar"><i id="s-bar"></i></div></div></div>
+              <div class="stat rem">${IC.flag}<div><span class="k">Remaining</span><b id="s-rem">0:00</b></div></div>
+            </div>
           </div>
         </section>
         <section class="panel next">
           <header class="ph">${IC.layers}<b>Next segment</b></header>
           <div class="nx-card" id="next-card"></div>
-          <div class="stat-row">
-            <div class="stat">${IC.bolt}<div><span class="k">Target power</span><b id="n-tw">–</b></div></div>
-            <div class="stat">${IC.watch}<div><span class="k">Duration</span><b id="n-dur">–</b></div></div>
-            <div class="stat int">${IC.dial}<div><span class="k">Intensity</span><b id="int-val">100%</b><span class="int-ctrl"><button class="int-btn" data-int="-1" title="−1 % (Shift: −10 %)" aria-label="Intensity −1 %">−</button><button class="int-btn" data-int="1" title="+1 % (Shift: +10 %)" aria-label="Intensity +1 %">+</button></span></div></div>
-          </div>
         </section>
       </div>
       <div class="ride-diagram panel">
@@ -1788,6 +1788,11 @@ class Ride {
         <button class="ctl" data-c="stop" title="End workout"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
         <button class="ctl" data-c="fwd" title="Forward 1 minute"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v4h-4"/></svg></button>
         <button class="ctl" data-c="next" title="Next segment (→)"><svg viewBox="0 0 24 24"><path d="M18 5v14M5 5l9 7-9 7z"/></svg></button>
+        <div class="int-group" title="Intensity scales every segment of this workout">
+          <div class="int-read"><span class="k">Intensity</span><b id="int-val">100%</b></div>
+          <button class="ctl int-b" data-int="-1" title="Intensity −1 % (Shift: −10 %)" aria-label="Intensity −1 %">−</button>
+          <button class="ctl int-b" data-int="1" title="Intensity +1 % (Shift: +10 %)" aria-label="Intensity +1 %">+</button>
+        </div>
       </div>
       <div class="ready" id="ready"><div><b>Ready?</b><span>Press <kbd>Space</kbd> or ▶ to start${trainer.connected ? ' — or just start pedalling' : ''}.</span></div>
         ${this.hasFree ? `<div class="vs-ask"><span class="k">free-ride segments</span><span class="seg-ctl" id="vs-choice">${[['gears', 'Real gears'], ['easy', 'Virtual gears easy'], ['medium', 'medium'], ['hard', 'hard']].map(([k, l]) => `<button data-vs="${k}" class="${(k === 'gears' ? !this.vs.on : this.vs.on && this.vs.difficulty === k) ? 'on' : ''}">${l}</button>`).join('')}</span></div>` : ''}</div>`;
@@ -2113,15 +2118,14 @@ class Ride {
     const p = fresh('power'), c = fresh('cadence'), hr = fresh('hr'), v = fresh('speed');
     const gt = vsActive ? this.vs.watts : allOut ? null : tw;
     $('#m-pow').textContent = p ?? '–';
-    $('#m-pow-t').textContent = gt != null ? `/ ${gt}` : '';
-    // power bar: 0…1.5× target (marker at the target), coloured by the zone you're riding in
+    // power bar: 0…1.5× target, coloured by the zone you're riding in (the target is on the gauge)
     const pRef = gt || F;
-    setBar($('#b-pow'), p != null ? p / (pRef * 1.5) : 0, { mark: gt ? 1 / 1.5 : null, color: p != null ? zoneColor(p / F, bounds()) : null });
+    setBar($('#b-pow'), p != null ? p / (pRef * 1.5) : 0, { color: p != null ? zoneColor(p / F, bounds()) : null });
 
     // cadence vs target (Zwift: Cadence / CadenceLow+High): green on target, amber ±5–10, red beyond 10 rpm
     const cLo = s.cadenceLow ?? s.cadence, cHi = s.cadenceHigh ?? s.cadence;
     $('#v-cad').textContent = c != null ? Math.round(c) : '–';
-    $('#t-cad').textContent = cLo != null ? `target ${cLo === cHi ? cLo : `${cLo}–${cHi}`}` : '';
+    $('#t-cad').textContent = cLo != null ? `/ ${cLo === cHi ? cLo : `${cLo}–${cHi}`}` : '';
     const dev = c != null && cLo != null ? (c < cLo ? cLo - c : c > cHi ? c - cHi : 0) : null;
     const cadState = dev == null ? '' : dev > 10 ? 'bad' : dev > 5 ? 'warn' : 'good';
     const live = this.running || !this.started;
@@ -2178,6 +2182,8 @@ class Ride {
       $('#s-tw').textContent = factor ? (proj ? `${proj} W` : '–') : (avg ? `${avg} W` : '–');
       $('#s-tw').style.color = '';
     }
+    $('#s-cad').textContent = cLo != null ? `${cLo === cHi ? cLo : `${cLo}–${cHi}`} rpm` : '–';
+    $('#s-cad').classList.toggle('range', cLo != null && cLo !== cHi);
     $('#s-dur').textContent = fmtTime(s.duration);
     $('#s-bar').style.width = `${Math.min(100, (inSeg / s.duration) * 100)}%`;
     $('#s-bar').style.background = color;
@@ -2197,18 +2203,14 @@ class Ride {
         const watts = n.p0 === null ? 'ride by feel' : wa === wb ? `${wa} W` : `${wa} → ${wb} W`;
         const nLo = n.cadenceLow ?? n.cadence, nHi = n.cadenceHigh ?? n.cadence;
         card.style.setProperty('--zc', zoneColor(nf, bounds()));
-        card.innerHTML = `<div class="nc-txt"><b>${big}</b><span class="nc-w" style="color:${zoneInk(nf, bounds())}">${watts}</span></div>
-          ${nLo != null ? `<span class="nc-cad" title="Target cadence">${IC.cad}<b>${nLo === nHi ? nLo : `${nLo}–${nHi}`}</b><small>rpm</small></span>` : `<span class="nc-zone" title="${nf == null ? 'Free ride' : zoneOf(nf, bounds()).name}">${IC.bars}</span>`}`;
-        $('#n-tw').textContent = n.p0 === null ? '–' : wa === wb ? `${wa} W` : `${wa}–${wb}`;
-        $('#n-tw').classList.toggle('range', n.p0 !== null && wa !== wb);
-        $('#n-dur').textContent = fmtTime(n.duration);
+        card.title = nf == null ? 'Free ride' : zoneOf(nf, bounds()).name;
+        card.innerHTML = `<div class="nc-txt"><b>${big}</b><span class="nc-v">${watts}</span><span class="nc-v">${fmtTime(n.duration)} min</span>${nLo != null ? `<span class="nc-v nc-rpm">${nLo === nHi ? nLo : `${nLo}–${nHi}`} rpm</span>` : ''}</div>`;
       } else {
         card.style.setProperty('--zc', 'var(--line-strong)');
+        card.title = '';
         card.innerHTML = this.cooling
-          ? '<div class="nc-txt"><b>Test done</b><span class="nc-w muted">press ⏹ for your result</span></div>'
-          : '<div class="nc-txt"><b>Finish strong</b><span class="nc-w muted">no more changes</span></div>';
-        $('#n-tw').textContent = '–';
-        $('#n-dur').textContent = '–';
+          ? '<div class="nc-txt"><b>Test done</b><span class="nc-v muted">press ⏹ for your result</span></div>'
+          : '<div class="nc-txt"><b>Finish strong</b><span class="nc-v muted">no more changes</span></div>';
       }
       $('#int-val').textContent = `${this.intensity}%`;
       $('#int-val').classList.toggle('changed', this.intensity !== 100);

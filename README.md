@@ -165,15 +165,15 @@ Deleting always goes to the system Trash (the Recycle Bin on Windows), so it can
 
 ## Riding a workout
 
-**Display:** three panels above the workout chart: **Live** (power, cadence, speed and heart rate with small bars, plus the watt gauge), **Current segment** (target %, target power, segment time with progress bar, remaining) and **Next segment** (target %, watts, target cadence, duration, and the intensity control). The chart has a watt axis, your live power, cadence and heart-rate lines (each can be switched on or off; the choice is remembered per rider) and coach messages floating on top. The workout clock (elapsed and remaining) and all readouts scale up in full screen.
+**Display:** three panels above the workout chart, a quarter, half and quarter of the width: **Live** (the watt gauge with target and actual power, below it power, cadence, speed and heart rate with small bars), **Current segment** (target % and watts in the ring, next to it target power, target cadence, segment time with progress bar and remaining) and **Next segment** (just the values: %, watts, duration and, if set, target cadence). The intensity control sits in the control bar next to play/pause. The chart has a watt axis, your live power, cadence and heart-rate lines (each can be switched on or off; the choice is remembered per rider) and coach messages floating on top. The workout clock (elapsed and remaining) and all readouts scale up in full screen.
 
 **Starting:** the workout starts after about 2 seconds of pedalling, or press **Space** / ▶.
 
-**Cadence check:** when a segment has a cadence target, the Live panel shows it next to your cadence (`target 80`). The bar marks the target and turns **green** when you're on it, **amber** 5–10 rpm off and **red** beyond 10 rpm (the number turns red too). The next segment's target cadence is shown in its card, so you can prepare.
+**Cadence check:** when a segment has a cadence target, the Live panel shows it next to your cadence (`86 / 90 rpm`) and the Current segment panel shows it as *Target cadence*. The bar marks the target and turns **green** when you're on it, **amber** 5–10 rpm off and **red** beyond 10 rpm (the number turns red too). The next segment's target cadence is shown in its panel, so you can prepare.
 
 **Trainer control:**
 - **ERG** follows every target second by second, including ramps.
-- **Intensity** (‹ › ±1 %, « » ±10 %) scales all targets.
+- **Intensity** (− / + in the control bar or ↑ / ↓ for ±1 %, with Shift ±10 %) scales all targets of the workout.
 - **Free-ride and all-out segments** release ERG: you ride with your gears, or with virtual gears.
 
 **Auto-pause:** after 3 seconds without power or cadence the workout pauses, and it resumes as soon as you pedal again. You can switch this off under Settings → App.
