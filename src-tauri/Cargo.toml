@@ -1,6 +1,6 @@
 [package]
 name = "zwotrainer"
-version = "1.2.0"
+version = "1.2.1"
 description = "Lightweight indoor trainer for Zwift .zwo workouts and folder-based plans"
 authors = ["SteffenR"]
 license = "MIT"
