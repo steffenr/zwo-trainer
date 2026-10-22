@@ -223,10 +223,21 @@ const initials = (n) => (n || '?').trim().split(/\s+/).map((x) => x[0]).join('')
 const AVATAR_COLORS = ['#338cff', '#59bf59', '#ff6639', '#b47cff', '#00a3c4', '#e0a800', '#ff4d8d', '#7f7f7f'];
 const avatarColor = (id) => AVATAR_COLORS[[...String(id)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % AVATAR_COLORS.length];
 const AVATAR_EMOJI = ['🚴', '🚵', '🏃', '🏊', '⚡', '🔥', '🚀', '🦊', '🐻', '🐼', '🦁', '🐯', '🐺', '🦅', '🐢', '🐝', '🌵', '🌊', '⛰️', '🌞', '⭐', '💪', '🎧', '🏁'];
-const avatarBg = (p) => p.avatar?.color || avatarColor(p.id);
+/** Only a #rrggbb colour may reach markup or CSS (same rule as clean_avatar in state.rs). */
+const safeColor = (c) => (typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c) ? c : null);
+const avatarBg = (p) => safeColor(p.avatar?.color) || avatarColor(p.id);
 const avatar = (p, cls = '') => {
   const e = p.avatar?.emoji;
-  return `<span class="avatar ${cls} ${e ? 'emoji' : ''}" style="--av:${avatarBg(p)}">${e ? esc(e) : esc(initials(p.name))}</span>`;
+  return `<span class="avatar ${esc(cls)} ${e ? 'emoji' : ''}" style="--av:${esc(avatarBg(p))}">${e ? esc(e) : esc(initials(p.name))}</span>`;
+};
+/** DOM version of avatar() for live previews: user input is only ever set as text, never parsed as HTML. */
+const avatarNode = (p, cls = '') => {
+  const e = p.avatar?.emoji;
+  const s = document.createElement('span');
+  s.className = `avatar ${cls} ${e ? 'emoji' : ''}`.trim();
+  s.style.setProperty('--av', avatarBg(p));
+  s.textContent = e || initials(p.name);
+  return s;
 };
 
 function renderProfileChip() {
@@ -381,7 +392,8 @@ function whoIsRiding() {
 /** Name, colour and emoji of a rider (the avatar replaces the initials when an emoji is set). */
 function profileEditor(p) {
   const cur = { color: p.avatar?.color || null, emoji: p.avatar?.emoji || null };
-  const preview = () => avatar({ ...p, avatar: { color: cur.color, emoji: cur.emoji }, name: $('[name=pname]', modal)?.value || p.name }, 'xl');
+  const previewProfile = () => ({ ...p, avatar: { color: cur.color, emoji: cur.emoji }, name: $('[name=pname]', modal)?.value || p.name });
+  const preview = () => avatar(previewProfile(), 'xl');
   openModal(`
     <div class="pv-head"><h2>Edit rider</h2><button class="icon-btn" data-a="close" aria-label="Close">✕</button></div>
     <div class="pe">
@@ -397,12 +409,12 @@ function profileEditor(p) {
     </div>
     <div class="modal-actions"><button class="btn ghost" data-a="back">Back</button><button class="btn primary" data-a="save">Save</button></div>`, 'small');
   const refresh = () => {
-    $('#pe-preview', modal).innerHTML = preview();
+    $('#pe-preview', modal).replaceChildren(avatarNode(previewProfile(), 'xl'));
     $$('#pe-colors [data-c]', modal).forEach((x) => x.classList.toggle('on', x.dataset.c === cur.color));
     $$('#pe-emoji [data-e]', modal).forEach((x) => x.classList.toggle('on', (x.dataset.e || null) === cur.emoji));
   };
   $('#pe-colors', modal).onclick = (e) => { const b = e.target.closest('[data-c]'); if (b) { cur.color = b.dataset.c; refresh(); } };
-  $('#pe-custom', modal).oninput = (e) => { cur.color = e.target.value; refresh(); };
+  $('#pe-custom', modal).oninput = (e) => { cur.color = safeColor(e.target.value); refresh(); };
   $('#pe-emoji', modal).onclick = (e) => { const b = e.target.closest('[data-e]'); if (b) { cur.emoji = b.dataset.e || null; $('#pe-emoji-own', modal).value = ''; refresh(); } };
   $('#pe-emoji-own', modal).oninput = (e) => { cur.emoji = e.target.value.trim() || null; refresh(); };
   $('[name=pname]', modal).oninput = refresh;
