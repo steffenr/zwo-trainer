@@ -16,6 +16,10 @@ on:
       - 'v*'
   workflow_dispatch:
 
+# Read-only by default; only the publish job gets contents: write.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   TAURI_CLI: '@tauri-apps/cli@^2'

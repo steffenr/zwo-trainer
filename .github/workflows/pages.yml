@@ -7,7 +7,8 @@ name: Deploy site
 #  - workflow_dispatch -> manual redeploy
 #
 # workflow_run is used instead of a tag trigger: it runs on the default branch, which the
-# github-pages environment allows, and only after the release assets exist.
+# github-pages environment allows, and only after the release assets exist. It deploys the
+# default branch, not the triggering run's commit (CodeQL: untrusted checkout).
 #
 # One-time setup: Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
 
@@ -45,9 +46,13 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # Always check out the default branch (github.sha), never the commit of the triggering
+      # workflow_run: that runs with pages/id-token write and must not execute foreign code.
+      # release.yml pushes the version bump to the branch before tagging, so the default
+      # branch already carries the released version.
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
 
       - name: Setup Node (for the version script)
         uses: actions/setup-node@v7

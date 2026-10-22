@@ -303,22 +303,23 @@ mod tests {
     use super::*;
 
     /// RFC 5849 / Twitter developer docs reference example for HMAC-SHA1 signing.
+    /// The sample keys live in tests/fixtures/oauth1_reference.json, not in the source, and the
+    /// signed header is never printed (it carries the consumer key and token).
     #[test]
     fn oauth1_signature_matches_reference() {
-        let params = vec![
-            ("include_entities".to_string(), "true".to_string()),
-            ("status".to_string(), "Hello Ladies + Gentlemen, a signed OAuth request!".to_string()),
-        ];
-        let h = oauth1_header(
-            "POST",
-            "https://api.twitter.com/1.1/statuses/update.json",
-            &params,
-            ("xvz1evFS4wEEPTGEFPHBog", "kAcSOqF21Fu85e7zjz7ZN2U4ZRhfV3WpwPAoE3Z7kBw"),
-            Some(("370773112-GmHxMAgYyLbNEtIKZeRNFsMKPR9EyMZeS9weJAEb", "LswwdoUaIvS8ltyTt5jkRh4J50vUPVVHtR2YPi5kE")),
-            "kYjzVBB8Y0ZFabxSWbWovY3uYSQ2pTgmZeNu2VS4cg",
-            1318622958,
-        );
-        assert!(h.contains("oauth_signature=\"hCtSmYh%2BiHYCEqBWrE7C7hYmtUk%3D\""), "{h}");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/oauth1_reference.json");
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(path).expect("fixture")).expect("fixture json");
+        let s = |k: &str| v[k].as_str().expect(k).to_string();
+        let params: Vec<(String, String)> = v["params"]
+            .as_array()
+            .expect("params")
+            .iter()
+            .map(|p| (p[0].as_str().unwrap().to_string(), p[1].as_str().unwrap().to_string()))
+            .collect();
+        let (ck, cs, t, ts) = (s("consumer_key"), s("consumer_secret"), s("token"), s("token_secret"));
+        let h = oauth1_header(&s("method"), &s("url"), &params, (&ck, &cs), Some((&t, &ts)), &s("nonce"), v["timestamp"].as_i64().expect("timestamp"));
+        let expected = format!("oauth_signature=\"{}\"", s("expected_signature"));
+        assert!(h.contains(&expected), "OAuth1 signature does not match the reference vector");
     }
 
     #[test]

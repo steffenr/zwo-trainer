@@ -8,6 +8,10 @@ on:
     branches: [develop]
   pull_request:
 
+# Read-only token: CI only checks out and builds.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
