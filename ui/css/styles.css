@@ -725,6 +725,14 @@ details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; fon
 .seg-stats .stat.cad b { color: var(--cad); }
 .seg-stats .stat:first-child > .ic { color: var(--text-2); }
 .panel.seg.closing .stat.rem b { color: var(--accent); animation: pulse 1s infinite; }
+/* coach line: one message at a time below the stats; the space is reserved so nothing jumps */
+.coach-line { --cc: var(--accent); display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 50px; padding: 9px 16px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--cc) 45%, transparent); background: color-mix(in srgb, var(--cc) 12%, var(--surface)); font-weight: 600; font-size: 18px; line-height: 1.25; text-align: center; opacity: 0; transform: translateY(4px); transition: opacity .35s, transform .35s; }
+.coach-line.show { opacity: 1; transform: none; }
+.coach-line .ic { flex: none; width: 22px; height: 22px; color: var(--cc); }
+.coach-line span { min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.coach-line.warn { --cc: var(--warn); }
+.coach-line.bad { --cc: var(--danger); }
+.coach-line.ok { --cc: var(--ok); }
 
 /* NEXT SEGMENT */
 .nx-card { position: relative; flex: 1 1 auto; min-height: 116px; display: flex; align-items: center; gap: 12px; padding: 14px 14px 14px 26px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
@@ -734,14 +742,13 @@ details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; fon
 .nc-v { font: 700 22px/1.1 var(--num); color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nc-rpm { color: var(--cad); }
 
-/* chart header, axis, coach message */
+/* chart header, axis */
 .wt-head { display: flex; flex-direction: column; gap: 6px; }
 .dg-stage { padding-left: 34px; }
 .dg-yaxis { position: absolute; left: 0; top: 0; bottom: 0; width: 30px; pointer-events: none; }
 .dg-yaxis span { position: absolute; right: 4px; transform: translateY(-50%); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .dg-free { left: 34px; }
 .dg-labels { margin-left: 34px; }
-.coach-msg { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); max-width: min(640px, 70%); padding: 9px 16px; border-radius: 10px; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); font-weight: 600; text-align: center; z-index: 3; box-shadow: var(--shadow-lg); animation: fadein .3s; }
 .ov i { width: 9px !important; height: 9px !important; border-radius: 50%; }
 
 /* top bar while riding */
@@ -760,6 +767,8 @@ details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; fon
   .ride .live .gauge { max-width: clamp(190px, 13vw, 320px); }
   .ride .seg-left { width: clamp(210px, 14.6vw, 340px); }
   .ride .int-read b { font-size: clamp(24px, 1.7vw, 36px); }
+  .ride .coach-line { font-size: clamp(18px, 1.25vw, 28px); min-height: clamp(50px, 3.5vw, 76px); }
+  .ride .coach-line .ic { width: clamp(22px, 1.5vw, 32px); height: clamp(22px, 1.5vw, 32px); }
   .ride .ph > b { font-size: clamp(12.5px, .9vw, 16px); }
   .ride .ic { width: clamp(19px, 1.36vw, 28px); height: clamp(19px, 1.36vw, 28px); }
 }
