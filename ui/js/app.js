@@ -1253,6 +1253,7 @@ async function openSettings(tab = 'rider') {
         <div class="frow">Appearance <span class="seg-ctl" id="theme-ctl">${['system', 'light', 'dark'].map((t) => `<button type="button" data-theme="${t}" class="${(s.theme || 'system') === t ? 'on' : ''}">${THEME_LABEL[t]}</button>`).join('')}</span></div>
         <label class="check"><input type="checkbox" name="beeps" ${s.beeps ? 'checked' : ''}> Countdown beeps before segment changes</label>
         <label class="check"><input type="checkbox" name="autoPause" ${s.autoPause !== false ? 'checked' : ''}> Auto-pause when you stop pedalling (resumes automatically)</label>
+        <label class="check"><input type="checkbox" name="coachHints" ${s.coachHints !== false ? 'checked' : ''}> Coach hints while riding (cadence, pacing, hard segments)</label>
       </div>
       <h3>Workouts folder</h3>
       <div class="folder-row"><code>${esc(library.root)}</code><button class="btn ghost sm" data-a="dir">Change…</button><button class="btn ghost sm" data-a="rescan" title="Re-read the folder">Rescan</button></div>
@@ -1347,6 +1348,7 @@ async function openSettings(tab = 'rider') {
     { const kg = Math.round(+f('weight').value * 10) / 10; s.weight = kg >= 30 && kg <= 200 ? kg : null; }
     s.beeps = f('beeps').checked;
     s.autoPause = f('autoPause').checked;
+    s.coachHints = f('coachHints').checked;
     const z = [0, 1, 2, 3].map((i) => +f(`z${i}`).value);
     if (z.every((v, i) => v > 0 && (i === 0 || v > z[i - 1]))) s.zones = z; else toast('Zone limits must increase — kept the old ones');
     const bests = {};
@@ -1676,6 +1678,8 @@ const IC = {
   layers: svgI('<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>'),
   dial: svgI('<path d="M4.5 18a9 9 0 1 1 15 0"/><path d="m12 14 3-4"/>'),
   bars: svgI('<path d="M5 20v-8M12 20V5M19 20v-5"/>'),
+  chat: svgI('<path d="M4 5h16v11H10l-5 4v-4H4z"/>'),
+  flame: svgI('<path d="M12 3c.8 3.6 5 5.4 5 10a5 5 0 0 1-10 0c0-2.4 1.3-3.9 2.4-5 .3 1.9 1.2 2.9 2.4 3-.6-2.9-.4-5.4.2-8z"/>'),
   plug: svgI('<path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5"/>'),
 };
 /** Plausibility note for a test result that differs a lot (> 15 %) from the current FTP. */
@@ -1787,6 +1791,7 @@ class Ride {
               <div class="stat rem">${IC.flag}<div><span class="k">Remaining</span><b id="s-rem">0:00</b></div></div>
             </div>
           </div>
+          <div class="coach-line" id="coach" role="status" aria-live="polite"></div>
         </section>
         <section class="panel next">
           <header class="ph">${IC.layers}<b>Next segment</b></header>
@@ -1800,7 +1805,6 @@ class Ride {
           <div class="wt-time rem"><span class="k">remaining</span><b id="d-rem">${fmtTime(this.w.duration)}</b><small id="d-tot">of ${fmtTime(this.w.duration)}</small></div>
         </div>
         <div class="dg-mount"></div>
-        <div class="coach-msg" id="msg" hidden></div>
         <div class="dg-tip" id="dg-tip" hidden></div>
       </div>
       <div class="ride-controls">
@@ -2189,6 +2193,7 @@ class Ride {
     const pacing = this.test && allOut && s.measure && s.duration >= 300;
     $('#s-tw-k').textContent = pacing ? (s.duration >= 480 ? 'Est. FTP' : 'Effort avg') : 'Target power';
     $('#s-watts').classList.remove('warn-text');
+    let paceFast = false;
     if (pacing) {
       const acc = this.effAcc?.[s.measure];
       const avg = acc && acc.n >= 5 ? Math.round(acc.sum / acc.n) : null;
@@ -2199,7 +2204,7 @@ class Ride {
       if (avg) $('#s-target').style.color = zoneInk(avg / F, bounds());
       $('#s-watts').textContent = !avg ? `aim ~${tw ?? '–'} W · ${vsActive ? 'shift' : 'gears'}` : fast ? 'too fast · ease off' : tw ? `avg · aim ~${tw} W` : 'effort average';
       $('#s-watts').classList.toggle('warn-text', fast);
-      if (fast && !this.paceWarned?.[s.measure]) { (this.paceWarned ||= {})[s.measure] = true; this.hint('Too fast — ease off a little, it\'s a long effort'); }
+      paceFast = fast;
       const proj = avg && factor && acc.n >= 30 ? Math.round(avg * factor) : null;
       $('#s-tw').textContent = factor ? (proj ? `${proj} W` : '–') : (avg ? `${avg} W` : '–');
       $('#s-tw').style.color = '';
@@ -2240,14 +2245,80 @@ class Ride {
       $('#btn-play').classList.toggle('is-running', this.running);
     }
 
-    // text events
-    const ev = s.texts.filter((x) => inSeg >= x.t && inSeg < x.t + 10).pop();
-    const msg = $('#msg');
-    if (ev) { if (msg.textContent !== ev.msg) msg.textContent = ev.msg; msg.hidden = false; } else msg.hidden = true;
+    this.coach(s, { segChanged, inSeg, rem, allOut, freeLike, gt, p, c, cLo, cHi, dev, cadState, paceFast });
 
     $('#d-el').textContent = fmtTime(this.t);
     $('#d-rem').textContent = fmtTime(Math.max(0, Math.ceil(this.w.duration - this.t)));
     this.diagram.update(this.t, this.samples);
+  }
+
+  /**
+   * Coach line under the Current segment stats: one short message at a time, empty otherwise.
+   * Priority: the workout's own text events > pacing (test "too fast", ERG power fading) >
+   * cadence more than 5 rpm off for 5 s (clears after 3 s back on target) > hard-segment cues
+   * (Z4 and up, all-out, max effort: start, halfway, last 30 s). A message stays at least 4 s
+   * unless a more important one replaces it. Automatic hints can be switched off (Settings → App).
+   */
+  coach(s, { segChanged, inSeg, rem, allOut, freeLike, gt, p, c, cLo, cHi, dev, cadState, paceFast }) {
+    const el = $('#coach');
+    if (!el) return;
+    const now = performance.now() / 1000;
+    const k = (this.cz ||= { cadOff: null, cadOn: null, cadShown: false, powLow: null, cur: null, since: 0 });
+    if (segChanged) Object.assign(k, { cadOff: null, cadOn: null, cadShown: false, powLow: null });
+    const auto = this.running && state.settings.coachHints !== false;
+    const cands = [];
+
+    // 1. text events from the .zwo file (always shown, also while paused)
+    const ev = s.texts.filter((x) => inSeg >= x.t && inSeg < x.t + 10).pop();
+    if (ev?.msg) cands.push({ key: `zwo:${s.start}:${ev.t}`, pri: 4, icon: IC.chat, level: 'info', text: ev.msg });
+
+    // 2. pacing: long test efforts started too fast; ERG target not reached (cadence collapsing)
+    if (auto && paceFast) cands.push({ key: 'pace', pri: 3, icon: IC.bolt, level: 'bad', text: 'Too fast · ease off, it\'s a long effort' });
+    const erg = !freeLike && trainer.connected && trainer.canErg && gt >= 50;
+    const low = auto && erg && p != null && inSeg >= 10 && p < gt * 0.85;
+    k.powLow = low ? (k.powLow ?? now) : null;
+    if (low && now - k.powLow >= 5) cands.push({ key: 'pow', pri: 3, icon: IC.bolt, level: 'bad', text: `Power fading · ${p} / ${gt} W · spin up` });
+
+    // 3. cadence target: > 5 rpm off for 5 s, clears after 3 s back on target
+    if (!auto || dev == null) Object.assign(k, { cadOff: null, cadOn: null, cadShown: false });
+    else if (dev > 5) { k.cadOn = null; k.cadOff ??= now; if (now - k.cadOff >= 5) k.cadShown = true; }
+    else { k.cadOff = null; if (k.cadShown) { k.cadOn ??= now; if (now - k.cadOn >= 3) { k.cadShown = false; k.cadOn = null; } } }
+    if (k.cadShown) {
+      const aim = cLo === cHi ? `${cLo}` : `${cLo}–${cHi}`, rpm = Math.round(c);
+      cands.push(dev > 5
+        ? { key: 'cad', pri: 2, icon: IC.cad, level: cadState, text: c < cLo ? `Cadence low · ${rpm} → aim ${aim} rpm` : `Cadence high · ${rpm} → aim ${aim} rpm` }
+        : { key: 'cad', pri: 0.5, icon: IC.cad, level: 'ok', text: `Back on target · ${rpm} rpm` });
+    }
+
+    // 4. hard segments: Z4 and up, all-out efforts, max efforts (not the ramp-test steps)
+    if (auto && !s.ramp && s.duration >= 20) {
+      const af = s.p0 === null ? null : ((s.p0 + s.p1) / 2) * this.mult(), zone = zoneOf(af, bounds());
+      const max = s.type === 'maxeffort';
+      if (allOut || max || zone?.id >= 4) {
+        const name = allOut ? 'All out' : max ? 'Max effort' : zone.name, half = s.duration / 2;
+        let text = null;
+        if (inSeg < 6) text = `${name} · ${fmtTime(s.duration)} · ${allOut || max ? 'go!' : 'settle in'}`;
+        else if (s.duration >= 120 && inSeg >= half && inSeg < half + 6) text = `Halfway · ${fmtTime(Math.ceil(rem))} to go`;
+        else if (s.duration >= 60 && rem <= 30 && rem > 22) text = 'Last 30 s · finish strong';
+        if (text) cands.push({ key: `hard:${s.start}:${text.split(' ·')[0]}`, pri: 1, icon: IC.flame, level: 'push', text, color: zone ? zoneInk(af, bounds()) : 'var(--danger)' });
+      }
+    }
+
+    const cand = cands.sort((a, b) => b.pri - a.pri)[0] || null;
+    const cur = k.cur;
+    let show = cand;
+    if (cur && cand?.key !== cur.key && now - k.since < 4 && (!cand || cand.pri <= cur.pri)) show = cur; // hold ≥ 4 s
+    if (!show) { if (cur) { el.classList.remove('show'); k.cur = null; } return; }
+    if (!cur || show.key !== cur.key) {
+      k.since = now;
+      el.innerHTML = `${show.icon}<span></span>`;
+      el.classList.remove('show'); void el.offsetWidth;
+    }
+    el.className = `coach-line show ${show.level}`;
+    if (show.color) el.style.setProperty('--cc', show.color); else el.style.removeProperty('--cc');
+    const span = el.querySelector('span');
+    if (span.textContent !== show.text) span.textContent = show.text;
+    k.cur = show;
   }
 
   async stop() {
