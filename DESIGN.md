@@ -147,10 +147,10 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 │       239 W          │ │   ╰───────╯    ⏱ SEGMENT         ⚑ REMAINING         │ │ ▌ 5:00 min       │
 │ ⚡ POWER   ⟳ CADENCE  │ │                   12:00 ▬▬          5:50            │ │ ▌ 85 rpm         │
 │  244 W     86 / 90   │ │                                                     │ │                  │
-│ ◠ SPEED   ♡ HR       │ │                                                     │ │                  │
+│ ◠ SPEED   ♡ HR       │ │         [ ⟳ Cadence low · 81 → aim 90 rpm ]         │ │                  │
 └──────────────────────┘ └─────────────────────────────────────────────────────┘ └──────────────────┘
 [ ılı WORKOUT / ELAPSED 0:00 ······ ● Power ● Cadence ● Heart rate ······ REMAINING 29:58 of 30:00 ]
-[ watt axis │ workout chart (fills remaining height), HTML labels under the bars, coach message floats on top ]
+[ watt axis │ workout chart (fills remaining height), HTML labels under the bars ]
 [ ⏮  ↺  ▶/⏸  ■  ↻  ⏭  │  INTENSITY 100%  −  + ]
 ```
 
@@ -160,6 +160,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 - **Cadence target:** only when the segment has one, the cadence row shows `86 / 90 rpm` (or `/ 85–95`); the bar spans 40–130 rpm with a marker (or band, for ranges) at the target and turns **green** on target, **amber** 5–10 rpm off, **red** beyond 10 rpm — the value itself turns red too. CURRENT shows it as *Target cadence* (in `--cad`), the next-segment card as its last line.
 - **Current-segment ring** `ProgressRing`: a single progress arc in the zone colour (it reuses `Gauge` but removes the inner "actual power" track, the FTP tick and the actual arc — only the LIVE watt gauge has two arcs: outer = target, inner = actual).
 - **Current segment** `.seg-body`: the ring on the left (`.seg-left`, 210 px, gear box below it in free-ride segments), a 2 × 2 `.seg-stats` grid on the right: target power (zone ink) · target cadence (`--cad`, `–` without a target) · segment duration with a progress bar in the zone colour · remaining (pulses in the last 5 s). Icon · label · 30 px value. Below 1180 px the ring stacks above the grid.
+- **Coach line** `.coach-line` under `.seg-body`: one message at a time, icon + 18 px semibold text, centred in a tinted box (`--cc`: accent for workout text events, `--warn`/`--danger` for cadence and pacing, `--ok` for "Back on target", the zone ink for hard-segment cues). Its height is always reserved; it fades in and out (opacity, 4 px slide) so nothing in the panel moves.
 - **Test pacing** (all-out test efforts ≥ 5 min): the ring centre shows the running effort average in zone ink, the line below it "avg · aim ~263 W" (or "too fast · ease off" in `--warn` after 1 min at > 110 % of the aim), and the first stat becomes **Est. FTP** (8/20-min efforts) or **Effort avg**. Keep both lines short so they fit inside the ring.
 - **Power ranges in stat values** (e.g. `150–113`) drop the unit and use `.stat b.range` (20 px) so they fit their column.
 - **Next-segment card** `.nx-card`: 6 px stripe in the zone colour (zone name as tooltip) and the values only, no labels or icons: `55%` (40 px), then `146 W`, `5:00 min` and, if set, `85 rpm` (22 px, `--text-2`; rpm in `--cad`).
