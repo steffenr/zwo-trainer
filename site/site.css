@@ -69,21 +69,36 @@ a { color: inherit; }
 .brand img { width: 30px; height: 30px; border-radius: 7px; }
 .brand b { color: var(--accent); font-weight: 600; }
 .nav-links { display: flex; gap: 4px; margin-left: auto; align-items: center; }
-.nav-links a { text-decoration: none; color: var(--muted); font-weight: 500; font-size: 15px; padding: 8px 12px; border-radius: 10px; }
+.nav-links a { display: inline-flex; align-items: center; text-decoration: none; color: var(--muted); font-weight: 500; font-size: 15px; padding: 8px 12px; border-radius: 10px; }
 .nav-links a:hover, .nav-links a[aria-current="page"] { color: var(--text); background: var(--bg-2); }
 .nav-links .btn { margin-left: 8px; }
+.nav-links a.ico { width: 38px; height: 38px; padding: 0; justify-content: center; }
+.nav-links a.ico svg { width: 18px; height: 18px; flex: none; }
 .theme-btn { background: none; border: 1px solid var(--line-2); color: var(--muted); width: 38px; height: 38px; border-radius: 10px; cursor: pointer; display: grid; place-items: center; }
 .theme-btn:hover { color: var(--text); }
 .theme-btn svg { width: 18px; height: 18px; }
+/* the sister-app link needs room: text link from 900 px, then only in the footer */
+@media (max-width: 900px) { .nav-links .sibling { display: none; } }
 @media (max-width: 720px) {
   .nav .wrap { gap: 10px; }
-  .nav-links a:not(.btn) { padding: 8px; font-size: 14px; }
-  .nav-links .gh { display: none; }
+  .nav-links { gap: 0; }
+  .nav-links a:not(.btn) { padding: 8px 6px; font-size: 14px; }
+  .nav-links a.ico { width: 32px; height: 32px; padding: 0; }
+  .theme-btn { width: 34px; height: 34px; margin-left: 2px; }
   .nav-links .btn { display: none; }
 }
+@media (max-width: 400px) {
+  .nav .wrap { gap: 6px; }
+  .brand { font-size: 18px; gap: 8px; }
+  .brand img { width: 26px; height: 26px; }
+  .nav-links a:not(.btn) { padding: 8px 5px; }
+  .nav-links a.ico { width: 30px; }
+}
+/* smallest phones: GitHub stays in the footer */
+@media (max-width: 350px) { .nav-links .gh { display: none; } }
 
 /* ---------- buttons ---------- */
-.btn { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font: 600 16px/1 var(--display); padding: 15px 22px; border-radius: 12px; border: 1px solid var(--line-2); color: var(--text); background: var(--card); transition: transform .15s ease, background .15s ease; white-space: nowrap; }
+.btn { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font: 600 16px/1 var(--display); padding: 15px 22px; border-radius: 12px; border: 1px solid var(--line-2); color: var(--text); background: var(--card); white-space: nowrap; }
 .btn:hover { transform: translateY(-1px); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .btn.primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--text)); }
@@ -272,10 +287,78 @@ details.faq p { color: var(--muted); margin: 12px 0 0; max-width: 75ch; }
 
 code { font: 14px var(--mono); background: var(--bg-2); border: 1px solid var(--line); padding: 2px 6px; border-radius: 6px; }
 
-/* reveal */
-.js .rv { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s ease; }
+/* ---------- motion ----------
+   Same language as the app (DESIGN.md → Motion): 150–500 ms, curve cubic-bezier(.2, .8, .2, 1),
+   one play per change, nothing loops except the coffee fuel bar. All of it is off under Reduce motion.
+   --i (set in site.js) is an element's place in its group, for staggered entries. */
+:root { --ease: cubic-bezier(.2, .8, .2, 1); }
+/* reveal on scroll: a short rise, groups of tiles follow one another */
+.js .rv { opacity: 0; transform: translateY(14px); transition: opacity .5s var(--ease), transform .5s var(--ease); transition-delay: calc(var(--i, 0) * 70ms); }
 .js .rv.in { opacity: 1; transform: none; }
-@media (prefers-reduced-motion: reduce) { .rv { opacity: 1; transform: none; transition: none; } html { scroll-behavior: auto; } .hero-shot .frame { transform: none; } }
+/* hover and press, like the app: 150 ms, buttons press to 98 % */
+.nav-links a, .toc a, footer a, .legend span, .theme-btn { transition: color .15s, background-color .15s, border-color .15s; }
+.btn { transition: transform .15s var(--ease), background-color .15s, border-color .15s; }
+.btn:active { transform: scale(.98); }
+.btn svg:last-child:not(:first-child) { transition: transform .15s var(--ease); }
+.btn:hover svg:last-child:not(:first-child) { transform: translateX(3px); }
+.tile { transition: border-color .2s, transform .2s var(--ease), box-shadow .2s; }
+.tile:hover { box-shadow: var(--shadow); }
+.tile .thumb img { transition: transform .5s var(--ease); }
+.tile:hover .thumb img { transform: translateY(-2%); }
+.compat .ic { transition: transform .2s var(--ease); }
+.compat > div:hover .ic { transform: translateY(-2px); }
+/* theme switch: colours cross-fade instead of snapping */
+html.theme-anim *, html.theme-anim *::before, html.theme-anim *::after { transition: background-color .25s, border-color .25s, color .25s, fill .25s !important; }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* page load: the zone pips grow, the .zwo highlight gets the segment-change sweep,
+     the workout bars rise from the baseline and the app window settles into its tilt */
+  .zones i { transform-origin: 50% 100%; animation: mo-grow .35s var(--ease) both; animation-delay: calc(var(--i, 0) * 50ms + .1s); }
+  .hl { position: relative; display: inline-block; }
+  .hero .hl { clip-path: inset(0 round 6px); }
+  .hero .hl::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0;
+    background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--accent) 30%, transparent) 45%, color-mix(in srgb, var(--accent) 30%, transparent) 55%, transparent 100%);
+    animation: mo-sweep .6s .55s cubic-bezier(.3, .6, .2, 1); }
+  .hero h1, .page-hero h1 { animation: mo-view .4s var(--ease) both; }
+  .hero .lead, .page-hero .lead { animation: mo-view .4s .06s var(--ease) both; }
+  .hero .cta, .hero .note, .page-hero .toc { animation: mo-view .4s .12s var(--ease) both; }
+  .steps-bg i { transform-origin: 50% 100%; animation: mo-bar .5s var(--ease) both; animation-delay: calc(var(--i, 0) * 22ms + .2s); }
+  .hero-shot .frame { animation: mo-pop .7s .25s var(--ease) both; }
+  .strip .wrap > div { animation: mo-settle .35s var(--ease) both; animation-delay: calc(var(--i, 0) * 60ms + .45s); }
+  .toc a { animation: mo-settle .3s var(--ease) both; animation-delay: calc(var(--i, 0) * 30ms + .2s); }
+
+  /* inside a revealed block, lists settle in one after another (like the app's workout list);
+     the compat grid animates its cells' contents so the grid lines never show through */
+  .rv.in .ticks li, .rv.in .cards .card, .rv.in .legend span, .rv.in .nots span, .compat.in > div > *, .howto.in li {
+    animation: mo-settle .3s var(--ease) both; animation-delay: calc(var(--i, 0) * 50ms + .15s); }
+  /* struck-through "left out" items: the line is drawn after they land */
+  .rv.in .nots span { text-decoration-color: transparent; animation-name: mo-settle, mo-strike; animation-duration: .3s, .35s;
+    animation-delay: calc(var(--i, 0) * 50ms + .15s), calc(var(--i, 0) * 50ms + .45s); }
+  /* the CTA's workout and the download steps' zone lines grow when they come into view */
+  .final.in .bars i { transform-origin: 50% 100%; animation: mo-bar .5s var(--ease) both; animation-delay: calc(var(--i, 0) * 30ms + .2s); }
+  .howto.in li { border-top-color: transparent; background: linear-gradient(var(--c, var(--accent)), var(--c, var(--accent))) 0 0 / 0 3px no-repeat;
+    background-origin: border-box;
+    animation-name: mo-settle, mo-line; animation-duration: .3s, .5s; animation-fill-mode: both, forwards; }
+  /* the recommended download gets one soft accent glow, like the gauge on target */
+  .plat.featured.in { animation: mo-glow 1.4s .5s ease-out; }
+  /* FAQ answers fade in when opened; theme icon turns in */
+  details.faq[open] p { animation: mo-view .22s ease-out; }
+  .theme-btn.swap svg { animation: mo-turn .3s var(--ease); }
+}
+@keyframes mo-grow { from { transform: scaleY(0); } }
+@keyframes mo-bar { from { transform: scaleY(0); } }
+@keyframes mo-sweep { 0% { opacity: 1; transform: translateX(-100%); } 100% { opacity: 0; transform: translateX(100%); } }
+@keyframes mo-view { from { opacity: 0; transform: translateY(6px); } }
+@keyframes mo-settle { from { opacity: 0; transform: translateY(6px) scale(.97); } }
+@keyframes mo-pop { from { opacity: 0; translate: 0 24px; } }
+@keyframes mo-strike { from { text-decoration-color: transparent; } to { text-decoration-color: var(--z5); } }
+@keyframes mo-line { to { background-size: 100% 3px; } }
+@keyframes mo-glow { 0% { box-shadow: 0 0 0 1px var(--accent) inset; } 35% { box-shadow: 0 0 0 1px var(--accent) inset, 0 0 0 6px var(--accent-soft), 0 18px 50px -20px var(--accent); } 100% { box-shadow: 0 0 0 1px var(--accent) inset; } }
+@keyframes mo-turn { from { opacity: 0; transform: rotate(-60deg) scale(.7); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; transition-duration: .01ms !important; transition-delay: 0s !important; }
+  .rv { opacity: 1; transform: none; } html { scroll-behavior: auto; } .hero-shot .frame { transform: none; }
+}
 
 /* support / buy me a coffee */
 .support { display: grid; grid-template-columns: 1.4fr 1fr; gap: clamp(28px, 5vw, 64px); align-items: center; border: 1px solid var(--line); border-radius: 28px; padding: clamp(32px, 6vw, 72px); background:
@@ -294,6 +377,6 @@ code { font: 14px var(--mono); background: var(--bg-2); border: 1px solid var(--
 .fuel-bar i { display: block; height: 100%; width: 18%; border-radius: inherit; background: linear-gradient(90deg, var(--z5), var(--z4)); animation: fuel 3.2s ease-in-out infinite alternate; }
 .fuel small { color: var(--z5); font-size: 12px; }
 @keyframes fuel { to { width: 34%; } }
-@media (prefers-reduced-motion: reduce) { .fuel-bar i { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .fuel-bar i { animation: none !important; } }
 footer .bmc-link { color: var(--text); font-weight: 600; }
 @media (max-width: 820px) { .support { grid-template-columns: 1fr; } .support-art { order: -1; justify-items: start; } }
