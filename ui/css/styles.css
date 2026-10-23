@@ -285,8 +285,8 @@ body.riding .brand { pointer-events: none; }
 .gauge-svg, .progress-svg { width: 100%; height: 100%; display: block; }
 .g-track { fill: none; stroke: var(--track); stroke-width: 14; stroke-linecap: round; }
 .g-track.inner { stroke-width: 12; }
-.g-target { fill: none; stroke-width: 14; stroke-linecap: round; transition: d .4s; }
-.g-actual { fill: none; stroke-width: 12; stroke-linecap: round; transition: d .4s; }
+.g-target { fill: none; stroke-width: 14; stroke-linecap: round; }
+.g-actual { fill: none; stroke-width: 12; stroke-linecap: round; }
 .g-ftp { stroke: var(--ftp); stroke-width: 3; stroke-linecap: round; }
 .gauge-center, .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .gauge-center b { font-size: 50px; line-height: 1; font-family: var(--num); font-weight: 750; font-variant-numeric: tabular-nums; margin: 2px 0; }
@@ -783,3 +783,50 @@ details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; fon
 /* power ranges (e.g. 150–113) need a smaller size to fit their stat column */
 .ride .stat b.range { font-size: 20px; }
 @media (min-width: 1400px) { .ride .stat b.range { font-size: clamp(20px, 1.43vw, 32px); } }
+
+/* ---------- micro animations (all off with the system's "Reduce motion") ---------- */
+.seg-ring .ring-check { position: absolute; inset: 22%; display: none; pointer-events: none; }
+.seg-ring .ring-check path { fill: none; stroke: var(--ok); stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 120; }
+.seg-ring.finished .ring-center { visibility: hidden; }
+.seg-ring.finished .ring-check { display: block; }
+.panel.seg { overflow: hidden; }
+.panel.seg::after { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--zc, var(--accent)) 26%, transparent) 45%, color-mix(in srgb, var(--zc, var(--accent)) 26%, transparent) 55%, transparent 100%); }
+.int-read b { display: inline-block; }
+/* on target: soft glow in the zone colour around the gauge arcs */
+.gauge .gauge-svg path { transition: filter .6s ease; }
+.gauge.on-target .g-actual, .gauge.on-target .g-target { filter: drop-shadow(0 0 5px var(--glow)) drop-shadow(0 0 12px color-mix(in srgb, var(--glow) 55%, transparent)); }
+.gauge::before { content: ''; position: absolute; inset: 6%; border-radius: 50%; pointer-events: none; opacity: 0; transition: opacity .6s ease;
+  background: radial-gradient(circle, color-mix(in srgb, var(--glow, transparent) 16%, transparent) 0%, transparent 68%); }
+.gauge.on-target::before { opacity: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  /* segment change: sweep over Current segment, values settle in, Next card slides up */
+  .panel.seg.seg-in::after { animation: mo-sweep .5s cubic-bezier(.3, .6, .2, 1); }
+  .panel.seg.seg-in .ring-center > *, .panel.seg.seg-in .seg-stats .stat b { animation: mo-settle .28s cubic-bezier(.2, .8, .2, 1) both; }
+  .panel.seg.seg-in .seg-stats .stat:nth-child(2) b { animation-delay: .03s; }
+  .panel.seg.seg-in .seg-stats .stat:nth-child(3) b { animation-delay: .06s; }
+  .panel.seg.seg-in .seg-stats .stat:nth-child(4) b { animation-delay: .09s; }
+  .nx-card.nx-in .nc-txt { animation: mo-rise .3s cubic-bezier(.2, .8, .2, 1) both; }
+  .nx-card.nx-in::before { animation: mo-grow .35s cubic-bezier(.2, .8, .2, 1) both; transform-origin: 50% 100%; }
+  /* intensity: the value rolls in the direction of the change */
+  #int-val.roll-up { animation: mo-roll-up .2s cubic-bezier(.2, .8, .2, 1); }
+  #int-val.roll-down { animation: mo-roll-down .2s cubic-bezier(.2, .8, .2, 1); }
+  /* finish: the check draws in the ring, then the summary rises */
+  .seg-ring.finished .ring-check path { animation: mo-draw .5s .1s cubic-bezier(.4, 0, .2, 1) both; }
+  dialog.rise[open] { animation: mo-pop .4s cubic-bezier(.2, .8, .2, 1); }
+  dialog.rise[open]::backdrop { animation: mo-fade .35s; }
+}
+@keyframes mo-sweep { 0% { opacity: 1; transform: translateX(-100%); } 100% { opacity: 0; transform: translateX(100%); } }
+@keyframes mo-settle { from { opacity: 0; transform: translateY(6px) scale(.97); } }
+@keyframes mo-rise { from { opacity: 0; transform: translateY(14px); } }
+@keyframes mo-grow { from { transform: scaleY(0); } }
+@keyframes mo-roll-up { from { opacity: 0; transform: translateY(60%); } }
+@keyframes mo-roll-down { from { opacity: 0; transform: translateY(-60%); } }
+@keyframes mo-draw { from { stroke-dashoffset: 120; } }
+@keyframes mo-pop { from { opacity: 0; transform: translateY(16px) scale(.97); } }
+@keyframes mo-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
+  .gauge.on-target .g-actual, .gauge.on-target .g-target { filter: none; }
+  .gauge.on-target::before { opacity: 0; }
+}
