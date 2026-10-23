@@ -1,5 +1,5 @@
 import { powerAt, segmentAt, estimateTss } from './zwo.js';
-import { ZONES, FREE_COLOR, zoneOf, zoneColor, zoneInk, fmtTime, fmtDur, miniProfile, Diagram, Gauge, ProgressRing } from './render.js';
+import { ZONES, FREE_COLOR, zoneOf, zoneColor, zoneInk, fmtTime, fmtDur, miniProfile, Diagram, Gauge, ProgressRing, motionOK } from './render.js';
 import { Trainer, HeartRate, Controllers, bindNative, invoke } from './ble.js';
 import { renderMarkdown, markdownSummary, markdownPlain, smartTrim } from './markdown.js';
 import { DEFAULT_SHIFTING, gearTable, virtualSpeed, targetWatts } from './vshift.js';
@@ -1698,6 +1698,14 @@ function ftpCheck(next, cur, source) {
 const SEG_KIND = { steady: 'Steady state', warmup: 'Warm-up', cooldown: 'Cool-down', ramp: 'Ramp', on: 'Power interval', off: 'Recovery', freeride: 'Free ride', maxeffort: 'Max effort' };
 const segKind = (s) => `${s.erg === false ? 'All-out effort' : SEG_KIND[s.type] || 'Segment'}${s.reps ? ` ${s.rep}/${s.reps}` : ''}`;
 /** Fill a metric bar: frac 0…1, optional target marker (0…1) and colour. */
+/** Restart a CSS animation class (removes the given classes first). */
+function restartAnim(el, cls, all = [cls]) {
+  if (!el) return;
+  el.classList.remove(...all);
+  void el.offsetWidth;
+  el.classList.add(cls);
+}
+
 function setBar(el, frac, { mark = null, color = null, band = null } = {}) {
   if (!el) return;
   const f = el.querySelector('.fill');
@@ -1781,6 +1789,7 @@ class Ride {
                   <b id="s-target">–</b>
                   <small id="s-watts"></small>
                 </div>
+                <svg class="ring-check" viewBox="0 0 100 100" aria-hidden="true"><path d="M27 52 L44 68 L74 34"/></svg>
               </div>
               <div class="gearbox" id="gearbox" hidden><button class="btn round sm" data-shift="-1" title="Shift down (−)">−</button><span id="gear-lbl">Gear</span><button class="btn round sm" data-shift="1" title="Shift up (+)">+</button></div>
             </div>
@@ -1935,8 +1944,10 @@ class Ride {
   mult() { return this.intensity / 100; }
 
   adjust(d) {
+    const old = this.intensity;
     this.intensity = Math.max(50, Math.min(150, this.intensity + d));
     this.render(true);
+    if (this.intensity !== old && motionOK()) restartAnim($('#int-val'), this.intensity > old ? 'roll-up' : 'roll-down', ['roll-up', 'roll-down']);
   }
 
   /** Seek with test rules: no skipping inside a measured effort (ramp or all-out), and a jump never
@@ -2175,6 +2186,12 @@ class Ride {
     $('#v-pow').textContent = p == null ? '–' : this.showPct ? `${Math.round((p / F) * 100)}%` : p;
     $('#t-pow').textContent = gt == null ? (s.type === 'maxeffort' ? 'max' : allOut ? 'all out' : 'free') : this.showPct ? `${Math.round((gt / F) * 100)}%` : `${gt} W`;
     this.gauge.update({ target: gt, actual: p, ftp: F, bounds: bounds() });
+    // on target: within ±5 % for 3 s -> soft glow in the zone colour around the gauge
+    const onT = this.running && gt != null && p != null && Math.abs(p - gt) / gt <= 0.05;
+    this.onSince = onT ? (this.onSince ?? performance.now()) : null;
+    const gEl = $('#gauge');
+    if (gt != null) gEl.style.setProperty('--glow', zoneColor(gt / F, bounds()));
+    gEl.classList.toggle('on-target', onT && performance.now() - this.onSince >= 3000);
 
     // CURRENT SEGMENT
     const color = zoneColor(tf, bounds());
@@ -2219,6 +2236,7 @@ class Ride {
 
     if (segChanged || force) {
       $('#seg-kind').textContent = segKind(s);
+      $('.panel.seg').style.setProperty('--zc', color);
       // NEXT SEGMENT
       const card = $('#next-card');
       if (n) {
@@ -2243,7 +2261,10 @@ class Ride {
       $('#int-val').classList.toggle('changed', this.intensity !== 100);
       this.diagram.highlight(idx);
       $('#btn-play').classList.toggle('is-running', this.running);
+      // segment change: zone-coloured sweep over Current segment, Next card slides up
+      if (segChanged && this.animReady && motionOK()) { restartAnim($('.panel.seg'), 'seg-in'); restartAnim(card, 'nx-in'); }
     }
+    this.animReady = true;
 
     this.coach(s, { segChanged, inSeg, rem, allOut, freeLike, gt, p, c, cLo, cHi, dev, cadState, paceFast });
 
@@ -2364,6 +2385,15 @@ class Ride {
   async finish(completed) {
     clearInterval(this.loop);
     this.running = false;
+    // ridden to the end: the ring closes and turns into a check, then the summary rises
+    const endAnim = completed && this.t >= this.w.duration - 1 && motionOK();
+    const animStart = performance.now();
+    if (endAnim) {
+      this.ring.update(1, 'var(--ok)');
+      $('.panel.seg')?.classList.remove('closing');
+      $('.seg-ring')?.classList.add('finished');
+      $('#gauge')?.classList.remove('on-target');
+    }
     const st = this.stats();
     const title = this.info?.title || this.w.name;
     const result = { status: 'done', planDuration: this.w.duration, doneDuration: Math.round(this.ridden), completed, ...st };
@@ -2413,6 +2443,7 @@ class Ride {
     const plan = this.planId && planById(this.planId);
     const next = plan && planProgress(plan).next;
     const cell = (k, v) => `<div><span class="k">${k}</span><b>${v ?? '–'}</b></div>`;
+    if (endAnim) { const wait = 650 - (performance.now() - animStart); if (wait > 0) await new Promise((r) => setTimeout(r, wait)); }
     openModal(`
       <div class="summary">
         <div class="eyebrow">${this.test ? 'FTP test result' : completed ? 'Workout complete' : 'Workout saved'}</div>
@@ -2446,7 +2477,7 @@ class Ride {
           <button class="btn ${next ? 'ghost' : 'primary'}" data-a="home">Done</button>
           ${next ? '<button class="btn primary" data-a="next">Start next now</button>' : ''}
         </div>
-      </div>`, 'small sticky');
+      </div>`, endAnim ? 'small sticky rise' : 'small sticky');
 
     const doGarmin = async () => {
       const el = $('#garmin-state', modal);
