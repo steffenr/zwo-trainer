@@ -170,6 +170,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
   - Segment labels hide when they don't fit their segment.
 - **Feedback for remote actions** (controller buttons) uses the `#ride-hint` pill at the top centre of the ride area, shown for 1.4 s.
 - **Paused** dims panels and chart to 60 %. **Auto-paused** adds a line above the controls ("Auto-paused — start pedalling to continue").
+- **Motion:** only where it carries information, 200–500 ms, nothing that loops while riding. Segment change: a sweep in the zone colour crosses Current segment (`.seg-in`), its values settle in, the Next card slides up and its stripe grows (`.nx-in`). The gauge arcs glide to each reading with a light spring (`Gauge.step`, ~0.45 s); the numbers change instantly. Within ±5 % of the target for 3 s the gauge glows in the zone colour (`.on-target`). The intensity value rolls up or down (`.roll-up` / `.roll-down`). When a workout is ridden to the end, the ring draws a check (`.finished`) and the summary rises (`dialog.rise`). With the system's *Reduce motion* setting every animation and transition is off (`motionOK()` in render.js, a global CSS rule).
 
 ### Responsive
 
