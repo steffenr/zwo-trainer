@@ -168,7 +168,7 @@ Deleting always goes to the system Trash (the Recycle Bin on Windows), so it can
 
 ## Riding a workout
 
-**Display:** three panels above the workout chart, a quarter, half and quarter of the width: **Live** (the watt gauge with target and actual power, below it power, cadence, speed and heart rate with small bars), **Current segment** (target % and watts in the ring, next to it target power, target cadence, segment time with progress bar and remaining) and **Next segment** (just the values: %, watts, duration and, if set, target cadence). The intensity control sits in the control bar next to play/pause. The chart has a watt axis, your live power, cadence and heart-rate lines (each can be switched on or off; the choice is remembered per rider) and coach messages floating on top. The workout clock (elapsed and remaining) and all readouts scale up in full screen.
+**Display:** three panels above the workout chart, a quarter, half and quarter of the width: **Live** (the watt gauge with target and actual power, below it power, cadence, speed and heart rate with small bars), **Current segment** (target % and watts in the ring, next to it target power, target cadence, segment time with progress bar and remaining) and **Next segment** (just the values: %, watts, duration and, if set, target cadence). The intensity control sits in the control bar next to play/pause. The chart has a watt axis, your live power, cadence and heart-rate lines (each can be switched on or off; the choice is remembered per rider). The workout clock (elapsed and remaining) and all readouts scale up in full screen.
 
 **Starting:** the workout starts after about 2 seconds of pedalling, or press **Space** / ▶.
 
@@ -178,6 +178,8 @@ Deleting always goes to the system Trash (the Recycle Bin on Windows), so it can
 - **ERG** follows every target second by second, including ramps.
 - **Intensity** (− / + in the control bar or ↑ / ↓ for ±1 %, with Shift ±10 %) scales all targets of the workout.
 - **Free-ride and all-out segments** release ERG: you ride with your gears, or with virtual gears.
+
+**Coach line:** a single line below the Current segment values shows one short message at a time and stays empty otherwise. The workout's own text events come first. Then, in this order: pacing warnings (starting a long test effort too fast, or power fading more than 15 % below the ERG target for 5 seconds), cadence more than 5 rpm off its target for 5 seconds (amber up to 10 rpm, red beyond; it says "Back on target" once you're back for 3 seconds), and cues in hard segments (Z4 and up, all-out and max efforts: at the start, at halfway and in the last 30 seconds). Each message stays at least 4 seconds. The automatic hints can be switched off under Settings → App (*Coach hints*); the workout's own messages are always shown.
 
 **Auto-pause:** after 3 seconds without power or cadence the workout pauses, and it resumes as soon as you pedal again. You can switch this off under Settings → App.
 
@@ -274,7 +276,7 @@ Other platforms (Wahoo, TrainingPeaks, Suunto) only accept uploads from approved
 **Per rider:**
 - avatar (colour and initials or an emoji), FTP, max heart rate, weight, zone limits and power bests
 - active plan, done/skipped marks, favorites, ride history and FTP tests
-- theme, beeps, auto-pause, virtual-shifting defaults, workouts folder and paired devices
+- theme, beeps, auto-pause, coach hints, virtual-shifting defaults, workouts folder and paired devices
 - Garmin sign-in and upload mode
 
 **Managing riders:**
@@ -310,7 +312,7 @@ Keep riders in sync across Macs through a folder your cloud app already syncs. N
 | Tab | Setting |
 |---|---|
 | **Rider** | FTP, max heart rate, weight, personal bests (5 s / 1 / 5 / 20 min), zone limits (upper limit of Z1–Z4 in % FTP) |
-| **App** | Appearance (Match system / Light / Dark), countdown beeps, auto-pause, workouts folder (*Change… / Rescan*), virtual shifting (default, difficulty, gear-ratio range, start gear), paired devices overview, *About* (version, licence, links to the website, source code, third-party licences and Buy Me a Coffee) |
+| **App** | Appearance (Match system / Light / Dark), countdown beeps, auto-pause, coach hints, workouts folder (*Change… / Rescan*), virtual shifting (default, difficulty, gear-ratio range, start gear), paired devices overview, *About* (version, licence, links to the website, source code, third-party licences and Buy Me a Coffee) |
 | **Connections** | Profile sync, Garmin Connect (sign in, upload mode, manual FIT import folder), Strava note, more platforms (Intervals.icu API key and upload mode, COROS import button) |
 
 ---
