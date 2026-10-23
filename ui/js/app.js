@@ -76,6 +76,9 @@ function descriptionBlock(md) {
   </section>`;
 }
 let workoutIndex = new Map();
+let lastView = null;         // micro animations: last rendered view (fade in on change)
+const pbarMemo = new Map();  // plan id -> last progress-bar widths (glide on change)
+let justDone = null;         // file just marked done (its check draws itself once)
 const workoutInfo = (file) => workoutIndex.get(file);
 const folderOf = (file) => (file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '');
 
@@ -336,9 +339,12 @@ const DEVICE_KINDS = [
 const devState = { trainer: {}, hr: {}, controller: {} };
 
 function setDev(kind, s) {
+  const was = devState[kind] || {};
   devState[kind] = { connected: !!s.connected, reconnecting: !!s.reconnecting, name: s.name || '' };
   const dot = $(`#btn-devices .dev-dots i[data-k="${kind}"]`);
   dot.className = s.connected ? 'on' : s.reconnecting ? 'warn' : '';
+  if (motionOK() && s.connected && !was.connected) restartAnim(dot, 'pop');
+  if (motionOK() && was.connected && !s.connected) restartAnim(dot, 'drop');
   const on = Object.values(devState).filter((d) => d.connected).length;
   $('#btn-devices').title = on ? `Devices — ${on} connected` : 'Devices — none connected';
   if ($('#popover.dev-pop')) renderDevicesMenu($('#popover.dev-pop'));
@@ -486,6 +492,32 @@ async function afterProfileChange(a) {
 
 // ------------------------------------------------------------------ routing / views
 function route() {
+  routeView();
+  afterRoute();
+}
+
+/** Micro animations after a render: the view fades in when it changed, progress bars glide to new values. */
+function afterRoute() {
+  if (!state || document.body.classList.contains('riding')) return;
+  const key = `${mode()}|${location.hash.replace(/^#\/?/, '')}`;
+  if (lastView !== null && key !== lastView && motionOK()) restartAnim($('#view'), 'view-in');
+  lastView = key;
+  const seen = {};
+  for (const bar of $$('#view .pbar[data-pid]')) {
+    const id = `${bar.dataset.pid}#${(seen[bar.dataset.pid] = (seen[bar.dataset.pid] || 0) + 1)}`;
+    const to = [bar.dataset.d, bar.dataset.s], from = pbarMemo.get(id);
+    pbarMemo.set(id, to);
+    if (!from || (from[0] === to[0] && from[1] === to[1]) || !motionOK()) continue;
+    const d = $('.d', bar), s = $('.s', bar);
+    d.style.width = `${from[0]}%`; s.style.width = `${from[1]}%`;
+    void bar.offsetWidth;
+    bar.classList.add('glide');
+    d.style.width = `${to[0]}%`; s.style.width = `${to[1]}%`;
+  }
+  justDone = null;
+}
+
+function routeView() {
   if (!state) return;
   const h = location.hash.replace(/^#\/?/, '');
   const [view, ...rest] = h.split('/');
@@ -506,9 +538,9 @@ function renderEmpty() {
   bindActions($('#view'));
 }
 
-function progressBar(pp) {
+function progressBar(pp, id) {
   const d = (pp.done / pp.total) * 100, s = (pp.skipped / pp.total) * 100;
-  return `<div class="pbar" title="${pp.done} done · ${pp.skipped} skipped · ${pp.total} total"><i class="d" style="width:${d}%"></i><i class="s" style="width:${s}%"></i></div>`;
+  return `<div class="pbar"${id ? ` data-pid="${esc(id)}" data-d="${d}" data-s="${s}"` : ''} title="${pp.done} done · ${pp.skipped} skipped · ${pp.total} total"><i class="d" style="width:${d}%"></i><i class="s" style="width:${s}%"></i></div>`;
 }
 
 function weekDay(w) {
@@ -531,7 +563,7 @@ function renderHome() {
           </div>
           <div class="hero-count"><b>${pp.done + pp.skipped}</b>/${pp.total}<small>${pp.done} done · ${pp.skipped} skipped</small></div>
         </div>
-        ${progressBar(pp)}
+        ${progressBar(pp, active.id)}
         ${n ? `
         <div class="upnext">
           <div class="upnext-info">
@@ -573,7 +605,7 @@ function renderHome() {
         <div class="pc-top"><h3>${esc(p.name)}</h3>${isActive ? '<span class="badge">Active</span>' : pp.finished ? '<span class="badge ok">Done</span>' : ''}</div>
         <div class="meta">${planMeta(p)}</div>
         ${p.description ? `<p class="pc-desc">${esc(markdownSummary(p.description, 110))}</p>` : ''}
-        ${pp.started ? progressBar(pp) : ''}
+        ${pp.started ? progressBar(pp, p.id) : ''}
       </a>`;
     }).join('') || '<p class="muted">No plans match.</p>';
   };
@@ -585,7 +617,7 @@ function renderHome() {
 const zoneTag = (z) => (z ? `<span class="ztag" style="--zc:${ZONES[z - 1].color}" title="Training intensity: ${ZONES[z - 1].short} ${ZONES[z - 1].name}">${ZONES[z - 1].short}</span>` : '');
 
 function workoutRow(w, { status, isNext, locked, free, showFolder, note, favTools } = {}) {
-  const icon = status === 'done' ? '<span class="st done" title="Done">✓</span>'
+  const icon = status === 'done' ? `<span class="st done${justDone === w.file && !document.body.classList.contains('riding') ? ' just-done' : ''}" title="Done">✓</span>`
     : status === 'skipped' ? '<span class="st skipped" title="Skipped">↷</span>'
       : isNext ? '<span class="st next" title="Up next">●</span>'
         : locked ? '<span class="st locked" title="Do the workouts in order">🔒</span>'
@@ -642,7 +674,7 @@ function renderPlan(id) {
         <div class="meta">${planMeta(plan)} total · <code>${esc(plan.id)}</code></div>
       </div>
       <div class="plan-actions">${actions}${menuBtn(`${pp.started ? `<button data-act="reset-plan" data-plan="${esc(plan.id)}">Reset progress…</button>` : ''}<button data-act="reveal" data-rel="${esc(plan.id)}">Show in ${PLAT.files}</button><button data-act="set-kind" data-kind="collection" data-rel="${esc(plan.id)}">Show as collection (Workouts only)</button><hr><button class="danger-text" data-act="trash-folder" data-rel="${esc(plan.id)}">Move plan folder to ${PLAT.trash}…</button>`, 'Plan actions')}</div>
-      ${pp.started ? `<div class="plan-prog">${progressBar(pp)}<span class="muted">${pp.done} done · ${pp.skipped} skipped · ${pp.total - pp.done - pp.skipped} to go</span></div>` : ''}
+      ${pp.started ? `<div class="plan-prog">${progressBar(pp, plan.id)}<span class="muted">${pp.done} done · ${pp.skipped} skipped · ${pp.total - pp.done - pp.skipped} to go</span></div>` : ''}
     </section>
     ${descriptionBlock(plan.description)}
     ${rows}`;
@@ -718,12 +750,13 @@ function renderWorkouts() {
         : f === '' ? `<h2>All workouts</h2><span class="grow"></span>${menuBtn(`<button data-act="reveal" data-rel="">Show library in ${PLAT.files}</button>`, 'Library actions')}` : '';
     bindActions($('#wk-head'));
   };
-  const draw = () => {
+  const draw = (animate) => {
     head();
     const list = filteredWorkouts();
     $('#wk-count').textContent = `${list.length} workout${list.length === 1 ? '' : 's'}`;
     $('#wk-list').innerHTML = list.slice(0, wf.limit).map((w) => workoutRow(w, { free: true, showFolder: !wf.folder || wf.folder.startsWith('@'), favTools: wf.folder === '@fav' && !wf.q && wf.dur === 'all' })).join('') || (wf.folder === '@fav' ? '<p class="muted">No favorites yet — tap ☆ on any workout.</p>' : '<p class="muted">Nothing matches.</p>');
     $('#wk-more').innerHTML = list.length > wf.limit ? `<button class="btn ghost" data-more>Show more (${list.length - wf.limit} left)</button>` : '';
+    if (animate && motionOK()) restartAnim($('#wk-list'), 'list-in');
   };
   draw();
   $('.wk-side', v).onclick = (e) => {
@@ -731,18 +764,18 @@ function renderWorkouts() {
     if (!b) return;
     wf.folder = b.dataset.folder; wf.limit = 80;
     $$('.wk-folder', v).forEach((x) => x.classList.toggle('on', x === b));
-    draw();
+    draw(true);
   };
   $('#wk-q').oninput = (e) => { wf.q = e.target.value; wf.limit = 80; draw(); };
-  $('#wk-dur').onclick = (e) => { const b = e.target.closest('[data-dur]'); if (!b) return; wf.dur = b.dataset.dur; $$('#wk-dur button').forEach((x) => x.classList.toggle('on', x === b)); wf.limit = 80; draw(); };
-  $('#wk-sort').onchange = (e) => { wf.sort = e.target.value; draw(); };
+  $('#wk-dur').onclick = (e) => { const b = e.target.closest('[data-dur]'); if (!b) return; wf.dur = b.dataset.dur; $$('#wk-dur button').forEach((x) => x.classList.toggle('on', x === b)); wf.limit = 80; draw(true); };
+  $('#wk-sort').onchange = (e) => { wf.sort = e.target.value; draw(true); };
   $('#wk-zones').onclick = (e) => {
     const b = e.target.closest('[data-z]');
     if (!b) return;
     const z = +b.dataset.z;
     if (wf.zones.has(z)) wf.zones.delete(z); else wf.zones.add(z);
     b.classList.toggle('on', wf.zones.has(z));
-    wf.limit = 80; draw();
+    wf.limit = 80; draw(true);
   };
   $('#wk-more').onclick = (e) => { if (e.target.closest('[data-more]')) { wf.limit += 200; draw(); } };
   bindActions($('#wk-list'));
@@ -1064,6 +1097,7 @@ async function activatePlan(id) {
 async function markEntry(planId, file, entry) {
   const ps = (state.plans[planId] ||= { startedAt: new Date().toISOString(), entries: {} });
   ps.entries[file] = { ...entry, at: new Date().toISOString() };
+  if (entry.status === 'done') justDone = file;
   const plan = planById(planId);
   if (plan && !planProgress(plan).next) ps.finishedAt = new Date().toISOString();
   await api.saveState();
@@ -1082,13 +1116,20 @@ async function unskip(file) {
 
 // ------------------------------------------------------------------ modals
 const modal = $('#modal');
+let modalCloseTimer = null;
 function openModal(html, cls = '') {
+  if (modalCloseTimer) { clearTimeout(modalCloseTimer); modalCloseTimer = null; } // reopened while fading out: keep it open
   modal.className = cls;
   $('.modal-body', modal).innerHTML = html;
   if (!modal.open) modal.showModal();
   return modal;
 }
-function closeModal() { if (modal.open) modal.close(); }
+function closeModal() {
+  if (!modal.open || modalCloseTimer) return;
+  if (!motionOK()) return modal.close();
+  modal.classList.add('closing');
+  modalCloseTimer = setTimeout(() => { modalCloseTimer = null; modal.classList.remove('closing'); modal.close(); }, 120);
+}
 modal.addEventListener('click', (e) => { if (e.target === modal && !modal.classList.contains('sticky')) closeModal(); });
 modal.addEventListener('cancel', (e) => { if (modal.classList.contains('sticky')) e.preventDefault(); });
 
@@ -1117,9 +1158,14 @@ function promptDialog(title, value = '') {
 let toastTimer;
 function toast(msg) {
   const t = $('#toast');
-  t.textContent = msg; t.hidden = false;
+  t.textContent = msg;
+  if (t.hidden || t.classList.contains('out')) { t.classList.remove('out'); t.hidden = false; if (motionOK()) restartAnim(t, 'in'); }
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (t.hidden = true), 3200);
+  toastTimer = setTimeout(() => {
+    if (!motionOK()) { t.hidden = true; return; }
+    t.classList.add('out');
+    toastTimer = setTimeout(() => { t.hidden = true; t.classList.remove('in', 'out'); }, 180);
+  }, 3200);
 }
 
 async function openPreview(file) {
@@ -1167,6 +1213,7 @@ async function openPreview(file) {
     bounds: bounds(), ftp: ftp(),
     onSelect: (i, s) => { d.highlight(i); $('.seg-info', modal).innerHTML = segmentText(s); },
   });
+  if (motionOK()) d.segEls.forEach((g, i) => { g.style.animationDelay = `${80 + Math.min(i, 30) * 12}ms`; g.classList.add('grow'); });
   $$('[data-a]', modal).forEach((b) => (b.onclick = async () => {
     const a = b.dataset.a;
     if (a === 'close') return closeModal();
@@ -1698,6 +1745,21 @@ function ftpCheck(next, cur, source) {
 const SEG_KIND = { steady: 'Steady state', warmup: 'Warm-up', cooldown: 'Cool-down', ramp: 'Ramp', on: 'Power interval', off: 'Recovery', freeride: 'Free ride', maxeffort: 'Max effort' };
 const segKind = (s) => `${s.erg === false ? 'All-out effort' : SEG_KIND[s.type] || 'Segment'}${s.reps ? ` ${s.rep}/${s.reps}` : ''}`;
 /** Fill a metric bar: frac 0…1, optional target marker (0…1) and colour. */
+/** Count a number up (or down) to its final value once, ~0.8 s ease-out; the end text is exact. */
+function countUp(el, from, to, fmt, delay = 0) {
+  if (from === to) return;
+  el.textContent = fmt(from);
+  setTimeout(() => {
+    const t0 = performance.now();
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / 800), e = 1 - (1 - k) ** 3;
+      el.textContent = fmt(k < 1 ? Math.round(from + (to - from) * e) : to);
+      if (k < 1 && el.isConnected) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, delay);
+}
+
 /** Restart a CSS animation class (removes the given classes first). */
 function restartAnim(el, cls, all = [cls]) {
   if (!el) return;
@@ -2478,6 +2540,8 @@ class Ride {
           ${next ? '<button class="btn primary" data-a="next">Start next now</button>' : ''}
         </div>
       </div>`, endAnim ? 'small sticky rise' : 'small sticky');
+    const ftpEl = this.test && testResult?.ftp && motionOK() ? $('.ftp-result > div > b', modal) : null;
+    if (ftpEl) countUp(ftpEl, ftp(), testResult.ftp, (v) => `${v} W`, endAnim ? 450 : 150);
 
     const doGarmin = async () => {
       const el = $('#garmin-state', modal);
