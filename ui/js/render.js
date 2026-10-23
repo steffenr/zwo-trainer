@@ -205,7 +205,11 @@ export class Diagram {
 const SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹';
 const toSup = (n) => String(n).split('').map((d) => SUP[+d]).join('');
 
-/** Ring gauge: outer = target, inner = actual, blue tick = FTP. */
+/** True unless the system asks for reduced motion. */
+export const motionOK = () => !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/** Ring gauge: outer = target, inner = actual, blue tick = FTP. The arcs glide to new values
+ *  (a light spring, ~0.45 s) unless reduced motion is on; then they jump. */
 export class Gauge {
   constructor(container) {
     this.c = container;
@@ -234,14 +238,40 @@ export class Gauge {
   }
 
   update({ target, actual, ftp, bounds }) {
-    const max = Math.max(ftp * 1.5, (target || 0) * 1.1, (actual || 0) * 1.05) || 1;
-    if (target) {
+    this.cfg = { ftp, bounds };
+    this.goal = { target: target || 0, actual: actual || 0 };
+    if (!motionOK() || !this.cur) {
+      this.cur = { ...this.goal }; this.vel = { target: 0, actual: 0 };
+      if (this.raf) { cancelAnimationFrame(this.raf); this.raf = null; }
+      return this.paint();
+    }
+    if (!this.raf) { this.last = performance.now(); this.raf = requestAnimationFrame((t) => this.step(t)); }
+  }
+
+  step(now) {
+    const dt = Math.min(0.05, (now - this.last) / 1000);
+    this.last = now;
+    let moving = false;
+    for (const k of ['target', 'actual']) {
+      const g = this.goal[k], x = this.cur[k], v = this.vel[k];
+      this.vel[k] = v + (90 * (g - x) - 16 * v) * dt; // spring k 90, damping 16
+      this.cur[k] = x + this.vel[k] * dt;
+      if (Math.abs(g - this.cur[k]) < 0.3 && Math.abs(this.vel[k]) < 0.3) { this.cur[k] = g; this.vel[k] = 0; } else moving = true;
+    }
+    this.paint();
+    this.raf = moving ? requestAnimationFrame((t) => this.step(t)) : null;
+  }
+
+  paint() {
+    const { ftp, bounds } = this.cfg, { target, actual } = this.cur, goal = this.goal;
+    const max = Math.max(ftp * 1.5, goal.target * 1.1, goal.actual * 1.05) || 1;
+    if (target >= 0.5) {
       this.target.setAttribute('d', this.arc(86, 0, target / max));
-      this.target.style.stroke = zoneColor(target / ftp, bounds);
+      this.target.style.stroke = zoneColor((goal.target || target) / ftp, bounds);
     } else this.target.setAttribute('d', '');
-    if (actual) {
+    if (actual >= 0.5) {
       this.actual.setAttribute('d', this.arc(68, 0, actual / max));
-      this.actual.style.stroke = zoneColor(actual / ftp, bounds);
+      this.actual.style.stroke = zoneColor((goal.actual || actual) / ftp, bounds);
     } else this.actual.setAttribute('d', '');
     const [x0, y0] = this.pt(76, ftp / max), [x1, y1] = this.pt(96, ftp / max);
     Object.entries({ x1: x0, y1: y0, x2: x1, y2: y1 }).forEach(([k, v]) => this.ftpTick.setAttribute(k, v));
