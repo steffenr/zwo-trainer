@@ -91,7 +91,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
   - The UI mutates `state` (the active profile) and calls `api.saveState()` → `save_profile`.
   - Rust-side changes (create/edit/switch/delete profile, sync) return a fresh `app_state` summary, which the UI applies with `applyAppState()`.
 - **The ZWO parser exists twice:** `zwo.rs` is authoritative (library scan, workout loading) and `ui/js/zwo.js` is a mirror used by the mock/dev server and some client helpers. If you change parsing, TSS or zone classification, change **both** and keep their outputs identical.
-- **Ride loop:** the `Ride` class in `app.js` ticks every 250 ms. It computes the target, sends ERG (deduplicated in JS and Rust), records 1 Hz samples, runs auto-pause, beeps and controller actions. `finish()` → `save_activity` (FIT) → history → Garmin upload.
+- **Ride loop:** the `Ride` class in `app.js` ticks every 250 ms. It computes the target, sends ERG (deduplicated in JS and Rust), records 1 Hz samples, runs auto-pause, beeps and controller actions. `coach()` fills the coach line in the Current segment panel (priority: .zwo text events > pacing > cadence > hard-segment cues; hysteresis and the 4 s minimum use wall-clock time in `this.cz`; `settings.coachHints` switches the automatic hints off). `finish()` → `save_activity` (FIT) → history → Garmin upload.
 
 ## Data model (state.json v2)
 
