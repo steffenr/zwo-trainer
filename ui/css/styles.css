@@ -231,6 +231,17 @@ dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(3px); }
 @keyframes spin { to { transform: rotate(360deg); } }
 .warn-text { color: var(--danger) !important; }
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 12px; z-index: 100; box-shadow: var(--shadow-lg); font-weight: 550; }
+.update-card { position: fixed; right: 24px; bottom: 24px; z-index: 90; width: 340px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 14px; }
+.update-card[hidden], body.riding .update-card { display: none; }
+.update-card .uc-head { display: flex; gap: 10px; align-items: flex-start; }
+.update-card .uc-head b { display: block; font-size: 14px; }
+.update-card .uc-head small { font-size: 12.5px; }
+.update-card .uc-ico { flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.update-card .uc-actions { display: flex; gap: 6px; align-items: center; margin-top: 12px; }
+.update-card .uc-actions .grow { flex: 1; }
+.update-card .uc-bar { margin-top: 12px; }
+.update-card .uc-bar i { transition: width .2s; }
+.upd-form { margin-top: 10px; }
 .summary .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 20px 0; }
 .summary .stats b { display: block; font-size: 22px; font-family: var(--num); font-variant-numeric: tabular-nums; }
 .next-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
@@ -848,6 +859,7 @@ details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; fon
   .dev-dots i.pop { animation: mo-dot-pop .5s cubic-bezier(.2, .8, .2, 1); }
   .dev-dots i.drop { animation: mo-shake .4s ease-in-out; }
   .toast.in { animation: mo-toast-in .22s cubic-bezier(.2, .8, .2, 1); }
+  .update-card.in { animation: mo-pop-in .2s cubic-bezier(.2, .8, .2, 1); }
   .toast.out { animation: mo-toast-out .18s ease-in forwards; }
 }
 @keyframes mo-dlg-in { from { opacity: 0; transform: translateY(8px) scale(.97); } }

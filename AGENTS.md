@@ -69,7 +69,7 @@ node scripts/sync-version.mjs [x.y.z]                # print / set the app versi
 - **Installers are unsigned** (macOS uses ad-hoc signing `signingIdentity: "-"`, which keeps the Bluetooth permission stable). Adding real signing/notarisation means adding secrets to `build-app.yml`.
 - **In-app updates** are a separate signature (minisign, `tauri-plugin-updater`), not code signing:
   - The public key is `plugins.updater.pubkey` in `tauri.conf.json`; the private key that signs the update files must never be committed.
-  - Until the updater key is set up, the pubkey is the placeholder `UPDATER_PUBLIC_KEY_NOT_SET`: `updater::configured` is false and `update_check` refuses to run.
+  - Until the updater key is set up, the pubkey is the placeholder `UPDATER_PUBLIC_KEY_NOT_SET`: `updater::configured` is false, the UI hides the update controls and never checks.
 - **Bundles:** `targets: "all"` → `.app`/`.dmg`, NSIS `.exe`/`.msi`, `.deb`/`.rpm`/`.AppImage`. The Linux packages depend on `bluez`.
 - **Before merging platform-touching Rust:** CI must be green on all three OSes. Locally you can type-check Windows from Linux/macOS with `rustup target add x86_64-pc-windows-msvc && cargo clippy --target x86_64-pc-windows-msvc` (`ring` needs MSVC headers; `cargo xwin` or the CI job is the easy way).
 
@@ -175,7 +175,8 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
   - COROS Training Hub imports only ZIPs (`zip_stored`).
   - Secrets are stored under `svc:<id>` in `secrets.json`; per-ride results go in `history[].services[id]`; modes live in `settings.services[id].mode`.
 - **Strava:** deliberately no Strava API integration (owner subscription requirement since 2026). Strava gets rides via Garmin's partner sync, which pushes once right after the import: Strava keeps its own default name ("Morning Ride") and the default bike, the type is Indoor Cycling. Neither `wkt_name` nor the later `garmin::rename` reaches Strava, and there is no known way around this without the Strava API. Don't re-add an API key flow.
-- **Updates (`updater.rs`):**
+- **Updates (`updater.rs`, `initUpdates()` in app.js):**
+  - The UI decides when: first check 8 s after boot, then every 6 h, only with `updates.auto` and never while `ride` is set. `Ride.close()` shows a card for an update found earlier; *Later* hides it for that version until the next launch.
   - `update_check` stores the `Update` in the `Pending` state; `update_install` takes it, downloads, verifies, installs and calls `app.restart()` (on Windows the installer quits the app first). A failed install puts it back so *Install & restart* can be retried.
   - The plugin's own JS commands are not enabled in `capabilities/default.json` on purpose: everything goes through our commands.
   - Bump the version only through the release workflow: the updater compares the manifest's `version` with `Cargo.toml`'s.

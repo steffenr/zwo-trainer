@@ -1,6 +1,6 @@
 import { powerAt, segmentAt, estimateTss } from './zwo.js';
 import { ZONES, FREE_COLOR, zoneOf, zoneColor, zoneInk, fmtTime, fmtDur, miniProfile, Diagram, Gauge, ProgressRing, motionOK } from './render.js';
-import { Trainer, HeartRate, Controllers, bindNative, invoke } from './ble.js';
+import { Trainer, HeartRate, Controllers, bindNative, invoke, listen } from './ble.js';
 import { renderMarkdown, markdownSummary, markdownPlain, smartTrim } from './markdown.js';
 import { DEFAULT_SHIFTING, gearTable, virtualSpeed, targetWatts } from './vshift.js';
 import { PROTOCOLS, protocolById, isTestWorkout, evaluateGeneric, classifyTest, prepareTestWorkout, vo2max } from './tests.js';
@@ -147,6 +147,7 @@ async function boot() {
   await loadLibrary();
   refreshServices();
   autoConnect();
+  initUpdates();
   if (params.get('sim') === '1') { trainer.startSim(); hrm.startSim(); }
 }
 
@@ -205,6 +206,91 @@ async function runSync(quiet = false) {
 
 window.addEventListener('focus', () => { if (syncOn() && Date.now() - Date.parse(syncCfg.lastSync || 0) > 60000) scheduleSync(500); });
 setInterval(() => scheduleSync(0), 5 * 60 * 1000);
+
+// ------------------------------------------------------------------ app updates (signed, from GitHub releases)
+// Rust does the work (updater.rs); this only decides when. Never checks, shows or installs during a ride.
+const RELEASES = 'https://github.com/steffenr/zwo-trainer/releases';
+let updPrefs = { auto: true, available: false }; // available: this build carries an updater key
+let updFound = null;     // { version, current, notes } from the last check
+let updLater = null;     // version postponed with "Later" (until the next launch)
+let updBusy = false;
+
+async function initUpdates() {
+  updPrefs = await invoke('update_status').catch(() => updPrefs);
+  if (!updPrefs.available) return;
+  await listen('update-progress', updateProgress).catch(() => {});
+  setTimeout(autoCheckUpdate, 8000);
+  setInterval(autoCheckUpdate, 6 * 3600 * 1000);
+}
+
+function autoCheckUpdate() {
+  if (updPrefs.auto !== false && !ride && !updBusy) checkUpdate(true);
+}
+
+/** One check. quiet: no toast for "up to date" or errors (automatic checks). */
+async function checkUpdate(quiet = false) {
+  if (updBusy) return null;
+  updBusy = true;
+  try {
+    updFound = await invoke('update_check');
+    if (!updFound) { if (!quiet) toast(`zwoTrainer is up to date`); return null; }
+    if (ride) { if (!quiet) toast(`zwoTrainer ${updFound.version} is available — install it after your ride`); }
+    else if (!quiet || updLater !== updFound.version) showUpdateCard();
+    return updFound;
+  } catch (e) {
+    if (!quiet) toast(String(e));
+    return null;
+  } finally { updBusy = false; }
+}
+
+const updIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>';
+
+function showUpdateCard() {
+  if (!updFound || ride) return;
+  const u = updFound;
+  let card = $('#update-card');
+  if (!card) { card = document.createElement('div'); card.id = 'update-card'; card.className = 'update-card'; card.setAttribute('role', 'status'); document.body.append(card); }
+  card.innerHTML = `<div class="uc-head"><span class="uc-ico">${updIcon}</span><div><b>zwoTrainer ${esc(u.version)} is available</b><small class="muted">You have ${esc(u.current)}</small></div></div>
+    <div class="uc-actions"><button class="btn ghost sm" data-u="notes">What's new</button><span class="grow"></span><button class="btn ghost sm" data-u="later">Later</button><button class="btn primary sm" data-u="install">Install &amp; restart</button></div>`;
+  card.hidden = false;
+  if (motionOK()) restartAnim(card, 'in');
+  card.onclick = (e) => {
+    const a = e.target.closest('[data-u]')?.dataset.u;
+    if (a === 'notes') invoke('open_link', { url: `${RELEASES}/tag/v${u.version}` }).catch((err) => toast(String(err)));
+    if (a === 'later') { updLater = u.version; hideUpdateCard(); }
+    if (a === 'install') installUpdate();
+  };
+}
+
+function hideUpdateCard() {
+  const card = $('#update-card');
+  if (card) card.hidden = true;
+}
+
+async function installUpdate() {
+  const card = $('#update-card');
+  if (ride || !card) return;
+  const ask = OS === 'linux' ? ' You may be asked for your password.' : '';
+  card.innerHTML = `<div class="uc-head"><span class="uc-ico">${updIcon}</span><div><b id="uc-status">Downloading zwoTrainer ${esc(updFound.version)}…</b><small class="muted">zwoTrainer restarts when it's done.${ask}</small></div></div>
+    <div class="pbar uc-bar"><i class="d" id="uc-bar" style="width:0%"></i></div>`;
+  card.onclick = null;
+  try {
+    await invoke('update_install'); // restarts the app (Windows: the installer quits it)
+  } catch (e) {
+    toast(String(e));
+    showUpdateCard();
+  }
+}
+
+function updateProgress({ done, total }) {
+  const st = $('#uc-status'), bar = $('#uc-bar');
+  if (!st || !bar) return;
+  if (total) {
+    const pct = Math.min(100, Math.round((done / total) * 100));
+    bar.style.width = `${pct}%`;
+    if (pct >= 100) st.textContent = 'Installing…';
+  }
+}
 
 // ------------------------------------------------------------------ theme
 const THEME_LABEL = { system: 'Match system', light: 'Light', dark: 'Dark' };
@@ -1315,6 +1401,7 @@ async function openSettings(tab = 'rider') {
       <p class="muted small">Trainer: ${esc(s.devices?.trainer?.name || 'none')} · Heart rate: ${esc(s.devices?.hr?.name || 'none')} · Shifter: ${esc((s.devices?.controllers || []).map((c) => c.name).join(' + ') || 'none')} — pair or forget them with the buttons in the top bar.</p>
       <h3>About</h3>
       <p class="muted small">zwoTrainer <span id="app-ver"></span> · MIT License · © 2026 SteffenR</p>
+      ${updPrefs.available ? `<div class="form upd-form"><div class="frow"><label class="check"><input type="checkbox" id="upd-auto" ${updPrefs.auto !== false ? 'checked' : ''}> Check for updates automatically</label><button class="btn ghost sm" data-a="upd-check">Check now</button></div></div>` : ''}
       <div class="about-links">
         <button class="btn ghost sm" data-a="link" data-url="https://steffenr.github.io/zwo-trainer/">Website</button>
         <button class="btn ghost sm" data-a="link" data-url="https://github.com/steffenr/zwo-trainer">Source code</button>
@@ -1424,11 +1511,20 @@ async function openSettings(tab = 'rider') {
     }
   };
   window.__TAURI__?.app?.getVersion?.().then((v) => { const el = $('#app-ver', modal); if (el) el.textContent = v; }).catch(() => {});
+  const updAuto = $('#upd-auto', modal);
+  if (updAuto) updAuto.onchange = () => invoke('update_prefs', { auto: updAuto.checked }).then((p) => (updPrefs = p)).catch((err) => toast(String(err)));
   $$('[data-a]', modal).forEach((b) => (b.onclick = async (e) => {
     e.preventDefault();
     const a = b.dataset.a;
     if (a === 'close' || a === 'cancel') { if (s.theme !== themeBefore) setTheme(themeBefore); return closeModal(); }
     if (a === 'link') return invoke('open_link', { url: b.dataset.url }).catch((err) => toast(String(err)));
+    if (a === 'upd-check') {
+      b.disabled = true; b.textContent = 'Checking…';
+      const u = await checkUpdate(false);
+      b.disabled = false; b.textContent = 'Check now';
+      if (u && !ride) closeModal();
+      return;
+    }
     if (a === 'dir') { closeModal(); return pickDir(); }
     if (a === 'rescan') { closeModal(); await loadLibrary(); return toast(`${library.plans.length} plans found`); }
     if (a === 'garmin-dir') {
@@ -2602,6 +2698,7 @@ class Ride {
     $('#ride-title').innerHTML = '';
     ride = null;
     route();
+    if (updFound && updLater !== updFound.version) showUpdateCard();
   }
 }
 

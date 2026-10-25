@@ -23,6 +23,7 @@ Built with **Tauri 2**: a Rust core and a plain HTML/CSS/JS interface, with no N
 ## Contents
 
 1. [Install & build](#install--build)
+    - [Updates](#updates)
 2. [Getting started](#getting-started)
 3. [The top bar](#the-top-bar)
 4. [Plans](#plans)
@@ -58,6 +59,15 @@ Every release on the GitHub **Releases** page has installers for all platforms. 
 | Linux (x64) | `.deb`, `.rpm` or `.AppImage` | Needs BlueZ (`bluetoothd`) running; the `.deb`/`.rpm` pull it in. |
 
 zwoTrainer is developed and used on macOS; the Windows and Linux builds use the same code and are compile-checked and tested in CI on every push, but get less real-world riding.
+
+### Updates
+
+Once installed, zwoTrainer updates itself. A few seconds after launch (and every 6 hours while it runs) it asks the newest GitHub release whether there is a newer version. If there is, a small card in the bottom-right corner offers **Install & restart**, **Later** and **What's new**.
+
+- **Never during a ride:** no check, card or install happens while you ride; an update found earlier appears when the ride ends.
+- **Signed:** every update file is signed with the project's update key, and the app refuses anything whose signature doesn't match. Updates fetched by the app itself normally don't bring back the unsigned-app warning.
+- **Each install type updates in kind:** the macOS app is replaced in place, Windows runs the same installer you used (`-setup.exe` or `.msi`) and closes the app while it installs, and Linux updates the `.AppImage`, `.deb` or `.rpm` (the packages ask for your password).
+- **Settings → App → About:** switch *Check for updates automatically* off, or press **Check now**. The setting belongs to this computer and isn't synced.
 
 ### Build from source
 
@@ -312,7 +322,7 @@ Keep riders in sync across Macs through a folder your cloud app already syncs. N
 | Tab | Setting |
 |---|---|
 | **Rider** | FTP, max heart rate, weight, personal bests (5 s / 1 / 5 / 20 min), zone limits (upper limit of Z1–Z4 in % FTP) |
-| **App** | Appearance (Match system / Light / Dark), countdown beeps, auto-pause, coach hints, workouts folder (*Change… / Rescan*), virtual shifting (default, difficulty, gear-ratio range, start gear), paired devices overview, *About* (version, licence, links to the website, source code, third-party licences and Buy Me a Coffee) |
+| **App** | Appearance (Match system / Light / Dark), countdown beeps, auto-pause, coach hints, workouts folder (*Change… / Rescan*), virtual shifting (default, difficulty, gear-ratio range, start gear), paired devices overview, *About* (version, *Check for updates automatically*, *Check now*, licence, links to the website, source code, third-party licences and Buy Me a Coffee) |
 | **Connections** | Profile sync, Garmin Connect (sign in, upload mode, manual FIT import folder), Strava note, more platforms (Intervals.icu API key and upload mode, COROS import button) |
 
 ---
@@ -342,12 +352,12 @@ The limits can be changed per rider (Settings → Rider) and drive the colours, 
 
 | What | Where |
 |---|---|
-| Riders, settings, progress, history | `state.json` in the app data folder: `~/Library/Application Support/dev.steffenr.zwotrainer/` (macOS), `%APPDATA%\dev.steffenr.zwotrainer\` (Windows), `~/.local/share/dev.steffenr.zwotrainer/` (Linux) |
+| Riders, settings, progress, history, update setting | `state.json` in the app data folder: `~/Library/Application Support/dev.steffenr.zwotrainer/` (macOS), `%APPDATA%\dev.steffenr.zwotrainer\` (Windows), `~/.local/share/dev.steffenr.zwotrainer/` (Linux) |
 | Garmin session tokens and the Intervals.icu API key (owner-only file) | `…/dev.steffenr.zwotrainer/secrets.json` (never synced) |
 | Ride files | `…/dev.steffenr.zwotrainer/activities/<rider>/*.fit` (plus `*.garmin.fit`) |
 | Workouts | your workouts folder; zwoTrainer only reads it, except *Move to Trash* |
 
-Nothing is sent anywhere except what you enable: uploads to the platforms you connect, and the cloud folder you choose for profile sync.
+Nothing is sent anywhere except what you enable: uploads to the platforms you connect, and the cloud folder you choose for profile sync. The update check only downloads the release manifest from GitHub (switch it off under Settings → App).
 
 ---
 
@@ -363,6 +373,7 @@ Nothing is sent anywhere except what you enable: uploads to the platforms you co
 | Garmin upload fails | Sign out and in again under Settings → Connections; use *Manual FIT import* meanwhile. |
 | Intervals.icu says the key is wrong | Create a new key under intervals.icu → Settings → Developer Settings and paste it again (no spaces). |
 | COROS import fails | Pick the **.zip** file zwoTrainer highlighted, not the .fit; processing in Training Hub can take a few minutes. |
+| Update fails or "Check now" says GitHub can't be reached | Check the internet connection and try again later; you can always download the newest version from the Releases page and install it over the old one. |
 | Sync says "waiting for iCloud downloads" | iCloud hasn't downloaded the files yet; zwoTrainer asks it to and picks them up on the next run. |
 
 ---
