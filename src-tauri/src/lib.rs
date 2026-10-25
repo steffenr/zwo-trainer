@@ -6,6 +6,7 @@ mod shifter;
 mod services;
 mod state;
 mod sync;
+mod updater;
 mod zwo;
 
 use serde_json::{json, Value};
@@ -52,6 +53,39 @@ fn rename_profile(app: State<'_, App>, id: String, name: String) -> Res<Value> {
 #[tauri::command]
 fn edit_profile(app: State<'_, App>, id: String, name: Option<String>, avatar: Option<Value>) -> Res<Value> {
     app.store.edit_profile(&id, name.as_deref(), avatar)
+}
+
+// ---------------------------------------------------------------- app updates
+
+/// Newer release? `{ version, current, notes }` or `null`. The UI never calls this during a ride.
+#[tauri::command]
+async fn update_check(handle: tauri::AppHandle) -> Res<Value> {
+    updater::check(&handle).await
+}
+
+/// Download and install the update found by `update_check`, then restart the app.
+#[tauri::command]
+async fn update_install(handle: tauri::AppHandle) -> Res<()> {
+    updater::install(handle).await
+}
+
+/// Machine-local update preferences ({ auto }); stays out of profile sync.
+#[tauri::command]
+fn update_prefs(handle: tauri::AppHandle, app: State<'_, App>, auto: bool) -> Res<Value> {
+    let configured = updater::configured(&handle);
+    app.store.update(|doc| {
+        doc["updates"]["auto"] = json!(auto);
+        let mut u = doc["updates"].clone();
+        u["available"] = json!(configured);
+        Ok(u)
+    })
+}
+
+/// Update preferences plus whether this build can update itself at all.
+#[tauri::command]
+fn update_status(handle: tauri::AppHandle, app: State<'_, App>) -> Value {
+    let doc = app.store.app_state();
+    json!({ "auto": doc["updates"]["auto"].as_bool().unwrap_or(true), "available": updater::configured(&handle) })
 }
 
 // ---------------------------------------------------------------- profile sync
@@ -550,6 +584,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             let ble = ble::Ble::new(app.handle().clone());
@@ -560,6 +595,7 @@ pub fn run() {
                 ble,
                 awake: Mutex::new(None),
             });
+            app.manage(updater::Pending::default());
             #[cfg(target_os = "macos")]
             {
                 app.set_menu(app_menu(app.handle())?)?;
@@ -618,6 +654,10 @@ pub fn run() {
             ctrl_connect,
             ctrl_disconnect,
             ctrl_list,
+            update_check,
+            update_install,
+            update_prefs,
+            update_status,
         ])
         .build(tauri::generate_context!())
         .expect("error while building zwoTrainer")

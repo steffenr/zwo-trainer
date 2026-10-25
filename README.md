@@ -61,7 +61,7 @@ zwoTrainer is developed and used on macOS; the Windows and Linux builds use the 
 
 ### Build from source
 
-**Requirements:** Rust 1.82+ (`rustup`) plus the platform's Tauri prerequisites:
+**Requirements:** Rust 1.90+ (`rustup`) plus the platform's Tauri prerequisites:
 - **macOS 11+:** the Xcode command-line tools (`xcode-select --install`).
 - **Windows 10/11:** Microsoft C++ Build Tools and WebView2 (preinstalled on Windows 11).
 - **Linux (Debian/Ubuntu):** `sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libdbus-1-dev pkg-config`.

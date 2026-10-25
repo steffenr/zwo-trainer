@@ -7,7 +7,7 @@ Guidance for coding agents (and humans) changing this repository. User documenta
 A desktop app (Tauri 2) for riding Zwift `.zwo` workouts on a Bluetooth smart trainer. It is developed on macOS and also released for Windows and Linux from the same code. It covers folder-based plans, free workouts, FTP tests, rider profiles, FIT recording, Garmin upload and profile sync through a cloud folder.
 
 **Product principles** (don't break them):
-- **Lightweight and fast:** no bundler, no Node in the app (Node is only used by CI and `scripts/sync-version.mjs`), no frontend framework, no runtime downloads. App start and library scans of ~2,600 files must stay well under a second.
+- **Lightweight and fast:** no bundler, no Node in the app (Node is only used by CI and the scripts in `scripts/`), no frontend framework, no runtime downloads (the only one is the optional, signed app update). App start and library scans of ~2,600 files must stay well under a second.
 - **Not in scope:** video courses, a workout builder, music, social features or a complex frontend.
 - **Clean, calm UX:** few controls, destructive actions behind "⋯" menus and confirmations, consistent top bar (see DESIGN.md).
 - **The rider's data is theirs:** local JSON files, optional sync through a folder the user chooses, no telemetry. Garmin passwords and MFA never pass through our code.
@@ -33,10 +33,11 @@ src-tauri/
   src/zwo.rs                ZWO parser (authoritative), TSS estimate, zone classification
   src/fit.rs                FIT encoder (Generic + Garmin flavour)
   src/garmin.rs             Garmin SSO window → OAuth1 → OAuth2, upload
+  src/updater.rs            in-app updates (tauri-plugin-updater): check, download + verify + install, restart
   src/services.rs           Intervals.icu (automatic upload, API key) and COROS (manual Training Hub import, ZIP)
   src/ble.rs                btleplug: FTMS (ERG), Cycling Power, Heart Rate, reconnect
   src/shifter.rs            Zwift Ride / Click / Play protocol (RideOn handshake, button decoding)
-  tauri.conf.json           window, CSP, bundle; Info.plist (Bluetooth usage, App Nap off)
+  tauri.conf.json           window, CSP, bundle, plugins.updater (pubkey, endpoint); Info.plist (Bluetooth usage, App Nap off)
   capabilities/default.json Tauri permissions (keep minimal)
 scripts/sync-version.mjs    print / set the version (Cargo.toml + Cargo.lock; tauri.conf.json has none)
 site/                       static website (home, features, download) with dark/light screenshots in site/img; no build step
@@ -66,10 +67,13 @@ node scripts/sync-version.mjs [x.y.z]                # print / set the app versi
 - **Version:** only in `src-tauri/Cargo.toml` (`[package] version`), mirrored into `Cargo.lock` by `scripts/sync-version.mjs`. Don't add `version` back to `tauri.conf.json`.
 - **Releasing:** run the *Release* workflow (bump) → it pushes tag `vX` → *Build zwoTrainer* builds all four targets and publishes the GitHub release. The Tauri CLI comes from `npx @tauri-apps/cli@^2` in CI; there is no package.json on purpose.
 - **Installers are unsigned** (macOS uses ad-hoc signing `signingIdentity: "-"`, which keeps the Bluetooth permission stable). Adding real signing/notarisation means adding secrets to `build-app.yml`.
+- **In-app updates** are a separate signature (minisign, `tauri-plugin-updater`), not code signing:
+  - The public key is `plugins.updater.pubkey` in `tauri.conf.json`; the private key that signs the update files must never be committed.
+  - Until the updater key is set up, the pubkey is the placeholder `UPDATER_PUBLIC_KEY_NOT_SET`: `updater::configured` is false and `update_check` refuses to run.
 - **Bundles:** `targets: "all"` → `.app`/`.dmg`, NSIS `.exe`/`.msi`, `.deb`/`.rpm`/`.AppImage`. The Linux packages depend on `bluez`.
 - **Before merging platform-touching Rust:** CI must be green on all three OSes. Locally you can type-check Windows from Linux/macOS with `rustup target add x86_64-pc-windows-msvc && cargo clippy --target x86_64-pc-windows-msvc` (`ring` needs MSVC headers; `cargo xwin` or the CI job is the easy way).
 
-The minimum Rust version is **1.82** (`Option::is_none_or` is used). Builds must stay warning-free.
+The minimum Rust version is **1.90** (required by `tauri-plugin-updater`). Builds must stay warning-free.
 
 ## Architecture
 
@@ -80,12 +84,13 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 ```
 
 - **IPC:** the UI talks to Rust only through `window.__TAURI__.core.invoke` (wrapped in `ble.js` as `invoke`) and `event.listen` (`withGlobalTauri: true`). Every new capability is a `#[tauri::command]` in `lib.rs` and must be registered in `generate_handler!`.
-- **Commands** (current set): `open_link app_state save_profile create_profile rename_profile edit_profile delete_profile switch_profile sync_targets sync_config sync_now pick_sync_dir scan_library load_workout pick_zwo_dir save_activity reveal_in_library trash_in_library export_activity garmin_import pick_garmin_dir open_url garmin_status garmin_connect garmin_disconnect garmin_upload services_status service_connect service_disconnect service_upload service_manual keep_awake ble_scan ble_connect ble_disconnect ble_current trainer_set_power trainer_free_ride trainer_resume ctrl_scan ctrl_connect ctrl_disconnect ctrl_list`.
+- **Commands** (current set): `open_link app_state save_profile create_profile rename_profile edit_profile delete_profile switch_profile sync_targets sync_config sync_now pick_sync_dir scan_library load_workout pick_zwo_dir save_activity reveal_in_library trash_in_library export_activity garmin_import pick_garmin_dir open_url garmin_status garmin_connect garmin_disconnect garmin_upload services_status service_connect service_disconnect service_upload service_manual keep_awake ble_scan ble_connect ble_disconnect ble_current trainer_set_power trainer_free_ride trainer_resume ctrl_scan ctrl_connect ctrl_disconnect ctrl_list update_status update_prefs update_check update_install`.
 - **Events Rust → UI:**
   - `device-status {kind: trainer|hr|controller, connected, reconnecting, name, erg, count}`
   - `sensor {power?, cadence?, speed?, hr?}`
   - `button {button, device}`
   - `ctrl-raw {device, hex}`
+  - `update-progress {done, total}` (bytes; only on whole-percent changes)
 - **State ownership:**
   - The profile schema is owned by the UI. `state.rs` guarantees defaults (`merge_defaults`), ids, `updatedAt` and atomic writes; it must not drop unknown keys.
   - The UI mutates `state` (the active profile) and calls `api.saveState()` → `save_profile`.
@@ -114,7 +119,8 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
     "favorites": [ "<file>" ]
   } },
   "tombstones": { "<deleted profile id>": "<iso time>" },
-  "sync": { "provider": "off|icloud|dropbox|nextcloud|folder", "dir", "auto", "lastSync", "lastError" }
+  "sync": { "provider": "off|icloud|dropbox|nextcloud|folder", "dir", "auto", "lastSync", "lastError" },
+  "updates": { "auto": true }   // machine-local (not in a profile, never synced); missing = true
 }
 ```
 
@@ -169,6 +175,10 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
   - COROS Training Hub imports only ZIPs (`zip_stored`).
   - Secrets are stored under `svc:<id>` in `secrets.json`; per-ride results go in `history[].services[id]`; modes live in `settings.services[id].mode`.
 - **Strava:** deliberately no Strava API integration (owner subscription requirement since 2026). Strava gets rides via Garmin's partner sync, which pushes once right after the import: Strava keeps its own default name ("Morning Ride") and the default bike, the type is Indoor Cycling. Neither `wkt_name` nor the later `garmin::rename` reaches Strava, and there is no known way around this without the Strava API. Don't re-add an API key flow.
+- **Updates (`updater.rs`):**
+  - `update_check` stores the `Update` in the `Pending` state; `update_install` takes it, downloads, verifies, installs and calls `app.restart()` (on Windows the installer quits the app first). A failed install puts it back so *Install & restart* can be retried.
+  - The plugin's own JS commands are not enabled in `capabilities/default.json` on purpose: everything goes through our commands.
+  - Bump the version only through the release workflow: the updater compares the manifest's `version` with `Cargo.toml`'s.
 - **Top bar:** it is identical on every screen, including during a ride. Don't add controls there; use Settings or a "⋯" menu.
 - **Cross-platform (macOS, Windows, Linux):**
   - **Wording:** never hard-code "Finder", "macOS Trash" or "this Mac" in the UI. Use `PLAT` in app.js (`PLAT.files`, `PLAT.trash`, `PLAT.trashFull`, `PLAT.machine`, `PLAT.bt`, `PLAT.emojiKey`); `OS` is `mac` / `win` / `linux` and is also set as `<html data-os>`.
