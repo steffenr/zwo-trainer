@@ -229,15 +229,15 @@ impl Store {
         })
     }
 
-    /// New profile; device pairings, folder and theme are copied from the active profile
-    /// (same computer), rider data starts from defaults. Becomes the active profile.
+    /// New profile; device pairings, folder, theme and language are copied from the active
+    /// profile (same computer), rider data starts from defaults. Becomes the active profile.
     pub fn create_profile(&self, name: &str) -> Result<Value, String> {
         let name = clean_name(name)?;
         self.update(|doc| {
             let id = new_id();
             let mut p = default_profile(&id, &name);
             let active = doc["activeProfile"].as_str().unwrap_or_default().to_string();
-            for k in ["zwoDir", "theme", "devices", "beeps"] {
+            for k in ["zwoDir", "theme", "language", "devices", "beeps"] {
                 if let Some(v) = doc["profiles"][&active]["settings"].get(k) {
                     p["settings"][k] = v.clone();
                 }
@@ -447,12 +447,14 @@ mod tests {
         let mut p = s.active_profile();
         p["settings"]["ftp"] = json!(300);
         p["settings"]["zwoDir"] = json!("/w");
+        p["settings"]["language"] = json!("de");
         s.save_profile(p).unwrap();
 
         let a = s.create_profile("  Anna ").unwrap();
         assert_eq!(a["profile"]["name"], "Anna");
         assert_eq!(a["profile"]["settings"]["ftp"], 250); // own rider data
         assert_eq!(a["profile"]["settings"]["zwoDir"], "/w"); // inherited machine setting
+        assert_eq!(a["profile"]["settings"]["language"], "de"); // inherited UI language
         let anna = a["activeProfile"].as_str().unwrap().to_string();
         assert_ne!(anna, first);
 
