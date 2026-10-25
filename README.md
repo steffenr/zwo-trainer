@@ -15,6 +15,7 @@ No video courses, no workout builder, no music, no subscription. You get a clean
 - **FTP Tests:** Ramp, Ramp Lite, 20-minute, 8-minute and Power Profile tests, plus test workouts from your library. One click applies the new FTP. W/kg and VO2max estimates are included.
 - **Riders:** several profiles with their own FTP, zones, plan progress, history, avatar and devices, optionally synced through iCloud Drive, Dropbox or Nextcloud.
 - **Devices:** Bluetooth smart trainers (FTMS), power meters, heart-rate straps and Zwift Ride / Click / Play controllers, with virtual shifting for free-ride segments.
+- **Languages:** English, German (Deutsch) and French (Français). zwoTrainer follows your system language until you pick one under Settings → App.
 
 Built with **Tauri 2**: a Rust core and a plain HTML/CSS/JS interface, with no Node and no bundler. Light mode uses pure white and dark mode pure black; zone colours follow the classic Zwift / WhatsOnZwift palette.
 
@@ -286,13 +287,13 @@ Other platforms (Wahoo, TrainingPeaks, Suunto) only accept uploads from approved
 **Per rider:**
 - avatar (colour and initials or an emoji), FTP, max heart rate, weight, zone limits and power bests
 - active plan, done/skipped marks, favorites, ride history and FTP tests
-- theme, beeps, auto-pause, coach hints, virtual-shifting defaults, workouts folder and paired devices
+- theme, language, beeps, auto-pause, coach hints, virtual-shifting defaults, workouts folder and paired devices
 - Garmin sign-in and upload mode
 
 **Managing riders:**
 - **Switch** with the avatar in the top bar. With more than one rider, zwoTrainer asks **Who's riding?** at launch.
 - **Edit** changes the name, colour (8 presets or any custom colour) and emoji.
-- **A new rider** takes over the workouts folder, theme and devices from the current rider; everything else starts from defaults.
+- **A new rider** takes over the workouts folder, theme, language and devices from the current rider; everything else starts from defaults.
 - **Deleting a rider** removes their settings, progress, history, stored rides and Garmin sign-in.
 
 ---
@@ -322,7 +323,7 @@ Keep riders in sync across Macs through a folder your cloud app already syncs. N
 | Tab | Setting |
 |---|---|
 | **Rider** | FTP, max heart rate, weight, personal bests (5 s / 1 / 5 / 20 min), zone limits (upper limit of Z1–Z4 in % FTP) |
-| **App** | Appearance (Match system / Light / Dark), countdown beeps, auto-pause, coach hints, workouts folder (*Change… / Rescan*), virtual shifting (default, difficulty, gear-ratio range, start gear), paired devices overview, *About* (version, *Check for updates automatically*, *Check now*, licence, links to the website, source code, third-party licences and Buy Me a Coffee) |
+| **App** | Appearance (Match system / Light / Dark), Language (English / Deutsch / Français; applies immediately, defaults to the system language), countdown beeps, auto-pause, coach hints, workouts folder (*Change… / Rescan*), virtual shifting (default, difficulty, gear-ratio range, start gear), paired devices overview, *About* (version, *Check for updates automatically*, *Check now*, licence, links to the website, source code, third-party licences and Buy Me a Coffee) |
 | **Connections** | Profile sync, Garmin Connect (sign in, upload mode, manual FIT import folder), Strava note, more platforms (Intervals.icu API key and upload mode, COROS import button) |
 
 ---
