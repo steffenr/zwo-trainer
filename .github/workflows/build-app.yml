@@ -9,6 +9,11 @@ name: Build zwoTrainer
 #
 # There is no npm project: the Tauri CLI is fetched with `npx` on demand, and the version
 # lives only in src-tauri/Cargo.toml (see scripts/sync-version.mjs).
+#
+# In-app updates: with the repository secrets TAURI_SIGNING_PRIVATE_KEY (and
+# TAURI_SIGNING_PRIVATE_KEY_PASSWORD, if the key has one) the build also creates signed update
+# files (tauri.updater.conf.json), and the release gets a latest.json that the app checks.
+# Without the secret everything still builds, just without updater files.
 
 on:
   push:
@@ -86,10 +91,32 @@ jobs:
 
       - name: Build installers
         shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           ARGS=()
           if [ -n "${{ matrix.settings.target }}" ]; then ARGS+=(--target "${{ matrix.settings.target }}"); fi
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            ARGS+=(--config src-tauri/tauri.updater.conf.json)
+          else
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set: building without in-app update files"
+          fi
           npx --yes "$TAURI_CLI" build "${ARGS[@]}"
+
+      - name: Name the macOS update bundle
+        # Tauri names it zwoTrainer.app.tar.gz for both architectures; give it the version and
+        # arch like the DMG so the two don't collide in the release
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          VERSION=$(node scripts/sync-version.mjs)
+          case "${{ matrix.settings.target }}" in aarch64-*) ARCH=aarch64 ;; *) ARCH=x64 ;; esac
+          shopt -s nullglob
+          for f in src-tauri/target/*/release/bundle/macos/zwoTrainer.app.tar.gz*; do
+            mv "$f" "${f%/*}/zwoTrainer_${VERSION}_${ARCH}${f##*/zwoTrainer}"
+          done
+          ls src-tauri/target/*/release/bundle/macos/
 
       - name: Upload installers
         uses: actions/upload-artifact@v7
@@ -103,6 +130,8 @@ jobs:
             src-tauri/target/**/release/bundle/deb/*.deb
             src-tauri/target/**/release/bundle/rpm/*.rpm
             src-tauri/target/**/release/bundle/appimage/*.AppImage
+            src-tauri/target/**/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/**/release/bundle/*/*.sig
 
   publish:
     name: publish release
@@ -130,8 +159,10 @@ jobs:
         shell: bash
         run: |
           mkdir -p release
-          find dist -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.msi' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \) -exec cp {} release/ \;
-          ls -la release
+          mkdir -p signatures
+          find dist -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.msi' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.app.tar.gz' \) -exec cp {} release/ \;
+          find dist -type f -name '*.sig' -exec cp {} signatures/ \;
+          ls -la release signatures
           test -n "$(ls -A release)"
 
       - name: Install cargo-about
@@ -151,12 +182,15 @@ jobs:
           PREV=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)
           if [ -n "$PREV" ]; then RANGE="${PREV}..${TAG}"; else RANGE="$TAG"; fi
           NOTES=$(git log "$RANGE" --no-merges --pretty=format:'- %s (%h)' | grep -vE 'chore\(release\):' || true)
+          echo "${NOTES}" > changes.md
           {
             echo 'Native installers for zwoTrainer. They are unsigned:'
             echo
             echo '- **macOS** (`_aarch64.dmg` for Apple silicon, `_x64.dmg` for Intel): right-click the app → Open on first launch (or System Settings → Privacy & Security → Open Anyway), then allow Bluetooth access.'
             echo '- **Windows** (`-setup.exe` or `.msi`): SmartScreen may warn — More info → Run anyway.'
             echo '- **Linux** (`.deb`, `.rpm` or `.AppImage`): needs BlueZ (`bluetoothd`) running.'
+            echo
+            echo 'Already installed? zwoTrainer offers the update itself (Settings → App → Check now); the `.app.tar.gz` and `latest.json` files are for that.'
             echo
             if [ -n "$PREV" ]; then
               echo "## Changes since ${PREV}"
@@ -170,6 +204,21 @@ jobs:
               echo "${NOTES}"
             fi
           } > notes.md
+
+      - name: Write the update manifest (latest.json)
+        # the in-app updater reads releases/latest/download/latest.json; it carries the
+        # signatures, so the .sig files themselves are not attached to the release
+        shell: bash
+        run: |
+          if [ -z "$(ls -A signatures)" ]; then
+            echo "::warning::No signed update files: this release has no latest.json, so installed apps won't offer it"
+            exit 0
+          fi
+          cp signatures/*.sig release/
+          node scripts/updater-manifest.mjs release "${GITHUB_REF_NAME}" changes.md > latest.json
+          rm release/*.sig
+          mv latest.json release/
+          cat release/latest.json
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v3
