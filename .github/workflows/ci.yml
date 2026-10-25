@@ -41,7 +41,9 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy --locked --all-targets -- -D warnings
       - name: UI syntax check
-        run: for f in ui/js/*.js; do node --check "$f"; done
+        run: for f in ui/js/*.js ui/js/i18n/*.js; do node --check "$f"; done
+      - name: Translations (en / de / fr)
+        run: node scripts/check-i18n.mjs
 
   check:
     name: check (${{ matrix.os }})
