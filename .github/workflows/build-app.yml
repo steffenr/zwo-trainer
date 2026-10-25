@@ -13,7 +13,8 @@ name: Build zwoTrainer
 # In-app updates: with the repository secrets TAURI_SIGNING_PRIVATE_KEY (and
 # TAURI_SIGNING_PRIVATE_KEY_PASSWORD, if the key has one) the build also creates signed update
 # files (tauri.updater.conf.json), and the release gets a latest.json that the app checks.
-# Without the secret everything still builds, just without updater files.
+# Without the secret everything still builds, just without updater files. Set it up once with
+# scripts/setup-updater-key.sh.
 
 on:
   push:
@@ -100,7 +101,7 @@ jobs:
           if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
             ARGS+=(--config src-tauri/tauri.updater.conf.json)
           else
-            echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set: building without in-app update files"
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set: building without in-app update files (see scripts/setup-updater-key.sh)"
           fi
           npx --yes "$TAURI_CLI" build "${ARGS[@]}"
 

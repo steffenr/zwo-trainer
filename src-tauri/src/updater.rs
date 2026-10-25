@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
-/// Placeholder for `plugins.updater.pubkey` until the updater key is set up.
+/// Placeholder for `plugins.updater.pubkey` until `scripts/setup-updater-key.sh` has run.
 const PUBKEY_UNSET: &str = "UPDATER_PUBLIC_KEY_NOT_SET";
 
 /// The update found by the last check, kept until it is installed or a new check replaces it.

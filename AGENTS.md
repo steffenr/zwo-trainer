@@ -42,6 +42,7 @@ src-tauri/
   capabilities/default.json Tauri permissions (keep minimal)
 scripts/sync-version.mjs    print / set the version (Cargo.toml + Cargo.lock; tauri.conf.json has none)
 scripts/updater-manifest.mjs  write latest.json (version, notes, per-platform url + signature) from the signed release files
+scripts/setup-updater-key.sh  one-time: create the updater key in ~/.tauri, write the pubkey, set the GitHub secrets
 site/                       static website (home, features, download) with dark/light screenshots in site/img; no build step
 .github/workflows/
   ci.yml                    push/PR: tests + clippy (Linux), tests (macOS, Windows)
@@ -71,7 +72,7 @@ node scripts/sync-version.mjs [x.y.z]                # print / set the app versi
 - **Installers are unsigned** (macOS uses ad-hoc signing `signingIdentity: "-"`, which keeps the Bluetooth permission stable). Adding real signing/notarisation means adding secrets to `build-app.yml`.
 - **In-app updates** are a separate signature (minisign, `tauri-plugin-updater`), not code signing:
   - The public key is `plugins.updater.pubkey` in `tauri.conf.json`; the private key lives only in `~/.tauri/zwotrainer.key` and the `TAURI_SIGNING_PRIVATE_KEY` / `_PASSWORD` repository secrets. Never commit it. Losing it means installed apps can't be updated any more.
-  - Until the updater key is set up, the pubkey is the placeholder `UPDATER_PUBLIC_KEY_NOT_SET`: `updater::configured` is false, the UI hides the update controls and never checks.
+  - Until `scripts/setup-updater-key.sh` has run, the pubkey is the placeholder `UPDATER_PUBLIC_KEY_NOT_SET`: `updater::configured` is false, the UI hides the update controls and never checks.
   - `build-app.yml` passes `--config src-tauri/tauri.updater.conf.json` only when the secret exists (local `cargo tauri build` never needs the key). The macOS `zwoTrainer.app.tar.gz` is renamed to `zwoTrainer_<version>_<aarch64|x64>.app.tar.gz` so both architectures fit in one release.
   - The publish job turns the `.sig` files into `latest.json` (`scripts/updater-manifest.mjs`); the `.sig` files themselves are not attached. Keys are `{os}-{arch}-{bundle}` (`darwin-aarch64-app`, `windows-x86_64-nsis` / `-msi`, `linux-x86_64-appimage` / `-deb` / `-rpm`) plus the plain `{os}-{arch}` for the default bundle; the plugin picks the one matching how the app was installed.
   - The endpoint is `releases/latest/download/latest.json`, so drafts and pre-releases are never offered. A release without `latest.json` (secret missing) simply isn't offered to installed apps.
