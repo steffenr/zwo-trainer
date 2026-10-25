@@ -1,13 +1,15 @@
 // SVG rendering: zone colours, workout diagram, mini profiles and the power gauge.
+import { t } from './i18n/index.js';
 
 // Zone colours follow the classic Zwift / WhatsOnZwift palette.
+// `name` is looked up in the UI language each time it's read (keys zone1…zone5).
 export const ZONES = [
-  { id: 1, name: 'Recovery', short: 'Z1', color: '#7f7f7f' },
-  { id: 2, name: 'Base endurance', short: 'Z2', color: '#338cff' },
-  { id: 3, name: 'Tempo', short: 'Z3', color: '#59bf59' },
-  { id: 4, name: 'Threshold', short: 'Z4', color: '#ffcc3f' },
-  { id: 5, name: 'VO2max', short: 'Z5', color: '#ff6639' },
-];
+  { id: 1, short: 'Z1', color: '#7f7f7f' },
+  { id: 2, short: 'Z2', color: '#338cff' },
+  { id: 3, short: 'Z3', color: '#59bf59' },
+  { id: 4, short: 'Z4', color: '#ffcc3f' },
+  { id: 5, short: 'Z5', color: '#ff6639' },
+].map((z) => Object.defineProperty(z, 'name', { get: () => t(`zone${z.id}`), enumerable: true }));
 export const FREE_COLOR = '#b4bac2';
 
 /** bounds: upper limits (in % FTP) of Z1..Z4, e.g. [55, 75, 90, 105] */
@@ -82,7 +84,7 @@ export class Diagram {
     const maxP = Math.max(1.2, ...this.w.segments.map((s) => Math.max(s.p0 ?? 0, s.p1 ?? 0))) * 1.08;
     this.maxP = maxP;
     const y = (p) => H - (p / maxP) * (H - top);
-    const x = (t) => (t / total) * W;
+    const x = (sec) => (sec / total) * W;
     this.x = x; this.y = y;
 
     this.c.innerHTML = '';
@@ -127,7 +129,7 @@ export class Diagram {
       if (s.p0 === null) {
         const f = document.createElement('span');
         f.style.left = pct(x0); f.style.width = pct(x1 - x0);
-        f.textContent = 'free';
+        f.textContent = t('gFree');
         freeLayer.append(f);
       }
       g.addEventListener('click', (e) => { e.stopPropagation(); this.onSelect?.(i, s); });
@@ -170,8 +172,8 @@ export class Diagram {
     for (const [k, line] of Object.entries(this.traces)) line.style.display = o[k] ? '' : 'none';
   }
 
-  update(t, samples) {
-    const X = this.x(t);
+  update(at, samples) {
+    const X = this.x(at);
     this.pos.setAttribute('x1', X); this.pos.setAttribute('x2', X);
     this.done.setAttribute('width', X);
     if (!samples || !samples.length) return;
@@ -245,7 +247,7 @@ export class Gauge {
       if (this.raf) { cancelAnimationFrame(this.raf); this.raf = null; }
       return this.paint();
     }
-    if (!this.raf) { this.last = performance.now(); this.raf = requestAnimationFrame((t) => this.step(t)); }
+    if (!this.raf) { this.last = performance.now(); this.raf = requestAnimationFrame((ts) => this.step(ts)); }
   }
 
   step(now) {
@@ -259,7 +261,7 @@ export class Gauge {
       if (Math.abs(g - this.cur[k]) < 0.3 && Math.abs(this.vel[k]) < 0.3) { this.cur[k] = g; this.vel[k] = 0; } else moving = true;
     }
     this.paint();
-    this.raf = moving ? requestAnimationFrame((t) => this.step(t)) : null;
+    this.raf = moving ? requestAnimationFrame((ts) => this.step(ts)) : null;
   }
 
   paint() {
