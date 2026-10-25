@@ -10,21 +10,21 @@
 <body>
   <header class="topbar" data-tauri-drag-region>
     <a class="brand" href="#/"><img src="icon.svg" alt="" width="26" height="26"><span>zwo<b>Trainer</b></span></a>
-    <div class="seg-ctl mode-switch" id="mode-switch" role="tablist" aria-label="Mode">
-      <button data-mode="plans" role="tab">Plans</button>
-      <button data-mode="workouts" role="tab">Workouts</button>
-      <button data-mode="tests" role="tab">FTP Tests</button>
+    <div class="seg-ctl mode-switch" id="mode-switch" role="tablist" data-i18n-aria="mode" aria-label="Mode">
+      <button data-mode="plans" role="tab" data-i18n="plans">Plans</button>
+      <button data-mode="workouts" role="tab" data-i18n="modeWorkouts">Workouts</button>
+      <button data-mode="tests" role="tab" data-i18n="modeTests">FTP Tests</button>
     </div>
     <div class="ride-title" id="ride-title" data-tauri-drag-region hidden></div>
     <div class="topbar-right" data-tauri-drag-region>
-      <button class="icon-btn dev-btn" id="btn-devices" title="Devices" aria-label="Devices" aria-haspopup="true">
+      <button class="icon-btn dev-btn" id="btn-devices" title="Devices" aria-label="Devices" data-i18n-aria="devices" data-i18n-title="devices" aria-haspopup="true">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg>
         <span class="dev-dots" aria-hidden="true"><i data-k="trainer"></i><i data-k="hr"></i><i data-k="controller"></i></span>
       </button>
-      <a class="icon-btn" id="btn-history" href="#/history" title="Ride history" aria-label="Ride history">
+      <a class="icon-btn" id="btn-history" href="#/history" title="Ride history" aria-label="Ride history" data-i18n-title="rideHistory" data-i18n-aria="rideHistory">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 16 2 2 4-4"/></svg>
       </a>
-      <button class="icon-btn" id="btn-settings" title="Settings" aria-label="Settings">
+      <button class="icon-btn" id="btn-settings" title="Settings" aria-label="Settings" data-i18n-title="settings" data-i18n-aria="settings">
         <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.6 7.6 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
       </button>
       <button class="avatar-btn" id="btn-profile" title="Riders" aria-label="Riders"></button>
