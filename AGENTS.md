@@ -25,6 +25,8 @@ ui/                         frontend — static files served by Tauri (frontendD
   js/tests.js               FTP test protocols, evaluation, VO2max, test-workout detection
   js/vshift.js              virtual drivetrain + flat-road physics (virtual shifting)
   js/ble.js                 device objects (Trainer, HeartRate, Controllers), simulator, Tauri event binding
+  js/i18n/index.js          t(key, vars), plurals, locale detection, translateDom() for data-i18n attributes
+  js/i18n/en.js · de.js · fr.js  UI dictionaries: en is the source, de/fr define the same keys
 src-tauri/
   src/lib.rs                Tauri commands (the only IPC surface) + App state
   src/state.rs              Store: state.json (profiles) + secrets.json, atomic writes, migrations
@@ -43,9 +45,10 @@ src-tauri/
 scripts/sync-version.mjs    print / set the version (Cargo.toml + Cargo.lock; tauri.conf.json has none)
 scripts/updater-manifest.mjs  write latest.json (version, notes, per-platform url + signature) from the signed release files
 scripts/setup-updater-key.sh  one-time: create the updater key in ~/.tauri, write the pubkey, set the GitHub secrets
+scripts/check-i18n.mjs      de/fr have exactly en's keys, plural shapes and placeholders; every t('key') in ui/ exists
 site/                       static website (home, features, download) with dark/light screenshots in site/img; no build step
 .github/workflows/
-  ci.yml                    push/PR: tests + clippy (Linux), tests (macOS, Windows)
+  ci.yml                    push/PR: tests + clippy + UI syntax + i18n check (Linux), tests (macOS, Windows)
   release.yml               manual: bump patch/minor/major, commit, tag vX, push (needs RELEASE_PAT)
   build-app.yml             tag v*: build macOS arm64/x64, Windows, Linux → one GitHub release (+ latest.json for updates)
   pages.yml                 site/ change on develop, successful release build, manual: deploy site/ to GitHub Pages
@@ -62,6 +65,7 @@ cd src-tauri && cargo test                           # all Rust tests (must pass
 cd src-tauri && cargo clippy --all-targets           # keep warning-free
 ZWO_TEST_DIR=~/Downloads/zwo cargo test scan_real_library -- --nocapture   # parse a real library
 node --check ui/js/app.js                            # quick syntax check for edited JS modules
+node scripts/check-i18n.mjs                          # translations complete and consistent (en / de / fr)
 node scripts/sync-version.mjs [x.y.z]                # print / set the app version
 ```
 
@@ -114,7 +118,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
     "id", "name", "avatar": { "color": "#rrggbb"|null, "emoji": "🚴"|null },
     "createdAt", "updatedAt",
     "settings": { "ftp", "maxHr", "weight", "zones": [55,75,90,105], "bests": {s5,m1,m5,m20},
-                  "theme", "mode", "beeps", "autoPause", "overlay": {power,cadence,hr},
+                  "theme", "language": "en|de|fr" (missing = system language), "mode", "beeps", "autoPause", "overlay": {power,cadence,hr},
                   "shifting": {...}, "zwoDir", "devices": {trainer, hr, controllers[]},
                   "garmin": {mode, autoOpen, folder},
                   "services": { "<intervals|coros>": {mode: off|manual|auto} },
@@ -149,6 +153,14 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 - **Views** are functions that render `#view` (`renderHome`, `renderPlan`, `renderWorkouts`, `renderTests`, `renderHistory`); `route()` picks one from the hash and `mode()`.
 - **Actions** use `data-act` attributes, handled by `bindActions(root)`. Menus use `menuBtn(items)` / `openMenu()` (a `<template>` holding `data-act` buttons).
 - **Modals:** `openModal(html, cls)`, `confirmDialog`, `choiceDialog`, `promptDialog`; `toast()` for feedback.
+- **Languages (English, German, French):** every user-visible string goes through `t('key', vars)` from `js/i18n/index.js` and lives in `en.js`, `de.js` **and** `fr.js` (run `node scripts/check-i18n.mjs`). Mirrors wozTools' `src/i18n/`, as plain modules instead of a React hook.
+  - Keys are camelCase (`p.ramp.name`, `mac.files`, `tm.*` for test-workout messages); counts use `{ one, other }` with `vars.n` (Intl.PluralRules, so French 0 is singular).
+  - Values may contain our own markup (`<b>`, `<code>`, `&amp;`) for `innerHTML`. Strings for `confirmDialog`, `choiceDialog`, `toast()` and `textContent` are escaped/plain, so their values must be plain text. Pass file and rider values through `esc()` before they go into `vars` of an HTML string.
+  - Never name a local variable `t` (it shadows the translator); use `el`, `x`, `th`, `ts`…
+  - The language is per rider (`settings.language`, copied to new riders like the theme); without it the system language is used, falling back to English. `applyLanguage()` sets it and fills `data-i18n` / `data-i18n-title` / `data-i18n-aria` in index.html; switching in Settings → App redraws the app at once (the ride screen picks it up with the next ride). Dates and times use `fmtLocale()`.
+  - Zone names (`ZONES[i].name` in render.js) and test protocol texts (`PROTOCOLS[i].name/about/…` in tests.js) are getters, so they always follow the current language. Test results already saved keep the detail labels of the language they were ridden in; built-in test names are re-translated via `testName()`.
+  - German uses "du", French "vous" with French typography (narrow no-break space before ? ! ; :, « »). Brand and hardware names (ERG, FTP, TSS, Zwift buttons, Garmin/COROS menu paths) stay as they are.
+  - Rust error strings (shown in toasts) stay English for now.
 - **During a ride** nothing may re-render or block: sync and profile switching are deferred (`if (ride) …`).
 - **Dev URL parameters:** `?sim=1` starts simulated devices, `?speed=N` fast-forwards time (recordings stay 1 Hz), `?profile=…` skips "Who's riding?".
 
@@ -188,7 +200,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
   - Bump the version only through the release workflow: the updater compares the manifest's `version` with `Cargo.toml`'s.
 - **Top bar:** it is identical on every screen, including during a ride. Don't add controls there; use Settings or a "⋯" menu.
 - **Cross-platform (macOS, Windows, Linux):**
-  - **Wording:** never hard-code "Finder", "macOS Trash" or "this Mac" in the UI. Use `PLAT` in app.js (`PLAT.files`, `PLAT.trash`, `PLAT.trashFull`, `PLAT.machine`, `PLAT.bt`, `PLAT.emojiKey`); `OS` is `mac` / `win` / `linux` and is also set as `<html data-os>`.
+  - **Wording:** never hard-code "Finder", "macOS Trash" or "this Mac" in the UI. Use `PLAT` in app.js (`PLAT.files`, `PLAT.trash`, `PLAT.machine`, `PLAT.onThisMachine`, `PLAT.bt`, `PLAT.emojiKey`); each is read from the dictionary (`mac.files`, `win.trash`, …) so it follows the UI language. `OS` is `mac` / `win` / `linux` and is also set as `<html data-os>`.
   - **Layout:** the 92 px traffic-light gap in the top bar applies only to `:root[data-os="mac"]`; Windows and Linux have a normal title bar (`titleBarStyle`, `hiddenTitle` and `trafficLightPosition` are macOS-only keys).
   - **Rust:** gate OS-specific code with `#[cfg(target_os = …)]` / `#[cfg(unix)]` and keep a fallback so every target compiles (e.g. `keep_awake`: `caffeinate` on macOS, `systemd-inhibit` on Linux, the web Screen Wake Lock API on Windows; `secrets.json` 0600 only on unix; `brctl` only on macOS).
   - **Paths:** build paths with `Path::join`, never string concatenation with `/`; library-relative ids are always `/`-separated (`library::rel_string`).
