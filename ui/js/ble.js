@@ -118,7 +118,7 @@ export class HeartRate extends Device {
   }
 }
 
-/** Zwift Ride / Click / Play controllers (virtual shifting). Several can be connected (Ride L + R). */
+/** Zwift Ride / Click / Play and OpenBikeControl controllers (virtual shifting). Several can be connected (Ride L + R). */
 export class Controllers extends Emitter {
   constructor() { super(); this.names = ''; this.count = 0; }
   get connected() { return this.count > 0; }
@@ -132,7 +132,7 @@ export class Controllers extends Emitter {
 /** Wire Rust events to the device objects. Sensor data from real devices goes to `onData`. */
 export async function bindNative(trainer, hrm, onData, ctrls, onButton) {
   await listen('device-status', (s) => (s.kind === 'controller' ? ctrls?.onStatus(s) : (s.kind === 'trainer' ? trainer : hrm).onStatus(s)));
-  await listen('button', (e) => onButton?.(e.button, e.device));
+  await listen('button', (e) => onButton?.(e.button, e.device, e.erg));
   await listen('ctrl-raw', (e) => ctrls?.emit('raw', e));
   await listen('sensor', (d) => {
     // ignore real readings for a kind that is being simulated
