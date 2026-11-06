@@ -14,7 +14,7 @@ No video courses, no workout builder, no music, no subscription. You get a clean
 - **Workouts:** browse and ride any workout freely, with search, length and intensity filters, TSS and favorites.
 - **FTP Tests:** Ramp, Ramp Lite, 20-minute, 8-minute and Power Profile tests, plus test workouts from your library. One click applies the new FTP. W/kg and VO2max estimates are included.
 - **Riders:** several profiles with their own FTP, zones, plan progress, history, avatar and devices, optionally synced through iCloud Drive, Dropbox or Nextcloud.
-- **Devices:** Bluetooth smart trainers (FTMS), power meters, heart-rate straps and Zwift Ride / Click / Play controllers, with virtual shifting for free-ride segments.
+- **Devices:** Bluetooth smart trainers (FTMS), power meters, heart-rate straps, Zwift Ride / Click / Play and OpenBikeControl controllers, with virtual shifting for free-ride segments.
 - **Languages:** English, German (Deutsch) and French (Français). zwoTrainer follows your system language until you pick one under Settings → App.
 
 Built with **Tauri 2**: a Rust core and a plain HTML/CSS/JS interface, with no Node and no bundler. Light mode uses pure white and dark mode pure black; zone colours follow the classic Zwift / WhatsOnZwift palette.
@@ -216,6 +216,8 @@ Deleting always goes to the system Trash (the Recycle Bin on Windows), so it can
 | A, Y, Power-up | start / pause |
 | Z | switch watts ↔ % FTP |
 
+**OpenBikeControl buttons:** Shift Up / Down work like Shift + / −, Increase / Decrease Difficulty like ▲ / ▼, Skip / Previous Interval and Right / Left like ▶ / ◀, Up / Down like ▲ / ▼, Select like A. When one press sends several of them (e.g. Shift Up + Increase Difficulty + Select), only one action runs: shift in free-ride segments, difficulty in ERG segments, otherwise the interval skip or navigation button.
+
 Every button press shows a short confirmation on screen. The display stays awake during a ride, and App Nap is disabled so ERG keeps updating in the background.
 
 **Finishing:** the summary shows time, average power, NP, average HR, cadence and energy. Below that, the Garmin upload status (or a manual import) and **Save .fit**. In a plan, the next workout is offered.
@@ -229,7 +231,7 @@ Every button press shows a short confirmation on screen. The display stays awake
 | Smart trainer | Bluetooth **FTMS** (Zwift Hub, Wahoo KICKR, Tacx, Elite, Saris, JetBlack, …), with ERG and flat-road simulation |
 | Power meter | Bluetooth **Cycling Power**, power only (no ERG) |
 | Heart rate | any Bluetooth heart-rate strap or watch broadcasting HR |
-| Controllers | **Zwift Ride**, **Zwift Click (v1/v2)**, **Zwift Play** |
+| Controllers | **Zwift Ride**, **Zwift Click (v1/v2)**, **Zwift Play**, **OpenBikeControl** controllers and bridge apps (e.g. BikeControl) over Bluetooth |
 
 - **Pairing:** pair from the **Devices** menu → *Connect*. Devices are remembered per rider and reconnect at launch and after dropouts.
 - **One connection only:** close Zwift and other training apps first, because most trainers and controllers accept just one connection.
@@ -242,11 +244,12 @@ Every button press shows a short confirmation on screen. The display stays awake
 
 - **How it works:** a virtual 24-speed drivetrain (ratio range and start gear configurable). Cadence × gear ratio gives a virtual speed, and road physics (rolling resistance and air drag, using your weight) turns that into the watts the trainer holds in ERG. Speed and distance in the FIT file follow the virtual speed.
 - **Choice per ride:** the Ready screen asks *Real gears* or *Virtual gears easy / medium / hard*. The default is set under Settings → App → Virtual shifting.
-- **Shifting:** with a Zwift controller, the keyboard (`+` / `−`) or the on-screen − / + buttons.
+- **Shifting:** with a Zwift or OpenBikeControl controller, the keyboard (`+` / `−`) or the on-screen − / + buttons.
 
 **Controllers:**
 - **Zwift Ride:** connect only the **left** controller; it relays the right one's buttons.
 - **Zwift Click v2:** unlock it once in the Zwift phone app (connect, wait about 90 s, close Zwift), or it stops after about a minute.
+- **OpenBikeControl:** controllers that advertise the open [OpenBikeControl](https://github.com/OpenBikeControl/openbikecontrol-protocol) Bluetooth service, and apps like BikeControl that bridge other controllers to it, show up in the Shifter dialog. zwoTrainer tells the device which buttons it uses after connecting.
 - **Button test:** the Shifter dialog has a live *button test* showing every press and the action it triggers.
 
 ---

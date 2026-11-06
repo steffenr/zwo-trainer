@@ -14,6 +14,9 @@
 //!
 //! Only the LEFT Zwift Ride controller needs a connection — it relays the right one.
 //!
+//! OpenBikeControl controllers (obc.rs) are found and connected here too; the advertised or
+//! discovered OpenBikeControl service decides the protocol (see `protocol`).
+//!
 //! Events emitted to the UI:  "button" { button, device } on every press (rising edge; button
 //! is one of shiftUp shiftDown up down left right a b y z powerup onoff), "ctrl-raw" { device,
 //! hex } for the button tester, and "device-status" { kind: "controller", connected, name, … }.
@@ -29,6 +32,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::ble::{Ble, Found};
+use crate::obc;
 
 pub const ZWIFT_COMPANY: u16 = 0x094A;
 const SVC: Uuid = Uuid::from_u128(0x00000001_19ca_4651_86e5_fa29dcdd09d1);
@@ -85,6 +89,25 @@ pub fn device_name(type_byte: Option<u8>, fallback: &str) -> String {
         Some(0x07) => "Zwift Ride (R)".into(),
         Some(0x08) => "Zwift Ride (L)".into(),
         _ => fallback.into(),
+    }
+}
+
+/// Which protocol a controller speaks.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Protocol {
+    Zwift,
+    Obc,
+}
+
+/// The protocol from the service UUIDs (advertised or discovered) and whether Zwift's manufacturer
+/// data is present. OpenBikeControl wins when both are there (a bridge app may advertise both).
+pub fn protocol(services: &[Uuid], zwift_data: bool) -> Option<Protocol> {
+    if services.contains(&obc::SVC) {
+        Some(Protocol::Obc)
+    } else if zwift_data || services.contains(&SVC) || services.contains(&SVC_RIDE) {
+        Some(Protocol::Zwift)
+    } else {
+        None
     }
 }
 
@@ -202,7 +225,8 @@ impl Controllers {
         );
     }
 
-    /// Scan for Zwift controllers (they advertise Zwift's manufacturer id; the service UUID is not always advertised).
+    /// Scan for Zwift controllers (they advertise Zwift's manufacturer id; the service UUID is not always advertised)
+    /// and OpenBikeControl controllers (they advertise the OpenBikeControl service).
     pub async fn scan(&self, secs: u64) -> Result<Vec<Found>, String> {
         let adapter = self.ble.adapter().await?;
         adapter.start_scan(ScanFilter::default()).await.map_err(|e| e.to_string())?;
@@ -213,11 +237,14 @@ impl Controllers {
         for p in adapter.peripherals().await.map_err(|e| e.to_string())? {
             let Ok(Some(props)) = p.properties().await else { continue };
             let zwift = props.manufacturer_data.get(&ZWIFT_COMPANY);
-            if zwift.is_none() && !props.services.contains(&SVC) && !props.services.contains(&SVC_RIDE) {
-                continue;
-            }
+            let Some(proto) = protocol(&props.services, zwift.is_some()) else { continue };
             let id = p.id().to_string();
             if connected.contains(&id) {
+                continue;
+            }
+            if proto == Protocol::Obc {
+                let name = props.local_name.or(props.advertisement_name).unwrap_or_else(|| "OpenBikeControl controller".into());
+                out.push(Found { id, name, rssi: props.rssi, kind: "controller" });
                 continue;
             }
             let ty = zwift.and_then(|d| d.first().copied());
@@ -254,6 +281,10 @@ impl Controllers {
 
         tokio::time::timeout(Duration::from_secs(15), periph.connect()).await.map_err(|_| "Connection timed out")?.map_err(|e| e.to_string())?;
         periph.discover_services().await.map_err(|e| e.to_string())?;
+        let services: Vec<Uuid> = periph.services().iter().map(|s| s.uuid).collect();
+        if protocol(&services, false) == Some(Protocol::Obc) {
+            return self.connect_obc(periph, id).await;
+        }
         let chars = periph.characteristics();
         let ch = |u: Uuid| chars.iter().find(|c| c.uuid == u).cloned();
         let async_c: Characteristic = ch(ASYNC).ok_or("Not a Zwift controller (service missing)")?;
@@ -307,6 +338,49 @@ impl Controllers {
                         }
                     }
                     was = now;
+                }
+            }
+            // stream ended → device gone
+            me.conns.lock().await.retain(|c| c.id != pid);
+            me.status().await;
+        });
+        self.conns.lock().await.push(Conn { periph, id: id.to_string(), name: name.clone(), task });
+        self.status().await;
+        Ok(json!({ "id": id, "name": name }))
+    }
+
+    /// OpenBikeControl: subscribe to the button state, send our App Information, emit one button per press.
+    async fn connect_obc(self: &Arc<Self>, periph: Peripheral, id: &str) -> Result<Value, String> {
+        let props = periph.properties().await.ok().flatten();
+        let name = props.and_then(|p| p.local_name.or(p.advertisement_name)).unwrap_or_else(|| "OpenBikeControl controller".into());
+        let chars = periph.characteristics();
+        let ch = |u: Uuid| chars.iter().find(|c| c.uuid == u).cloned();
+        let state_c = ch(obc::BUTTON_STATE).ok_or("Not an OpenBikeControl controller (button state missing)")?;
+        let mut stream = periph.notifications().await.map_err(|e| e.to_string())?;
+        periph.subscribe(&state_c).await.map_err(|e| e.to_string())?;
+        // optional for the device: it then assumes we support every button
+        if let Some(info) = ch(obc::APP_INFO) {
+            let msg = obc::app_info(env!("CARGO_PKG_VERSION"));
+            if let Some(t) = handshake_write_types(info.properties).first() {
+                let _ = periph.write(&info, &msg, *t).await;
+            }
+        }
+
+        let app = self.app.clone();
+        let dev = name.clone();
+        let me = self.clone();
+        let pid = id.to_string();
+        let task = tokio::spawn(async move {
+            let mut tracker = obc::Tracker::default();
+            let label = |b: u32| BUTTON_NAMES.iter().find(|(f, _)| *f == b).map(|(_, n)| *n).unwrap_or("");
+            while let Some(n) = stream.next().await {
+                if n.uuid != obc::BUTTON_STATE {
+                    continue;
+                }
+                let hex: String = n.value.iter().map(|b| format!("{b:02x}")).collect();
+                let _ = app.emit("ctrl-raw", json!({ "device": dev, "hex": hex }));
+                if let Some(p) = tracker.update(&n.value) {
+                    let _ = app.emit("button", json!({ "button": label(p.free), "erg": label(p.erg), "device": dev }));
                 }
             }
             // stream ended → device gone
@@ -379,6 +453,16 @@ mod tests {
         // left pad, shift paddle pressed
         assert_eq!(decode(&[0x07, 0x08, 0x01, 0x30, 0x00]), Some(B_SHIFT_DN));
         assert_eq!(decode(&[0x07, 0x08, 0x00, 0x30, 0x00]), Some(B_SHIFT_UP));
+    }
+
+    #[test]
+    fn protocol_detection() {
+        assert_eq!(protocol(&[obc::SVC], false), Some(Protocol::Obc));
+        assert_eq!(protocol(&[SVC, obc::SVC], true), Some(Protocol::Obc));
+        assert_eq!(protocol(&[], true), Some(Protocol::Zwift));
+        assert_eq!(protocol(&[SVC_RIDE], false), Some(Protocol::Zwift));
+        assert_eq!(protocol(&[SVC], false), Some(Protocol::Zwift));
+        assert_eq!(protocol(&[Uuid::from_u128(0x00001826_0000_1000_8000_00805f9b34fb)], false), None);
     }
 
     #[test]

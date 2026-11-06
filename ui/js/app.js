@@ -393,7 +393,7 @@ async function autoConnect() {
   }
 }
 
-/** Controller button → [workout action, dictionary key of its description] (Zwift Ride / Play / Click). */
+/** Controller button → [workout action, dictionary key of its description] (Zwift Ride / Play / Click, OpenBikeControl). */
 export const BUTTON_ACTIONS = {
   shiftUp: ['gear+', 'btnShiftUp'],
   shiftDown: ['gear-', 'btnShiftDown'],
@@ -411,7 +411,9 @@ export const BUTTON_ACTIONS = {
 const BUTTON_LABEL = { shiftUp: 'Shift +', shiftDown: 'Shift −', up: '▲', down: '▼', left: '◀', right: '▶', a: 'A', b: 'B', y: 'Y', z: 'Z', powerup: 'Power-up', onoff: 'On/Off' };
 let buttonTester = null;
 
-function onButton(button, device) {
+/** `erg`: OpenBikeControl's pick for ERG segments when one press sent several ids (difficulty before shift). */
+function onButton(button, device, erg) {
+  if (erg && ride && !ride.freeLike) button = erg;
   buttonTester?.(button, device);
   const action = BUTTON_ACTIONS[button]?.[0];
   if (ride && action) ride.button(action);
@@ -1639,6 +1641,7 @@ async function controllerDialog() {
     <ul class="tips small muted">
       <li>${t('tipRide')}</li>
       <li>${t('tipClick')}</li>
+      <li>${t('tipObc')}</li>
       <li>${t('tipCloseZwift')}</li>
     </ul>
     <div class="modal-actions">${connected.length ? `<button class="btn ghost" data-a="disc">${t('disconnectAll')}</button>` : ''}<button class="btn ghost" data-a="rescan">${t('searchAgain')}</button><button class="btn ghost" data-a="close">${t('close')}</button></div>`, 'small');
