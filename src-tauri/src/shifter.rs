@@ -377,6 +377,9 @@ impl Controllers {
         let dev = name.clone();
         let me = self.clone();
         let pid = id.to_string();
+        // Held until the Conn is registered: if the link drops right away, the task's cleanup
+        // waits for the lock instead of running on a list that doesn't have the Conn yet.
+        let mut conns = self.conns.lock().await;
         let task = tokio::spawn(async move {
             let mut tracker = obc::Tracker::default();
             let label = |b: u32| BUTTON_NAMES.iter().find(|(f, _)| *f == b).map(|(_, n)| *n).unwrap_or("");
@@ -394,7 +397,8 @@ impl Controllers {
             me.conns.lock().await.retain(|c| c.id != pid);
             me.status().await;
         });
-        self.conns.lock().await.push(Conn { periph, id: id.to_string(), name: name.clone(), task });
+        conns.push(Conn { periph, id: id.to_string(), name: name.clone(), task });
+        drop(conns);
         self.status().await;
         Ok(json!({ "id": id, "name": name }))
     }
