@@ -366,8 +366,10 @@ impl Controllers {
         // optional for the device: it then assumes we support every button
         if let Some(info) = ch(obc::APP_INFO) {
             let msg = obc::app_info(env!("CARGO_PKG_VERSION"));
-            if let Some(t) = handshake_write_types(info.properties).first() {
-                let _ = periph.write(&info, &msg, *t).await;
+            for t in handshake_write_types(info.properties) {
+                if periph.write(&info, &msg, t).await.is_ok() {
+                    break;
+                }
             }
         }
 
