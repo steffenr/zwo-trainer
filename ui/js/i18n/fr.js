@@ -357,7 +357,7 @@ export const fr = {
   searchingCtrl: 'Recherche… appuyez sur un bouton de la manette pour la réveiller',
   tipRide: '<b>Zwift Ride :</b> connectez seulement la manette <b>gauche</b> — elle relaie les boutons de la droite.',
   tipClick: '<b>Zwift Click v2</b> s’arrête après ~1 min s’il n’est pas déverrouillé : ouvrez une fois l’app Zwift sur un téléphone, connectez-y le Click, attendez ~90 s, fermez Zwift (sans abonnement).',
-  tipObc: '<b>OpenBikeControl :</b> les manettes au protocole ouvert, et les apps comme BikeControl qui relaient d’autres manettes, apparaissent ici aussi. Vitesses, difficulté ±, intervalle suivant / précédent et sélection fonctionnent.',
+  tipObc: '<b>OpenBikeControl :</b> les manettes au protocole ouvert, et les apps comme BikeControl qui relaient d’autres manettes, apparaissent ici aussi. Vitesses, difficulté ±, intervalle suivant / précédent et sélection fonctionnent.',
   tipCloseZwift: 'Fermez d’abord Zwift et les autres apps d’entraînement — les manettes n’acceptent qu’une connexion.',
   disconnectAll: 'Tout déconnecter',
   searchAgain: 'Rechercher à nouveau',
