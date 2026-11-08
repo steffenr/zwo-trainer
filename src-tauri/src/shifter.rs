@@ -283,7 +283,12 @@ impl Controllers {
         periph.discover_services().await.map_err(|e| e.to_string())?;
         let services: Vec<Uuid> = periph.services().iter().map(|s| s.uuid).collect();
         if protocol(&services, false) == Some(Protocol::Obc) {
-            return self.connect_obc(periph, id).await;
+            // don't keep the link open when the setup fails
+            let res = self.connect_obc(periph.clone(), id).await;
+            if res.is_err() {
+                let _ = periph.disconnect().await;
+            }
+            return res;
         }
         let chars = periph.characteristics();
         let ch = |u: Uuid| chars.iter().find(|c| c.uuid == u).cloned();
