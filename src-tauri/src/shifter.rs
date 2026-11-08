@@ -326,6 +326,8 @@ impl Controllers {
         let dev = name.clone();
         let me = self.clone();
         let pid = id.to_string();
+        // Held until the Conn is registered (see connect_obc).
+        let mut conns = self.conns.lock().await;
         let task = tokio::spawn(async move {
             let mut was = 0u32;
             while let Some(n) = stream.next().await {
@@ -349,7 +351,8 @@ impl Controllers {
             me.conns.lock().await.retain(|c| c.id != pid);
             me.status().await;
         });
-        self.conns.lock().await.push(Conn { periph, id: id.to_string(), name: name.clone(), task });
+        conns.push(Conn { periph, id: id.to_string(), name: name.clone(), task });
+        drop(conns);
         self.status().await;
         Ok(json!({ "id": id, "name": name }))
     }
