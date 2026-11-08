@@ -2,6 +2,7 @@ mod ble;
 mod fit;
 mod garmin;
 mod library;
+mod obc;
 mod shifter;
 mod services;
 mod state;
