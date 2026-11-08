@@ -57,7 +57,7 @@ pub fn button_states(msg: &[u8]) -> Option<Vec<(u8, u8)>> {
     if kind != MSG_BUTTON_STATE {
         return None;
     }
-    Some(body.chunks_exact(2).map(|p| (p[0], p[1])).collect())
+    Some(body.as_chunks::<2>().0.iter().map(|p| (p[0], p[1])).collect())
 }
 
 /// One press: the button for free-ride segments and the one for ERG segments (B_* flags).
