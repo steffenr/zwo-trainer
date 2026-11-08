@@ -16,6 +16,7 @@
 //! `erg`) and chooses (app.js `onButton`).
 
 use crate::shifter::{B_A, B_DOWN, B_LEFT, B_RIGHT, B_SHIFT_DN, B_SHIFT_UP, B_UP};
+use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 pub const SVC: Uuid = Uuid::from_u128(0xd273f680_d548_419d_b9d1_fa0472345229);
@@ -69,23 +70,37 @@ pub struct Press {
 /// Turns button state messages into presses. A message lists only the changed buttons, so the
 /// state of every id is kept to find the ones that are newly pressed.
 pub struct Tracker {
-    held: [bool; 256],
+    /// When each id was pressed; None = released.
+    held: [Option<Instant>; 256],
 }
 
 impl Default for Tracker {
     fn default() -> Self {
-        Self { held: [false; 256] }
+        Self { held: [None; 256] }
     }
 }
 
+/// A button "held" longer than this is assumed to have lost its release message (dropped
+/// notification, or a bridge that only sends presses): the next press counts again.
+const HOLD_MAX: Duration = Duration::from_secs(2);
+
 impl Tracker {
     pub fn update(&mut self, msg: &[u8]) -> Option<Press> {
+        self.update_at(msg, Instant::now())
+    }
+
+    fn update_at(&mut self, msg: &[u8], now: Instant) -> Option<Press> {
         let mut pressed = vec![];
         for (id, state) in button_states(msg)? {
-            if state != 0 && !self.held[id as usize] {
-                pressed.push(id);
+            let slot = &mut self.held[id as usize];
+            if state != 0 {
+                if slot.is_none_or(|at| now.saturating_duration_since(at) > HOLD_MAX) {
+                    pressed.push(id);
+                    *slot = Some(now);
+                }
+            } else {
+                *slot = None;
             }
-            self.held[id as usize] = state != 0;
         }
         let pick = |order: &[u8]| order.iter().find(|id| pressed.contains(id)).map(|id| button(*id));
         Some(Press { free: pick(&PRIORITY)?, erg: pick(&PRIORITY_ERG)? })
@@ -148,6 +163,17 @@ mod tests {
         assert_eq!(t.update(&[0x01, 0x01, 0x00, 0x30, 0x00]), None);
         // pressed again after the release
         assert!(t.update(&[0x01, 0x01, 0x01]).is_some());
+    }
+
+    #[test]
+    fn lost_release_does_not_block_the_button() {
+        let mut t = Tracker::default();
+        let t0 = Instant::now();
+        assert!(t.update_at(&[0x01, 0x01, 0x01], t0).is_some());
+        // no release: a quick repeat is still the same hold
+        assert!(t.update_at(&[0x01, 0x01, 0x01], t0 + Duration::from_millis(500)).is_none());
+        // after HOLD_MAX the press counts again
+        assert!(t.update_at(&[0x01, 0x01, 0x01], t0 + HOLD_MAX + Duration::from_millis(1)).is_some());
     }
 
     #[test]
