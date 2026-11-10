@@ -286,6 +286,8 @@ export const en = {
   appearance: 'Appearance',
   language: 'Language',
   optBeeps: 'Countdown beeps before segment changes',
+  optBeepDirection: 'Rising notes when the power goes up, falling notes when it goes down',
+  optEndChime: 'Chime when a workout is ridden to the end',
   optAutoPause: 'Auto-pause when you stop pedalling (resumes automatically)',
   optCoach: 'Coach hints while riding (cadence, pacing, hard segments)',
   workoutsFolder: 'Workouts folder',

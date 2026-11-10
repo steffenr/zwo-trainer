@@ -285,6 +285,8 @@ export const fr = {
   appearance: 'Apparence',
   language: 'Langue',
   optBeeps: 'Bips de compte à rebours avant les changements de segment',
+  optBeepDirection: 'Notes montantes quand la puissance augmente, descendantes quand elle baisse',
+  optEndChime: 'Carillon quand une séance est terminée jusqu’au bout',
   optAutoPause: 'Pause auto quand vous arrêtez de pédaler (reprise automatique)',
   optCoach: 'Conseils du coach pendant la sortie (cadence, allure, segments durs)',
   workoutsFolder: 'Dossier de séances',

@@ -212,6 +212,8 @@ dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(3px); }
 .form label span { display: flex; align-items: center; gap: 8px; color: var(--muted); }
 .form input[type=number] { width: 90px; text-align: right; }
 .form .check { justify-content: flex-start; color: var(--text-2); }
+.form .check.sub { padding-left: 26px; }
+.form .check:has(input:disabled) { opacity: 0.5; }
 .zone-form { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 16px; }
 .zf { display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 10px; }
 .zf i { width: 14px; height: 14px; border-radius: 4px; }
