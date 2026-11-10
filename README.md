@@ -194,7 +194,7 @@ Deleting always goes to the system Trash (the Recycle Bin on Windows), so it can
 
 **Auto-pause:** after 3 seconds without power or cadence the workout pauses, and it resumes as soon as you pedal again. You can switch this off under Settings → App.
 
-**Beeps:** a countdown in the last 3 seconds before each change of target (Settings → App).
+**Sounds:** a countdown in the last 3 seconds before each change of target. Three rising notes mean the power goes up, three falling notes that it goes down, and the plain beep that it stays about the same (within 3 % FTP) or that the next segment has no fixed target. All-out and max efforts count as going up. Both can be switched off under Settings → App (*Countdown beeps*, with the rising/falling notes below it).
 
 **Keyboard:**
 
@@ -290,7 +290,7 @@ Other platforms (Wahoo, TrainingPeaks, Suunto) only accept uploads from approved
 **Per rider:**
 - avatar (colour and initials or an emoji), FTP, max heart rate, weight, zone limits and power bests
 - active plan, done/skipped marks, favorites, ride history and FTP tests
-- theme, language, beeps, auto-pause, coach hints, virtual-shifting defaults, workouts folder and paired devices
+- theme, language, beeps and sounds, auto-pause, coach hints, virtual-shifting defaults, workouts folder and paired devices
 - Garmin sign-in and upload mode
 
 **Managing riders:**
@@ -326,7 +326,7 @@ Keep riders in sync across Macs through a folder your cloud app already syncs. N
 | Tab | Setting |
 |---|---|
 | **Rider** | FTP, max heart rate, weight, personal bests (5 s / 1 / 5 / 20 min), zone limits (upper limit of Z1–Z4 in % FTP) |
-| **App** | Appearance (Match system / Light / Dark), Language (English / Deutsch / Français; applies immediately, defaults to the system language), countdown beeps, auto-pause, coach hints, workouts folder (*Change… / Rescan*), virtual shifting (default, difficulty, gear-ratio range, start gear), paired devices overview, *About* (version, *Check for updates automatically*, *Check now*, licence, links to the website, source code, third-party licences and Buy Me a Coffee) |
+| **App** | Appearance (Match system / Light / Dark), Language (English / Deutsch / Français; applies immediately, defaults to the system language), countdown beeps (with rising/falling notes), auto-pause, coach hints, workouts folder (*Change… / Rescan*), virtual shifting (default, difficulty, gear-ratio range, start gear), paired devices overview, *About* (version, *Check for updates automatically*, *Check now*, licence, links to the website, source code, third-party licences and Buy Me a Coffee) |
 | **Connections** | Profile sync, Garmin Connect (sign in, upload mode, manual FIT import folder), Strava note, more platforms (Intervals.icu API key and upload mode, COROS import button) |
 
 ---
@@ -413,4 +413,4 @@ Supported ZWO elements: `SteadyState`, `SolidState`, `Warmup`, `Cooldown`, `Ramp
 
 zwoTrainer is free and open source under the [MIT License](LICENSE) © 2026 SteffenR.
 
-The installers bundle open-source Rust crates under their own licences (MIT, Apache-2.0, BSD, ISC, MPL-2.0 and others). Their notices are attached to every release as `THIRD-PARTY-NOTICES.html` and linked in the app under *Settings → App → About*. Zwift, Garmin, Strava, Intervals.icu and COROS are trademarks of their owners; zwoTrainer isn't affiliated with them.
+The installers bundle open-source Rust crates under their own licences (MIT, Apache-2.0, BSD, ISC, MPL-2.0 and others). Their notices are attached to every release as `THIRD-PARTY-NOTICES.html` and linked in the app under *Settings → App → About*. The countdown sounds in `ui/sounds/` are under [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) (public domain). Zwift, Garmin, Strava, Intervals.icu and COROS are trademarks of their owners; zwoTrainer isn't affiliated with them.

@@ -5,6 +5,7 @@ import { renderMarkdown, markdownSummary, markdownPlain, smartTrim } from './mar
 import { DEFAULT_SHIFTING, gearTable, virtualSpeed, targetWatts } from './vshift.js';
 import { PROTOCOLS, protocolById, isTestWorkout, evaluateGeneric, classifyTest, prepareTestWorkout, vo2max } from './tests.js';
 import { t, LOCALES, setLocale, systemLocale, coerceLocale, fmtLocale, translateDom } from './i18n/index.js';
+import { loadSounds, countdown } from './sound.js';
 
 // Platform wording: zwoTrainer runs on macOS, Windows and Linux; only labels differ.
 const OS = (() => {
@@ -1410,6 +1411,7 @@ async function openSettings(tab = 'rider') {
         <div class="frow">${t('appearance')} <span class="seg-ctl" id="theme-ctl">${['system', 'light', 'dark'].map((th) => `<button type="button" data-theme="${th}" class="${(s.theme || 'system') === th ? 'on' : ''}">${t(THEME_LABEL[th])}</button>`).join('')}</span></div>
         <div class="frow">${t('language')} <span class="seg-ctl" id="lang-ctl">${LOCALES.map((l) => `<button type="button" data-lang="${l.value}" lang="${l.value}" class="${uiLang() === l.value ? 'on' : ''}">${l.nativeLabel}</button>`).join('')}</span></div>
         <label class="check"><input type="checkbox" name="beeps" ${s.beeps ? 'checked' : ''}> ${t('optBeeps')}</label>
+        <label class="check sub"><input type="checkbox" name="beepDirection" ${s.beepDirection !== false ? 'checked' : ''} ${s.beeps ? '' : 'disabled'}> ${t('optBeepDirection')}</label>
         <label class="check"><input type="checkbox" name="autoPause" ${s.autoPause !== false ? 'checked' : ''}> ${t('optAutoPause')}</label>
         <label class="check"><input type="checkbox" name="coachHints" ${s.coachHints !== false ? 'checked' : ''}> ${t('optCoach')}</label>
       </div>
@@ -1505,6 +1507,8 @@ async function openSettings(tab = 'rider') {
     toast(t('languageSet', { label: LOCALES.find((x) => x.value === l).nativeLabel }));
     openSettings('app');
   };
+  // the up/down cue belongs to the countdown beeps
+  $('[name=beeps]', modal).onchange = (e) => { $('[name=beepDirection]', modal).disabled = !e.target.checked; };
   $$('#vs-mode, #vs-diff', modal).forEach((ctl) => (ctl.onclick = (e) => {
     const b = e.target.closest('[data-v]');
     if (b) $$('button', ctl).forEach((x) => x.classList.toggle('on', x === b));
@@ -1519,6 +1523,7 @@ async function openSettings(tab = 'rider') {
     s.maxHr = Math.round(+f('maxHr').value) || s.maxHr;
     { const kg = Math.round(+f('weight').value * 10) / 10; s.weight = kg >= 30 && kg <= 200 ? kg : null; }
     s.beeps = f('beeps').checked;
+    s.beepDirection = f('beepDirection').checked;
     s.autoPause = f('autoPause').checked;
     s.coachHints = f('coachHints').checked;
     const z = [0, 1, 2, 3].map((i) => +f(`z${i}`).value);
@@ -1938,6 +1943,7 @@ class Ride {
     this.startedAt = null;
     this.ridden = 0;
     this.beeped = new Set();
+    loadSounds(['up', 'down']);
     this.autoStartCount = 0;
     this.build();
     this.wake();
@@ -2336,8 +2342,8 @@ class Ride {
     // beeps: last 3 s before a change of target
     const n = segs[idx + 1];
     if (state.settings.beeps && this.running && n && rem <= 3.05 && rem > 0) {
-      const k = `${idx}:${Math.ceil(rem)}`;
-      if (!this.beeped.has(k)) { this.beeped.add(k); beep(Math.ceil(rem) === 1 ? 880 : 660); }
+      const sec = Math.min(3, Math.ceil(rem)), k = `${idx}:${sec}`;
+      if (!this.beeped.has(k)) { this.beeped.add(k); countdown(sec, state.settings.beepDirection !== false ? cueDir(s, n) : null); }
     }
 
     const ergEl = $('#erg-state');
@@ -2748,18 +2754,13 @@ function choiceDialog(title, text, options) {
   });
 }
 
-let audioCtx;
-function beep(freq) {
-  try {
-    audioCtx ||= new AudioContext();
-    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    o.frequency.value = freq; o.type = 'sine';
-    g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.18);
-    o.connect(g).connect(audioCtx.destination);
-    o.start(); o.stop(audioCtx.currentTime + 0.2);
-  } catch { /* audio optional */ }
+// Direction of the coming change for the countdown cue: 'up', 'down', or null for about the same
+// (within 3 % FTP) or no fixed target (free ride). All-out efforts count as higher than any target.
+function cueDir(cur, next) {
+  const level = (x, end) => (x.erg === false || x.type === 'maxeffort' ? Infinity : x.p0 === null ? null : end ? x.p1 : x.p0);
+  const a = level(cur, true), b = level(next, false);
+  if (a === null || b === null || a === b) return null;
+  return b - a > 0.03 ? 'up' : a - b > 0.03 ? 'down' : null;
 }
 
 boot().catch((e) => {

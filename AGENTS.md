@@ -24,6 +24,8 @@ ui/                         frontend — static files served by Tauri (frontendD
   js/zwo.js                 client-side ZWO helpers: parse, powerAt, segmentAt, TSS, zone classification
   js/tests.js               FTP test protocols, evaluation, VO2max, test-workout detection
   js/vshift.js              virtual drivetrain + flat-road physics (virtual shifting)
+  js/sound.js               countdown beep and rising/falling countdown notes (Web Audio)
+  sounds/                   power-up.mp3, power-down.mp3 (3 notes ~1 s apart) (CC0)
   js/ble.js                 device objects (Trainer, HeartRate, Controllers), simulator, Tauri event binding
   js/i18n/index.js          t(key, vars), plurals, locale detection, translateDom() for data-i18n attributes
   js/i18n/en.js · de.js · fr.js  UI dictionaries: en is the source, de/fr define the same keys
@@ -107,7 +109,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
   - The UI mutates `state` (the active profile) and calls `api.saveState()` → `save_profile`.
   - Rust-side changes (create/edit/switch/delete profile, sync) return a fresh `app_state` summary, which the UI applies with `applyAppState()`.
 - **The ZWO parser exists twice:** `zwo.rs` is authoritative (library scan, workout loading) and `ui/js/zwo.js` is a mirror used by the mock/dev server and some client helpers. If you change parsing, TSS or zone classification, change **both** and keep their outputs identical.
-- **Ride loop:** the `Ride` class in `app.js` ticks every 250 ms. It computes the target, sends ERG (deduplicated in JS and Rust), records 1 Hz samples, runs auto-pause, beeps and controller actions. `coach()` fills the coach line in the Current segment panel (priority: .zwo text events > pacing > cadence > hard-segment cues; hysteresis and the 4 s minimum use wall-clock time in `this.cz`; `settings.coachHints` switches the automatic hints off). `finish()` → `save_activity` (FIT) → history → Garmin upload.
+- **Ride loop:** the `Ride` class in `app.js` ticks every 250 ms. It computes the target, sends ERG (deduplicated in JS and Rust), records 1 Hz samples, runs auto-pause, the countdown (`countdown()` in sound.js; `cueDir()` picks up / down / same with a 3 % FTP dead band) and controller actions. `coach()` fills the coach line in the Current segment panel (priority: .zwo text events > pacing > cadence > hard-segment cues; hysteresis and the 4 s minimum use wall-clock time in `this.cz`; `settings.coachHints` switches the automatic hints off). `finish()` → `save_activity` (FIT) → history → Garmin upload.
 
 ## Data model (state.json v2)
 
@@ -119,7 +121,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
     "id", "name", "avatar": { "color": "#rrggbb"|null, "emoji": "🚴"|null },
     "createdAt", "updatedAt",
     "settings": { "ftp", "maxHr", "weight", "zones": [55,75,90,105], "bests": {s5,m1,m5,m20},
-                  "theme", "language": "en|de|fr" (missing = system language), "mode", "beeps", "autoPause", "overlay": {power,cadence,hr},
+                  "theme", "language": "en|de|fr" (missing = system language), "mode", "beeps", "beepDirection", "autoPause", "overlay": {power,cadence,hr},
                   "shifting": {...}, "zwoDir", "devices": {trainer, hr, controllers[]},
                   "garmin": {mode, autoOpen, folder},
                   "services": { "<intervals|coros>": {mode: off|manual|auto} },
@@ -181,6 +183,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 - **Descriptions:** `<folder>.md` (else README.md, else the only `.md`), capped at 64 KB, rendered by `markdown.js`. Never inject description HTML unescaped; links only open via `open_link` (http/https).
 - **FTP tests (`tests.js`):** results come only from tagged samples (`measure`): ramp steps are tagged `ramp`, all-out efforts `20` / `a` / `b` / `m20` / `e<i>`. `effort()` returns a power only when ≥ `COMPLETE` (95 %) of the effort was ridden; otherwise `incomplete()` returns `{ ftp: null, incomplete: { label, ridden, needed, text } }`. Never fall back to "best N minutes of the whole ride" — warm-up and recovery would give a too-low FTP.
 - **Test ride rules (`Ride` in app.js):** during a test, auto-pause is skipped in every measured segment (`cs.measure`), `go(t)` (all seeks from buttons, keys, controllers, the chart) blocks skipping inside a measured block and snaps jumps to its start (forward) or end (backward), and `rampCooldown()` replaces the remaining ramp steps with a 5-minute cool-down when the rider fails (`this.cooling`; Stop then finishes without the dialog). Pacing uses `this.effAcc[tag]` (running sum per effort, filled where samples are recorded).
+- **Sounds (`sound.js`):** MP3 (decodes in every webview: WKWebView, WebView2, WebKitGTK/GStreamer; Ogg isn't reliable in WKWebView). They are fetched from the app origin (CSP `connect-src 'self'`) and decoded when a ride opens; until they are ready, or if decoding fails, the plain beep plays. Each countdown tick plays only its own note, so pause and seek can't leave a cue running. Note starts come from `noteStarts()` on the decoded audio, never fixed offsets: MP3 decoders add a short, decoder-specific delay at the start. New sounds must be CC0 (or another licence that needs no attribution in the app) and get a line in the README's License section.
 - **Free-ride segments** have `p0 === null`; all-out efforts are `erg: false` with a measurement window. Both must release ERG (free ride or virtual shifting).
 - **Zwift Ride:** only the **left** controller needs a connection. The sync-RX characteristic accepts write-without-response only; the handshake picks the write type from the characteristic properties. Button bits are **cleared** when pressed.
 - **OpenBikeControl:** the protocol is decided by the advertised service at scan time and by the discovered GATT services at connect time (`shifter::protocol`; OpenBikeControl wins over Zwift data), never by trying one and falling back. One press can send several ids in one message; `obc::Tracker` turns the newly pressed ids into one press and picks one button by priority (shift > difficulty > interval skip / navigation / select, difficulty first in ERG segments). A button held longer than `HOLD_MAX` (2 s) counts as released, so a lost release message can't block it. Rust sends both picks, `onButton` in app.js chooses with `ride.freeLike`. Bluetooth only: the mDNS / TCP transport would need a new crate.

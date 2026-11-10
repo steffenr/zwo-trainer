@@ -285,6 +285,7 @@ export const de = {
   appearance: 'Erscheinungsbild',
   language: 'Sprache',
   optBeeps: 'Countdown-Pieptöne vor Abschnittswechseln',
+  optBeepDirection: 'Steigende Töne, wenn die Leistung steigt, fallende, wenn sie sinkt',
   optAutoPause: 'Auto-Pause, wenn du aufhörst zu treten (geht automatisch weiter)',
   optCoach: 'Coach-Hinweise während der Fahrt (Trittfrequenz, Pacing, harte Abschnitte)',
   workoutsFolder: 'Workout-Ordner',
