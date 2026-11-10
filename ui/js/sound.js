@@ -1,9 +1,9 @@
-// Ride sounds: the synthesized countdown beep plus two bundled recordings in ui/sounds/ (CC0).
+// Ride sounds: the synthesized countdown beep plus three bundled recordings in ui/sounds/ (CC0).
 // power-up / power-down hold a whole 3-2-1 countdown: three short notes about 1 s apart.
 // Each countdown tick plays only its own note, so pausing or seeking never leaves a cue running.
 // The note starts are measured in the decoded audio: MP3 decoders add a short, decoder-specific
 // delay at the start, so fixed offsets of 0 / 1 / 2 s would cut into the notes.
-const FILES = { up: 'sounds/power-up.mp3', down: 'sounds/power-down.mp3' };
+const FILES = { up: 'sounds/power-up.mp3', down: 'sounds/power-down.mp3', done: 'sounds/workout-done.mp3' };
 const ready = {}; // name → { buf, at: [note start in s, …] } once decoded
 const loading = {};
 let ctx;
@@ -66,4 +66,9 @@ export function countdown(sec, dir) {
     if (s && s.at.length === 3) return play(s.buf, at, 0.8, 0.9);
   } catch { /* fall back to the beep */ }
   beep(sec === 1 ? 880 : 660);
+}
+
+/** The end-of-workout chime (silent if it couldn't be loaded). */
+export function endChime() {
+  try { if (ready.done) play(ready.done.buf, 0, ready.done.buf.duration, 0.7); } catch { /* audio optional */ }
 }

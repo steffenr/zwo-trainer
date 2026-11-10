@@ -5,7 +5,7 @@ import { renderMarkdown, markdownSummary, markdownPlain, smartTrim } from './mar
 import { DEFAULT_SHIFTING, gearTable, virtualSpeed, targetWatts } from './vshift.js';
 import { PROTOCOLS, protocolById, isTestWorkout, evaluateGeneric, classifyTest, prepareTestWorkout, vo2max } from './tests.js';
 import { t, LOCALES, setLocale, systemLocale, coerceLocale, fmtLocale, translateDom } from './i18n/index.js';
-import { loadSounds, countdown } from './sound.js';
+import { loadSounds, countdown, endChime } from './sound.js';
 
 // Platform wording: zwoTrainer runs on macOS, Windows and Linux; only labels differ.
 const OS = (() => {
@@ -1412,6 +1412,7 @@ async function openSettings(tab = 'rider') {
         <div class="frow">${t('language')} <span class="seg-ctl" id="lang-ctl">${LOCALES.map((l) => `<button type="button" data-lang="${l.value}" lang="${l.value}" class="${uiLang() === l.value ? 'on' : ''}">${l.nativeLabel}</button>`).join('')}</span></div>
         <label class="check"><input type="checkbox" name="beeps" ${s.beeps ? 'checked' : ''}> ${t('optBeeps')}</label>
         <label class="check sub"><input type="checkbox" name="beepDirection" ${s.beepDirection !== false ? 'checked' : ''} ${s.beeps ? '' : 'disabled'}> ${t('optBeepDirection')}</label>
+        <label class="check"><input type="checkbox" name="endChime" ${s.endChime !== false ? 'checked' : ''}> ${t('optEndChime')}</label>
         <label class="check"><input type="checkbox" name="autoPause" ${s.autoPause !== false ? 'checked' : ''}> ${t('optAutoPause')}</label>
         <label class="check"><input type="checkbox" name="coachHints" ${s.coachHints !== false ? 'checked' : ''}> ${t('optCoach')}</label>
       </div>
@@ -1524,6 +1525,7 @@ async function openSettings(tab = 'rider') {
     { const kg = Math.round(+f('weight').value * 10) / 10; s.weight = kg >= 30 && kg <= 200 ? kg : null; }
     s.beeps = f('beeps').checked;
     s.beepDirection = f('beepDirection').checked;
+    s.endChime = f('endChime').checked;
     s.autoPause = f('autoPause').checked;
     s.coachHints = f('coachHints').checked;
     const z = [0, 1, 2, 3].map((i) => +f(`z${i}`).value);
@@ -1943,7 +1945,7 @@ class Ride {
     this.startedAt = null;
     this.ridden = 0;
     this.beeped = new Set();
-    loadSounds(['up', 'down']);
+    loadSounds(['up', 'down', 'done']);
     this.autoStartCount = 0;
     this.build();
     this.wake();
@@ -2587,7 +2589,9 @@ class Ride {
     clearInterval(this.loop);
     this.running = false;
     // ridden to the end: the ring closes and turns into a check, then the summary rises
-    const endAnim = completed && this.t >= this.w.duration - 1 && motionOK();
+    const ridToEnd = completed && this.t >= this.w.duration - 1;
+    const endAnim = ridToEnd && motionOK();
+    if (ridToEnd && !this.test && state.settings.endChime !== false) endChime();
     const animStart = performance.now();
     if (endAnim) {
       this.ring.update(1, 'var(--ok)');

@@ -26,6 +26,7 @@ fn default_settings() -> Value {
         "zones": [55, 75, 90, 105],
         "beeps": true,
         "beepDirection": true,
+        "endChime": true,
         "theme": "system",
         "mode": "plans",
         "zwoDir": default_zwo_dir(),
@@ -238,7 +239,7 @@ impl Store {
             let id = new_id();
             let mut p = default_profile(&id, &name);
             let active = doc["activeProfile"].as_str().unwrap_or_default().to_string();
-            for k in ["zwoDir", "theme", "language", "devices", "beeps", "beepDirection"] {
+            for k in ["zwoDir", "theme", "language", "devices", "beeps", "beepDirection", "endChime"] {
                 if let Some(v) = doc["profiles"][&active]["settings"].get(k) {
                     p["settings"][k] = v.clone();
                 }
