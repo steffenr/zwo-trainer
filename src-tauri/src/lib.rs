@@ -3,6 +3,7 @@ mod fit;
 mod garmin;
 mod library;
 mod obc;
+mod ride_window;
 mod shifter;
 mod services;
 mod state;
@@ -555,6 +556,13 @@ async fn trainer_resume(app: State<'_, App>) -> Res<()> {
     Ok(())
 }
 
+// ---------------------------------------------------------------- compact ride window
+
+#[tauri::command]
+fn ride_window(window: tauri::WebviewWindow, pending: State<'_, ride_window::Pending>, compact: bool) -> Res<()> {
+    pending.set(&window, compact)
+}
+
 // ---------------------------------------------------------------- virtual shifting controllers
 
 #[tauri::command]
@@ -597,6 +605,7 @@ pub fn run() {
                 awake: Mutex::new(None),
             });
             app.manage(updater::Pending::default());
+            app.manage(ride_window::Pending::default());
             #[cfg(target_os = "macos")]
             {
                 app.set_menu(app_menu(app.handle())?)?;
@@ -644,6 +653,7 @@ pub fn run() {
             garmin_disconnect,
             garmin_upload,
             keep_awake,
+            ride_window,
             ble_scan,
             ble_connect,
             ble_disconnect,

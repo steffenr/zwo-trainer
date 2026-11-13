@@ -876,6 +876,61 @@ details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; fon
 @keyframes mo-shake { 20%, 60% { transform: translateX(-2px); } 40%, 80% { transform: translateX(2px); } }
 @keyframes mo-toast-in { from { opacity: 0; transform: translate(-50%, 14px); } }
 @keyframes mo-toast-out { to { opacity: 0; transform: translate(-50%, 10px); } }
+/* ---------- optional compact ride presentation ---------- */
+.compact-ride { display: none; }
+body.compact-riding .topbar { display: none; }
+body.compact-riding .ride { inset: 0; display: block; padding: 8px 12px; overflow: hidden; }
+body.compact-riding .ride > :not(.compact-ride):not(#ride-hint) { display: none; }
+body.compact-riding .compact-ride { display: grid; height: 100%; min-height: 0; grid-template-rows: 32px minmax(0, 1fr) 36px; gap: 8px; }
+.compact-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+:root[data-os="mac"] .compact-head { padding-left: 80px; }
+.compact-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.compact-state { display: flex; align-items: center; gap: 6px; flex: none; color: var(--text-2); font-size: 11px; }
+.compact-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+.compact-state i.on { background: var(--ok); }
+.compact-head .icon-btn { flex: none; width: 32px; height: 32px; }
+.compact-head .ic { width: 18px; height: 18px; }
+.compact-readouts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 20px; align-content: center; min-height: 0; }
+.compact-metric { min-width: 0; }
+.compact-metric .k { display: block; color: var(--text-2); font-size: 10px; line-height: 1.3; letter-spacing: .04em; }
+.compact-value { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.compact-value b { font: 700 clamp(26px, 4.2vw, 44px)/1.1 var(--num); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.compact-value b.is-text { font-size: 22px; }
+.compact-value small { color: var(--text-2); font-size: 12px; }
+.compact-mode { display: block; color: var(--text-2); font-size: 10px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compact-secondary { display: none; }
+.compact-controls { display: flex; justify-content: center; align-items: center; gap: 12px; }
+.compact-controls .ctl { width: 36px; height: 36px; border-radius: 10px; }
+.compact-controls .ctl svg { width: 18px; height: 18px; }
+.compact-gears { display: flex; align-items: center; gap: 2px; color: var(--text-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.compact-gears .icon-btn { width: 32px; height: 32px; }
+.compact-ride button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+body.compact-riding #ride-hint { top: 40px; max-width: calc(100% - 24px); font-size: 12px; text-align: center; }
+@media (max-width: 639px) {
+  .compact-readouts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; }
+  .compact-head { gap: 6px; }
+  .compact-value b { font-size: 28px; }
+  .compact-value b.is-text { font-size: 20px; }
+  .compact-mode { display: none; }
+}
+@media (max-width: 639px) and (min-height: 360px) {
+  .compact-readouts { gap: 16px; }
+  .cmp-power, .cmp-target { grid-column: 1 / -1; }
+  .cmp-power .compact-value b { font-size: clamp(48px, 14vw, 68px); }
+  .cmp-target .compact-value b { font-size: 36px; }
+  .cmp-target .compact-value b.is-text { font-size: 24px; }
+  .compact-mode { display: block; }
+  .compact-metric .k { font-size: 11px; }
+}
+@media (max-width: 639px) and (min-height: 460px) {
+  .compact-secondary { display: block; }
+}
+@media (min-width: 1100px) {
+  .compact-readouts { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .compact-secondary { display: block; }
+  .compact-value b { font-size: 36px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
   .gauge.on-target .g-actual, .gauge.on-target .g-target { filter: none; }

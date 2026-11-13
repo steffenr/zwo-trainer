@@ -1,5 +1,11 @@
 // German — same keys as en.js (missing keys fall back to English).
 export const de = {
+  btnPause: 'Pause',
+  compactView: 'Kompakte Ansicht',
+  compactAutoPaused: 'Auto-Pause',
+  expandView: 'Zur vollständigen Ansicht',
+  compactSegmentLeft: 'Intervall übrig',
+  compactWorkoutLeft: 'Training übrig',
   couldNotSave: 'Speichern fehlgeschlagen: {e}',
   nWorkouts: { one: '{n} Workout', other: '{n} Workouts' },
   nWeeks: { one: '{n} Woche', other: '{n} Wochen' },

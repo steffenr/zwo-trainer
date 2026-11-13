@@ -133,7 +133,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
   2. **Ride history**: calendar with a check mark.
   3. **Settings**: gear.
   4. **Avatar**: a 32 px circle, no name label.
-- **The bar is identical on every screen.** During a ride:
+- **The bar is identical on every full-size screen.** The optional Compact ride view hides it entirely (see below); it never adds controls to this bar. During a ride:
   - the mode switch is replaced by the ride title (`#ride-title`: badge · title · ERG pill) at the same 40 px height;
   - ride history is shown at 30 % opacity and disabled;
   - the avatar never moves.
@@ -175,9 +175,18 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 - **Motion outside the ride:** 120–250 ms, only on a change. Dialogs and popovers scale in from 97 % (dialogs fade out in 120 ms via `closeModal()`), settings tabs fade, a new view fades in with a 6 px rise (`.view-in`, not on re-renders of the same view). Workout rows lift 1 px on hover and settle in one after another after a folder, duration, zone or sort change (`.list-in`, not while typing a search). The preview's bars grow from the baseline. A workout just marked done pops its check (`.just-done`), progress bars glide to the new value (`.pbar.glide`). Device dots breathe while connecting, pulse once on connect, shake when a connection drops. Toasts slide up and out; the update card pops in like a popover. A new FTP in the test result counts up once from the current value (`countUp()`). Buttons press to 98 %, segmented controls fade between states.
 - **Motion on the website** (`site/`): the same curve, durations and `mo-*` keyframes as the app, each played once. On load the zone pips grow, the hero copy fades up, `.zwo` gets the segment-change sweep and the app screenshot rises into its tilt. Sections rise in on scroll (`.rv`) and their lists settle in one after another; the order comes from `--i`, set in `site.js`. Buttons press to 98 %, tiles lift, a theme switch cross-fades the colours. Only the coffee fuel bar loops, and *Reduce motion* turns everything off.
 
+### Compact ride view
+
+- Optional **⋯ → Compact view** in the ride controls; a compact presentation of the same Ride and native window, not another dashboard or another ride. Its readouts are built once alongside the full dashboard.
+- Hide the normal toolbar, panels, chart and ready overlay only in this view. Keep a 32 px draggable heading (workout title, readable run/pause state with connection dot and tooltip, expand) and a 36 px primary control row. On macOS, reserve the existing traffic-light space.
+- Initial inner size **960 × 200**, minimum **320 × 200** logical pixels. Four flat readouts: power, target, segment left, workout left. ≤ 639 px wraps to two columns; taller narrow panels make power/target more prominent, with cadence/HR from 460 px height. Bars ≥ 1100 px show all six readouts. No decorative gauge or nested panels.
+- Values are tabular HTML text (28–68 px depending on context); labels use `--text-2`, target uses zone ink. Missing sensors show a dash. Free/all-out targets use text without a W unit. Keep virtual gear controls in free-like segments.
+- Pause/resume and stop have accessible names; expand restores full-view geometry without rebuilding Ride. Stop/results expand before opening their dialogs. Use a short auto-pause label, with the pedalling hint retained in its accessible name/tooltip.
+- Full-view geometry is machine-local and temporary; position restoration is best-effort on compositors that restrict it. Native fullscreen must be exited before switching. Resizing failures leave the current presentation available for retry.
+
 ### Responsive
 
-- **Minimum window:** 900 × 640.
+- **Normal minimum window:** 900 × 640; Compact ride view: 320 × 200.
 - **≤ 1100 px:** the workout rows drop the mini profile.
 - **≤ 980 px:** the ride panels wrap 2 + 1 and the rows drop the duration.
 - **Above 1400 px:** ride readouts scale up (see Typography).

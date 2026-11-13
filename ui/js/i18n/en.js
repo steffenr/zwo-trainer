@@ -1,6 +1,12 @@
 // English — the source dictionary. Every user-visible string lives here; de.js and fr.js define
 // the same keys. Plural values are { one, other } and pick their form from `vars.n`.
 export const en = {
+  btnPause: 'Pause',
+  compactView: 'Compact view',
+  compactAutoPaused: 'Auto-paused',
+  expandView: 'Return to full view',
+  compactSegmentLeft: 'Segment left',
+  compactWorkoutLeft: 'Workout left',
   couldNotSave: 'Could not save: {e}',
   nWorkouts: { one: '{n} workout', other: '{n} workouts' },
   nWeeks: { one: '{n} week', other: '{n} weeks' },

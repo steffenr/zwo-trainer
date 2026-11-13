@@ -1,3 +1,4 @@
+import { CompactView } from './compact.js';
 import { powerAt, segmentAt, estimateTss } from './zwo.js';
 import { ZONES, FREE_COLOR, zoneOf, zoneColor, zoneInk, fmtTime, fmtDur, miniProfile, Diagram, Gauge, ProgressRing, motionOK } from './render.js';
 import { Trainer, HeartRate, Controllers, bindNative, invoke, listen } from './ble.js';
@@ -1061,6 +1062,7 @@ function bindActions(root) {
       }
       case 'more': return moreMenu(el, el.dataset.file);
       case 'menu': return openMenu(el);
+      case 'ride-compact': return ride?.compact.set(true);
       case 'md-link': return invoke('open_link', { url: el.dataset.link }).catch((err) => toast(String(err)));
       case 'desc-toggle': {
         const box = el.closest('.plan-desc');
@@ -1870,6 +1872,7 @@ const IC = {
   chat: svgI('<path d="M4 5h16v11H10l-5 4v-4H4z"/>'),
   flame: svgI('<path d="M12 3c.8 3.6 5 5.4 5 10a5 5 0 0 1-10 0c0-2.4 1.3-3.9 2.4-5 .3 1.9 1.2 2.9 2.4 3-.6-2.9-.4-5.4.2-8z"/>'),
   plug: svgI('<path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5"/>'),
+  expand: svgI('<path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5M3 3l6 6M21 3l-6 6M21 21l-6-6M3 21l6-6"/>'),
 };
 /** Plausibility note for a test result that differs a lot (> 15 %) from the current FTP. */
 function ftpCheck(next, cur, source) {
@@ -1947,6 +1950,14 @@ class Ride {
     this.beeped = new Set();
     loadSounds(['up', 'down', 'done']);
     this.autoStartCount = 0;
+    this.compact = new CompactView({
+      resize: (compact) => invoke('ride_window', { compact }),
+      apply: (compact) => {
+        document.body.classList.toggle('compact-riding', compact);
+        if (!compact) this.diagram.update(this.t, this.samples);
+      },
+      report: (error) => toast(String(error)),
+    });
     this.build();
     this.wake();
     this.loop = setInterval(() => this.tick(), 250);
@@ -2031,7 +2042,28 @@ class Ride {
           <button class="ctl int-b" data-int="-1" title="${t('intDownTitle')}" aria-label="${t('btnIntDown')}">−</button>
           <button class="ctl int-b" data-int="1" title="${t('intUpTitle')}" aria-label="${t('btnIntUp')}">+</button>
         </div>
+        ${menuBtn(`<button data-act="ride-compact">${t('compactView')}</button>`)}
       </div>
+      <section class="compact-ride" aria-label="${t('compactView')}">
+        <header class="compact-head" data-tauri-drag-region>
+          <span class="compact-name" data-tauri-drag-region title="${esc(this.info?.title || this.w.name)}">${esc(this.info?.title || this.w.name)}</span>
+          <span class="compact-state" id="cmp-state"><i id="cmp-dot"></i><span id="cmp-status" role="status"></span></span>
+          <button class="icon-btn" data-c="expand" title="${t('expandView')}" aria-label="${t('expandView')}">${IC.expand}</button>
+        </header>
+        <div class="compact-readouts">
+          <div class="compact-metric cmp-power"><span class="k">${t('colPower')}</span><div class="compact-value"><b id="cmp-power">–</b><small>W</small></div></div>
+          <div class="compact-metric cmp-target"><span class="k">${t('targetPower')}</span><div class="compact-value"><b id="cmp-target">–</b><small id="cmp-target-unit">W</small></div><span class="compact-mode" id="cmp-mode"></span></div>
+          <div class="compact-metric"><span class="k">${t('compactSegmentLeft')}</span><div class="compact-value"><b id="cmp-segment">0:00</b></div></div>
+          <div class="compact-metric"><span class="k">${t('compactWorkoutLeft')}</span><div class="compact-value"><b id="cmp-workout">0:00</b></div></div>
+          <div class="compact-metric compact-secondary"><span class="k">${t('cadence')}</span><div class="compact-value"><b id="cmp-cadence">–</b><small>rpm</small></div></div>
+          <div class="compact-metric compact-secondary"><span class="k">${t('devHr')}</span><div class="compact-value"><b id="cmp-hr">–</b><small>bpm</small></div></div>
+        </div>
+        <div class="compact-controls">
+          <button class="ctl play" data-c="play" title="${t('btnPlay')}" aria-label="${t('btnPlay')}"><svg viewBox="0 0 24 24" class="i-play" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" class="i-pause" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg></button>
+          <button class="ctl" data-c="stop" title="${t('endWorkout')}" aria-label="${t('endWorkout')}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
+          <div class="compact-gears" id="cmp-gears" hidden><button class="icon-btn" data-shift="-1" title="${t('shiftDownKey')}" aria-label="${t('shiftDownKey')}">−</button><span id="cmp-gear"></span><button class="icon-btn" data-shift="1" title="${t('shiftUpKey')}" aria-label="${t('shiftUpKey')}">+</button></div>
+        </div>
+      </section>
       <div class="ready" id="ready"><div><b>${t('ready')}</b><span>${t('readyText')}${trainer.connected ? ` ${t('readyPedal')}` : ''}.</span></div>
         ${this.hasFree ? `<div class="vs-ask"><span class="k">${t('freeRideSegments')}</span><span class="seg-ctl" id="vs-choice">${[['gears', 'realGears'], ['easy', 'vgEasy'], ['medium', 'diff.medium'], ['hard', 'diff.hard']].map(([k, l]) => `<button data-vs="${k}" class="${(k === 'gears' ? !this.vs.on : this.vs.on && this.vs.difficulty === k) ? 'on' : ''}">${t(l)}</button>`).join('')}</span></div>` : ''}</div>`;
 
@@ -2048,6 +2080,8 @@ class Ride {
       },
     });
     r.onclick = (e) => {
+      const menu = e.target.closest('[data-act="menu"]');
+      if (menu) return openMenu(menu);
       const vsb = e.target.closest('[data-vs]');
       if (vsb) return this.chooseShifting(vsb.dataset.vs);
       const sb = e.target.closest('[data-shift]');
@@ -2181,6 +2215,7 @@ class Ride {
     const seg = this.w.segments[this.segIdx];
     switch (c) {
       case 'play': return this.toggle();
+      case 'expand': return this.compact.set(false);
       case 'stop': return this.stop();
       case 'back': return this.go(this.t - 60);
       case 'fwd': return this.go(this.t + 60);
@@ -2473,7 +2508,36 @@ class Ride {
 
     $('#d-el').textContent = fmtTime(this.t);
     $('#d-rem').textContent = fmtTime(Math.max(0, Math.ceil(this.w.duration - this.t)));
-    this.diagram.update(this.t, this.samples);
+
+    // Both presentations share the same samples and Ride. No DOM is rebuilt on resize.
+    $('#cmp-power').textContent = p ?? '–';
+    $('#cmp-target').textContent = gt != null ? gt : allOut ? t('allOut') : t('free');
+    $('#cmp-target').classList.toggle('is-text', gt == null);
+    $('#cmp-target').style.color = gt != null ? zoneInk(gt / F, bounds()) : '';
+    $('#cmp-target-unit').hidden = gt == null;
+    $('#cmp-mode').textContent = vsActive ? t('virtualGears') : freeLike ? t('ergOffGears') : trainer.canErg ? 'ERG' : t('powerOnlyCap');
+    $('#cmp-mode').title = $('#cmp-mode').textContent;
+    $('#cmp-segment').textContent = fmtTime(Math.max(0, Math.ceil(rem)));
+    $('#cmp-workout').textContent = $('#d-rem').textContent;
+    $('#cmp-cadence').textContent = c != null ? Math.round(c) : '–';
+    $('#cmp-hr').textContent = hr ?? '–';
+    $('#cmp-cadence').classList.toggle('off-target', live && cadState === 'bad');
+    $('#cmp-gears').hidden = !freeLike;
+    $('#cmp-gear').textContent = t('gearN', { n: this.gear + 1 });
+    const status = this.autoPaused ? t('compactAutoPaused') : this.running ? t('running') : this.started ? t('paused') : t('ready');
+    if ($('#cmp-status').textContent !== status) $('#cmp-status').textContent = status;
+    const connection = trainer.connected ? trainer.mode === 'sim' ? t('simulator') : t('connectedCap') : t('noTrainer');
+    const statusDetail = this.autoPaused ? t('autoPaused') : status;
+    $('#cmp-state').title = `${statusDetail} · ${connection}`;
+    $('#cmp-state').setAttribute('aria-label', `${statusDetail} · ${connection}`);
+    $('#cmp-dot').classList.toggle('on', trainer.connected);
+    $$('#ride [data-c="play"]').forEach((el) => {
+      el.classList.toggle('is-running', this.running);
+      const label = this.running ? t('btnPause') : t('btnPlay');
+      el.title = `${label} (${t('spaceKey')})`;
+      el.setAttribute('aria-label', label);
+    });
+    if (!this.compact.active) this.diagram.update(this.t, this.samples);
   }
 
   /**
@@ -2546,6 +2610,7 @@ class Ride {
   }
 
   async stop() {
+    if (!await this.compact.set(false)) return;
     const wasRunning = this.running;
     if (wasRunning) this.toggle();
     if (!this.started) return this.close();
@@ -2588,6 +2653,8 @@ class Ride {
   async finish(completed) {
     clearInterval(this.loop);
     this.running = false;
+    // Saving/results must still proceed if the OS rejects a window resize.
+    await this.compact.set(false);
     // ridden to the end: the ring closes and turns into a check, then the summary rises
     const ridToEnd = completed && this.t >= this.w.duration - 1;
     const endAnim = ridToEnd && motionOK();
@@ -2732,7 +2799,8 @@ class Ride {
     else if (fit && !garmin.connected && state.settings.garmin?.autoOpen) garminImport(fit.path);
   }
 
-  close() {
+  async close() {
+    if (!await this.compact.set(false)) return;
     clearInterval(this.loop);
     invoke('keep_awake', { on: false }).catch(() => {});
     this.wakeLock?.release().catch(() => {});
