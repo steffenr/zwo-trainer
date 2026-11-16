@@ -231,6 +231,7 @@ impl Controllers {
     /// and OpenBikeControl controllers (they advertise the OpenBikeControl service).
     pub async fn scan(&self, secs: u64) -> Result<Vec<Found>, String> {
         let adapter = self.ble.adapter().await?;
+        let _gate = self.ble.scan_gate.lock().await;
         adapter.start_scan(ScanFilter::default()).await.map_err(|e| e.to_string())?;
         tokio::time::sleep(Duration::from_secs(secs.clamp(1, 15))).await;
         let _ = adapter.stop_scan().await;
@@ -264,15 +265,20 @@ impl Controllers {
         let adapter = self.ble.adapter().await?;
         let mut periph = adapter.peripherals().await.ok().and_then(|ps| ps.into_iter().find(|p| p.id().to_string() == id));
         if periph.is_none() {
-            adapter.start_scan(ScanFilter::default()).await.map_err(|e| e.to_string())?;
-            for _ in 0..25 {
-                tokio::time::sleep(Duration::from_millis(400)).await;
-                periph = adapter.peripherals().await.ok().and_then(|ps| ps.into_iter().find(|p| p.id().to_string() == id));
-                if periph.is_some() {
-                    break;
+            let _gate = self.ble.scan_gate.lock().await;
+            // another scan may have found it while we waited for the gate
+            periph = adapter.peripherals().await.ok().and_then(|ps| ps.into_iter().find(|p| p.id().to_string() == id));
+            if periph.is_none() {
+                adapter.start_scan(ScanFilter::default()).await.map_err(|e| e.to_string())?;
+                for _ in 0..25 {
+                    tokio::time::sleep(Duration::from_millis(400)).await;
+                    periph = adapter.peripherals().await.ok().and_then(|ps| ps.into_iter().find(|p| p.id().to_string() == id));
+                    if periph.is_some() {
+                        break;
+                    }
                 }
+                let _ = adapter.stop_scan().await;
             }
-            let _ = adapter.stop_scan().await;
         }
         let periph = periph.ok_or("Controller not found — press a button to wake it")?;
         let ty = periph.properties().await.ok().flatten().and_then(|p| {
@@ -328,11 +334,17 @@ impl Controllers {
         let dev = name.clone();
         let me = self.clone();
         let pid = id.to_string();
+        let mut gone = self.ble.subscribe_dropped();
         // Held until the Conn is registered (see connect_obc).
         let mut conns = self.conns.lock().await;
         let task = tokio::spawn(async move {
             let mut was = 0u32;
-            while let Some(n) = stream.next().await {
+            loop {
+                // the stream may never end when the controller is switched off: also watch the adapter
+                let n = tokio::select! {
+                    n = stream.next() => match n { Some(n) => n, None => break },
+                    _ = crate::ble::wait_dropped(&mut gone, &pid) => break,
+                };
                 if n.uuid == ASYNC || n.uuid == SYNC_TX {
                     let hex: String = n.value.iter().map(|b| format!("{b:02x}")).collect();
                     let _ = app.emit("ctrl-raw", json!({ "device": dev, "hex": hex }));
@@ -385,11 +397,16 @@ impl Controllers {
         let pid = id.to_string();
         // Held until the Conn is registered: if the link drops right away, the task's cleanup
         // waits for the lock instead of running on a list that doesn't have the Conn yet.
+        let mut gone = self.ble.subscribe_dropped();
         let mut conns = self.conns.lock().await;
         let task = tokio::spawn(async move {
             let mut tracker = obc::Tracker::default();
             let label = |b: u32| BUTTON_NAMES.iter().find(|(f, _)| *f == b).map(|(_, n)| *n).unwrap_or("");
-            while let Some(n) = stream.next().await {
+            loop {
+                let n = tokio::select! {
+                    n = stream.next() => match n { Some(n) => n, None => break },
+                    _ = crate::ble::wait_dropped(&mut gone, &pid) => break,
+                };
                 if n.uuid != obc::BUTTON_STATE {
                     continue;
                 }
