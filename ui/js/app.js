@@ -1,4 +1,4 @@
-import { CompactView } from './compact.js';
+import { CompactView, compactMode } from './compact.js';
 import { powerAt, segmentAt, estimateTss } from './zwo.js';
 import { ZONES, FREE_COLOR, zoneOf, zoneColor, zoneInk, fmtTime, fmtDur, miniProfile, Diagram, Gauge, ProgressRing, motionOK } from './render.js';
 import { Trainer, HeartRate, Controllers, bindNative, invoke, listen } from './ble.js';
@@ -1971,6 +1971,9 @@ class Ride {
     document.body.classList.add('riding');
     const plan = this.planId && planById(this.planId);
     const ov = state.settings.overlay || { power: true };
+    // compact view: play/stop and "workout left" appear twice (heading row when short, footer otherwise)
+    const cmpCtl = `<span class="compact-ctl"><button class="ctl play" data-c="play" title="${t('btnPlay')}" aria-label="${t('btnPlay')}"><svg viewBox="0 0 24 24" class="i-play" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" class="i-pause" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg></button><button class="ctl" data-c="stop" title="${t('endWorkout')}" aria-label="${t('endWorkout')}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button></span>`;
+    const cmpWl = `<span class="cmp-wl"><small>${t('compactWorkoutLeft')}</small><b class="cmp-wleft">0:00</b></span>`;
     // the ride title lives in the regular top bar (in place of the mode switch)
     const rt = $('#ride-title');
     rt.innerHTML = `${this.test ? `<span class="badge test">${t('ftpTest')}</span>` : ''}${plan ? `<span class="badge">${esc(plan.name)}${this.info?.week ? ` · ${t('weekDayCompact', { w: this.info.week, d: this.info.day })}` : ''}</span>` : this.test ? '' : `<span class="badge muted">${t('workout')}</span>`}
@@ -2048,27 +2051,48 @@ class Ride {
         <header class="compact-head" data-tauri-drag-region>
           <span class="compact-name" data-tauri-drag-region title="${esc(this.info?.title || this.w.name)}">${esc(this.info?.title || this.w.name)}</span>
           <span class="compact-state" id="cmp-state"><i id="cmp-dot"></i><span id="cmp-status" role="status"></span></span>
+          <div class="compact-gears" id="cmp-gears" hidden><button class="icon-btn" data-shift="-1" title="${t('shiftDownKey')}" aria-label="${t('shiftDownKey')}">−</button><span id="cmp-gear"></span><button class="icon-btn" data-shift="1" title="${t('shiftUpKey')}" aria-label="${t('shiftUpKey')}">+</button></div>
+          <span class="compact-short">${cmpWl}${cmpCtl}</span>
           <button class="icon-btn" data-c="expand" title="${t('expandView')}" aria-label="${t('expandView')}">${IC.expand}</button>
         </header>
-        <div class="compact-readouts">
-          <div class="compact-metric cmp-power"><span class="k">${t('colPower')}</span><div class="compact-value"><b id="cmp-power">–</b><small>W</small></div></div>
-          <div class="compact-metric cmp-target"><span class="k">${t('targetPower')}</span><div class="compact-value"><b id="cmp-target">–</b><small id="cmp-target-unit">W</small></div><span class="compact-mode" id="cmp-mode"></span></div>
-          <div class="compact-metric"><span class="k">${t('compactSegmentLeft')}</span><div class="compact-value"><b id="cmp-segment">0:00</b></div></div>
-          <div class="compact-metric"><span class="k">${t('compactWorkoutLeft')}</span><div class="compact-value"><b id="cmp-workout">0:00</b></div></div>
-          <div class="compact-metric compact-secondary"><span class="k">${t('cadence')}</span><div class="compact-value"><b id="cmp-cadence">–</b><small>rpm</small></div></div>
-          <div class="compact-metric compact-secondary"><span class="k">${t('devHr')}</span><div class="compact-value"><b id="cmp-hr">–</b><small>bpm</small></div></div>
+        <div class="compact-main">
+          <section class="cp cp-live">
+            <div class="cp-ph"><i></i>${t('live')}</div>
+            <div class="cp-body">
+              <div class="cp-cell"><div class="cp-dial"><div class="cp-mount" id="cmp-gauge"></div><div class="cp-center"><b id="cmp-pow">–</b><small id="cmp-pow-sub"></small></div></div></div>
+              <div class="cp-meta cp-opt"><span><small>${t('devHr')}</small><b id="cmp-hr">–</b></span><span><small>${t('cadence')}</small><b id="cmp-cad">–</b></span></div>
+            </div>
+          </section>
+          <section class="cp cp-cur">
+            <div class="cp-ph"><i></i>${t('compactCurrent')}</div>
+            <div class="cp-body">
+              <div class="cp-cell"><div class="cp-dial"><div class="cp-mount" id="cmp-ring"></div><div class="cp-center"><b id="cmp-seg">0:00</b><small id="cmp-seg-sub"></small></div></div></div>
+              <div class="cp-info cp-opt"><b id="cmp-tgt">–</b><div class="cp-bar"><i id="cmp-bar"></i></div></div>
+            </div>
+          </section>
+          <section class="cp cp-next">
+            <div class="cp-ph"><i></i>${t('compactNext')}</div>
+            <div class="cp-body"><div class="cp-nx" id="cmp-next"></div></div>
+          </section>
         </div>
-        <div class="compact-controls">
-          <button class="ctl play" data-c="play" title="${t('btnPlay')}" aria-label="${t('btnPlay')}"><svg viewBox="0 0 24 24" class="i-play" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" class="i-pause" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg></button>
-          <button class="ctl" data-c="stop" title="${t('endWorkout')}" aria-label="${t('endWorkout')}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
-          <div class="compact-gears" id="cmp-gears" hidden><button class="icon-btn" data-shift="-1" title="${t('shiftDownKey')}" aria-label="${t('shiftDownKey')}">−</button><span id="cmp-gear"></span><button class="icon-btn" data-shift="1" title="${t('shiftUpKey')}" aria-label="${t('shiftUpKey')}">+</button></div>
-        </div>
+        <div class="compact-foot">${cmpCtl}${cmpWl}</div>
       </section>
       <div class="ready" id="ready"><div><b>${t('ready')}</b><span>${t('readyText')}${trainer.connected ? ` ${t('readyPedal')}` : ''}.</span></div>
         ${this.hasFree ? `<div class="vs-ask"><span class="k">${t('freeRideSegments')}</span><span class="seg-ctl" id="vs-choice">${[['gears', 'realGears'], ['easy', 'vgEasy'], ['medium', 'diff.medium'], ['hard', 'diff.hard']].map(([k, l]) => `<button data-vs="${k}" class="${(k === 'gears' ? !this.vs.on : this.vs.on && this.vs.difficulty === k) ? 'on' : ''}">${t(l)}</button>`).join('')}</span></div>` : ''}</div>`;
 
     this.gauge = new Gauge($('.gauge-mount', r));
     this.ring = new ProgressRing($('.ring-mount', r));
+    this.cGauge = new Gauge($('#cmp-gauge', r));
+    this.cRing = new ProgressRing($('#cmp-ring', r));
+    const cmpEl = $('.compact-ride', r);
+    const fitCompact = () => {
+      const m = compactMode(cmpEl.clientWidth, cmpEl.clientHeight);
+      cmpEl.dataset.mode = m.mode;
+      for (const k of ['short', 'tiny', 'narrow', 'xs']) cmpEl.dataset[k] = m[k] ? '1' : '0';
+    };
+    this.cObs = new ResizeObserver(fitCompact);
+    this.cObs.observe(cmpEl);
+    fitCompact();
     this.diagram = new Diagram($('.dg-mount', r), this.w, {
       bounds: bounds(), ftp: ftp(), maxHr: maxHr(), overlay: ov,
       onSelect: (i, s) => {
@@ -2487,10 +2511,17 @@ class Ride {
         const nLo = n.cadenceLow ?? n.cadence, nHi = n.cadenceHigh ?? n.cadence;
         card.style.setProperty('--zc', zoneColor(nf, bounds()));
         card.title = nf == null ? t('freeRide') : zoneOf(nf, bounds()).name;
+        const cn = $('#cmp-next');
+        cn.style.setProperty('--zc', zoneColor(nf, bounds()));
+        cn.innerHTML = `<div class="nc-txt"><b>${big}</b><span class="nc-v">${watts}</span><span class="nc-v cp-opt">${fmtTime(n.duration)} min</span><span class="nc-v cp-opt" id="cmp-next-in"></span></div>`;
         card.innerHTML = `<div class="nc-txt"><b>${big}</b><span class="nc-v">${watts}</span><span class="nc-v">${fmtTime(n.duration)} min</span>${nLo != null ? `<span class="nc-v nc-rpm">${nLo === nHi ? nLo : `${nLo}–${nHi}`} rpm</span>` : ''}</div>`;
       } else {
         card.style.setProperty('--zc', 'var(--line-strong)');
         card.title = '';
+        $('#cmp-next').style.setProperty('--zc', 'var(--line-strong)');
+        $('#cmp-next').innerHTML = this.cooling
+          ? `<div class="nc-txt"><b>${t('testDone')}</b></div>`
+          : `<div class="nc-txt"><b>${t('finishStrong')}</b><span class="nc-v muted cp-opt">${t('noMoreChanges')}</span></div>`;
         card.innerHTML = this.cooling
           ? `<div class="nc-txt"><b>${t('testDone')}</b><span class="nc-v muted">${t('pressStopResult')}</span></div>`
           : `<div class="nc-txt"><b>${t('finishStrong')}</b><span class="nc-v muted">${t('noMoreChanges')}</span></div>`;
@@ -2510,20 +2541,26 @@ class Ride {
     $('#d-rem').textContent = fmtTime(Math.max(0, Math.ceil(this.w.duration - this.t)));
 
     // Both presentations share the same samples and Ride. No DOM is rebuilt on resize.
-    $('#cmp-power').textContent = p ?? '–';
-    $('#cmp-target').textContent = gt != null ? gt : allOut ? t('allOut') : t('free');
-    $('#cmp-target').classList.toggle('is-text', gt == null);
-    $('#cmp-target').style.color = gt != null ? zoneInk(gt / F, bounds()) : '';
-    $('#cmp-target-unit').hidden = gt == null;
-    $('#cmp-mode').textContent = vsActive ? t('virtualGears') : freeLike ? t('ergOffGears') : trainer.canErg ? 'ERG' : t('powerOnlyCap');
-    $('#cmp-mode').title = $('#cmp-mode').textContent;
-    $('#cmp-segment').textContent = fmtTime(Math.max(0, Math.ceil(rem)));
-    $('#cmp-workout').textContent = $('#d-rem').textContent;
-    $('#cmp-cadence').textContent = c != null ? Math.round(c) : '–';
+    // compact panels: same values as the full view (actual target, never a test-estimated FTP)
+    const cmpSub = gt != null ? `${gt} W` : t(allOut ? 'gAllOut' : 'gFree');
+    this.cGauge.update({ target: gt, actual: p, ftp: F, bounds: bounds() });
+    $('#cmp-pow').textContent = p ?? '–';
+    $('#cmp-pow-sub').textContent = cmpSub;
+    this.cRing.update(Math.min(1, inSeg / s.duration), color);
+    $('#cmp-seg').textContent = fmtTime(Math.max(0, Math.ceil(rem)));
+    $('#cmp-seg-sub').textContent = cmpSub;
+    $('#cmp-tgt').textContent = $('#s-target').textContent;
+    $('#cmp-tgt').style.color = $('#s-target').style.color;
+    $('#cmp-bar').style.width = $('#s-bar').style.width;
+    $('#cmp-bar').style.background = color;
     $('#cmp-hr').textContent = hr ?? '–';
-    $('#cmp-cadence').classList.toggle('off-target', live && cadState === 'bad');
+    $('#cmp-cad').textContent = c != null ? Math.round(c) : '–';
+    $('#cmp-cad').classList.toggle('off-target', live && cadState === 'bad');
+    $$('.cmp-wleft').forEach((el) => { el.textContent = $('#d-rem').textContent; });
     $('#cmp-gears').hidden = !freeLike;
     $('#cmp-gear').textContent = t('gearN', { n: this.gear + 1 });
+    const nIn = $('#cmp-next-in');
+    if (nIn) nIn.textContent = `${t('compactIn')} ${fmtTime(Math.max(0, Math.ceil(rem)))}`;
     const status = this.autoPaused ? t('compactAutoPaused') : this.running ? t('running') : this.started ? t('paused') : t('ready');
     if ($('#cmp-status').textContent !== status) $('#cmp-status').textContent = status;
     const connection = trainer.connected ? trainer.mode === 'sim' ? t('simulator') : t('connectedCap') : t('noTrainer');
@@ -2802,6 +2839,7 @@ class Ride {
   async close() {
     if (!await this.compact.set(false)) return;
     clearInterval(this.loop);
+    this.cObs?.disconnect();
     invoke('keep_awake', { on: false }).catch(() => {});
     this.wakeLock?.release().catch(() => {});
     this.wakeLock = null;
