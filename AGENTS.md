@@ -19,6 +19,7 @@ ui/                         frontend — static files served by Tauri (frontendD
   index.html                shell: top bar, #view, #ride, <dialog id="modal">, #toast
   css/styles.css            ALL styles; theme tokens on :root (light) + dark overrides
   js/app.js                 app controller: boot, routing, modes, riders, settings, sync, Ride class
+  js/compact.js             serialized compact/full ride presentation transitions (same Ride, native resize first) and `compactMode()` size tiers
   js/render.js              zones, colours, mini profiles, Diagram (workout chart), Gauge, ProgressRing
   js/markdown.js            tiny safe Markdown renderer (plan descriptions); escapes everything, links via open_link
   js/zwo.js                 client-side ZWO helpers: parse, powerAt, segmentAt, TSS, zone classification
@@ -37,6 +38,7 @@ src-tauri/
   src/zwo.rs                ZWO parser (authoritative), TSS estimate, zone classification
   src/fit.rs                FIT encoder (Generic + Garmin flavour)
   src/garmin.rs             Garmin SSO window → OAuth1 → OAuth2, upload
+  src/ride_window.rs        temporary compact-window geometry, minimum size, transactional resize/restore
   src/updater.rs            in-app updates (tauri-plugin-updater): check, download + verify + install, restart
   src/services.rs           Intervals.icu (automatic upload, API key) and COROS (manual Training Hub import, ZIP)
   src/ble.rs                btleplug: FTMS (ERG), Cycling Power, Heart Rate, reconnect
@@ -69,6 +71,7 @@ cd src-tauri && cargo clippy --all-targets           # keep warning-free
 ZWO_TEST_DIR=~/Downloads/zwo cargo test scan_real_library -- --nocapture   # parse a real library
 node --check ui/js/app.js                            # quick syntax check for edited JS modules
 node scripts/check-i18n.mjs                          # translations complete and consistent (en / de / fr)
+node --test scripts/compact-ride.test.mjs             # compact/full transition lifecycle
 node scripts/sync-version.mjs [x.y.z]                # print / set the app version
 ```
 
@@ -97,7 +100,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 ```
 
 - **IPC:** the UI talks to Rust only through `window.__TAURI__.core.invoke` (wrapped in `ble.js` as `invoke`) and `event.listen` (`withGlobalTauri: true`). Every new capability is a `#[tauri::command]` in `lib.rs` and must be registered in `generate_handler!`.
-- **Commands** (current set): `open_link app_state save_profile create_profile rename_profile edit_profile delete_profile switch_profile sync_targets sync_config sync_now pick_sync_dir scan_library load_workout pick_zwo_dir save_activity reveal_in_library trash_in_library export_activity garmin_import pick_garmin_dir open_url garmin_status garmin_connect garmin_disconnect garmin_upload services_status service_connect service_disconnect service_upload service_manual keep_awake ble_scan ble_connect ble_disconnect ble_current trainer_set_power trainer_free_ride trainer_resume ctrl_scan ctrl_connect ctrl_disconnect ctrl_list update_status update_prefs update_check update_install`.
+- **Commands** (current set): `open_link app_state save_profile create_profile rename_profile edit_profile delete_profile switch_profile sync_targets sync_config sync_now pick_sync_dir scan_library load_workout pick_zwo_dir save_activity reveal_in_library trash_in_library export_activity garmin_import pick_garmin_dir open_url garmin_status garmin_connect garmin_disconnect garmin_upload services_status service_connect service_disconnect service_upload service_manual keep_awake ride_window ble_scan ble_connect ble_disconnect ble_current trainer_set_power trainer_free_ride trainer_resume ctrl_scan ctrl_connect ctrl_disconnect ctrl_list update_status update_prefs update_check update_install`.
 - **Events Rust → UI:**
   - `device-status {kind: trainer|hr|controller, connected, reconnecting, name, erg, count}`
   - `sensor {power?, cadence?, speed?, hr?}`
@@ -167,7 +170,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 - **During a ride** nothing may re-render or block: sync and profile switching are deferred (`if (ride) …`).
 - **Dev URL parameters:** `?sim=1` starts simulated devices, `?speed=N` fast-forwards time (recordings stay 1 Hz), `?profile=…` skips "Who's riding?".
 
-**CSS / UI:** follow [DESIGN.md](DESIGN.md). Only token colours (`var(--…)`), no hard-coded colours except zone and brand colours. Every change must work in **light and dark**, from 900 px up to full screen.
+**CSS / UI:** follow [DESIGN.md](DESIGN.md). Only token colours (`var(--…)`), no hard-coded colours except zone and brand colours. Every change must work in **light and dark**, from 900 px up to full screen (the optional Compact ride view supports 320 × 200).
 
 ## Testing changes
 
@@ -203,7 +206,8 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
   - `update_check` stores the `Update` in the `Pending` state; `update_install` takes it, downloads, verifies, installs and calls `app.restart()` (on Windows the installer quits the app first). A failed install puts it back so *Install & restart* can be retried.
   - The plugin's own JS commands are not enabled in `capabilities/default.json` on purpose: everything goes through our commands.
   - Bump the version only through the release workflow: the updater compares the manifest's `version` with `Cargo.toml`'s.
-- **Top bar:** it is identical on every screen, including during a ride. Don't add controls there; use Settings or a "⋯" menu.
+- **Top bar:** it is identical on every full-size screen, including during a ride. Don't add controls there; use Settings or a "⋯" menu. The one exception is the icon-only compact-view button (`#btn-compact`, before the rider avatar), which is hidden outside a ride. Optional Compact view hides it entirely; expand restores it unchanged.
+- **Compact ride view (`compact.js`, `ride_window.rs`):** same Ride and same native window. `CompactView.set(bool)` serializes IPC and changes CSS only after success; never call `Ride.build()` on resize. `ride_window` snapshots physical geometry once, lowers minimum size to 320 × 200 (initial 960 × 200 logical), and restores the normal 900 × 640 minimum/geometry/maximization. Failures roll back and allow retry; window positioning is best-effort so compositor restrictions do not block resizing. Native fullscreen must be exited first. Stop/finish/close expand before dialogs/routing. The compact section holds three mini panels (LIVE gauge, CURRENT ring, NEXT card) with their own `Gauge` / `ProgressRing` instances, filled by `Ride.render()` next to the full-view values; a `ResizeObserver` (`Ride.cObs`, disconnected in `close()`) writes `compactMode()` as `data-mode` / `data-short` / `data-tiny` / `data-narrow` / `data-xs` on `.compact-ride`, and CSS does the rest (gauges stay, text drops out first). Play/stop and "workout left" exist twice (heading row when short, footer otherwise). Only presentation changes; recording, ERG, test rules and controller/keyboard handling continue. Compact readouts use actual target/free/all-out mode, not test-estimated FTP. No persisted state or new Tauri plugin permissions.
 - **Cross-platform (macOS, Windows, Linux):**
   - **Wording:** never hard-code "Finder", "macOS Trash" or "this Mac" in the UI. Use `PLAT` in app.js (`PLAT.files`, `PLAT.trash`, `PLAT.machine`, `PLAT.onThisMachine`, `PLAT.bt`, `PLAT.emojiKey`); each is read from the dictionary (`mac.files`, `win.trash`, …) so it follows the UI language. `OS` is `mac` / `win` / `linux` and is also set as `<html data-os>`.
   - **Layout:** the 92 px traffic-light gap in the top bar applies only to `:root[data-os="mac"]`; Windows and Linux have a normal title bar (`titleBarStyle`, `hiddenTitle` and `trafficLightPosition` are macOS-only keys).

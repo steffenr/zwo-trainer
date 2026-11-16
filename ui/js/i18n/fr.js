@@ -1,5 +1,13 @@
 // French — same keys as en.js (missing keys fall back to English).
 export const fr = {
+  btnPause: 'Mettre en pause',
+  compactView: 'Vue compacte',
+  compactAutoPaused: 'Pause auto',
+  expandView: 'Revenir à la vue complète',
+  compactCurrent: 'En cours',
+  compactNext: 'Suivant',
+  compactIn: 'dans',
+  compactWorkoutLeft: 'Séance restante',
   couldNotSave: 'Enregistrement impossible : {e}',
   nWorkouts: { one: '{n} séance', other: '{n} séances' },
   nWeeks: { one: '{n} semaine', other: '{n} semaines' },
