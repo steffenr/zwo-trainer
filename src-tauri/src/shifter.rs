@@ -204,6 +204,8 @@ struct Conn {
     id: String,
     name: String,
     task: tokio::task::JoinHandle<()>,
+    /// Battery polling; stops when the controller is dropped.
+    _battery: Option<crate::battery::Watch>,
 }
 
 pub struct Controllers {
@@ -218,10 +220,10 @@ impl Controllers {
     }
 
     async fn status(&self) {
-        let names: Vec<String> = self.conns.lock().await.iter().map(|c| c.name.clone()).collect();
+        let (names, ids): (Vec<String>, Vec<String>) = self.conns.lock().await.iter().map(|c| (c.name.clone(), c.id.clone())).unzip();
         let _ = self.app.emit(
             "device-status",
-            json!({ "kind": "controller", "connected": !names.is_empty(), "name": names.join(" + "), "count": names.len() }),
+            json!({ "kind": "controller", "connected": !names.is_empty(), "name": names.join(" + "), "count": names.len(), "ids": ids }),
         );
     }
 
@@ -351,7 +353,8 @@ impl Controllers {
             me.conns.lock().await.retain(|c| c.id != pid);
             me.status().await;
         });
-        conns.push(Conn { periph, id: id.to_string(), name: name.clone(), task });
+        let battery = crate::battery::watch(self.app.clone(), periph.clone(), "controller", id.to_string());
+        conns.push(Conn { periph, id: id.to_string(), name: name.clone(), task, _battery: battery });
         drop(conns);
         self.status().await;
         Ok(json!({ "id": id, "name": name }))
@@ -400,7 +403,8 @@ impl Controllers {
             me.conns.lock().await.retain(|c| c.id != pid);
             me.status().await;
         });
-        conns.push(Conn { periph, id: id.to_string(), name: name.clone(), task });
+        let battery = crate::battery::watch(self.app.clone(), periph.clone(), "controller", id.to_string());
+        conns.push(Conn { periph, id: id.to_string(), name: name.clone(), task, _battery: battery });
         drop(conns);
         self.status().await;
         Ok(json!({ "id": id, "name": name }))

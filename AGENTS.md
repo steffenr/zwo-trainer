@@ -26,6 +26,7 @@ ui/                         frontend — static files served by Tauri (frontendD
   js/tests.js               FTP test protocols, evaluation, VO2max, test-workout detection
   js/vshift.js              virtual drivetrain + flat-road physics (virtual shifting)
   js/sound.js               countdown beep, rising/falling countdown notes and end chime (Web Audio)
+  js/battery.js             battery badge for the devices popover: state thresholds (ok ≥ 40, low 16–39, critical ≤ 15), lowest level, icon HTML
   sounds/                   power-up.mp3, power-down.mp3 (3 notes ~1 s apart), workout-done.mp3 (all CC0)
   js/ble.js                 device objects (Trainer, HeartRate, Controllers), simulator, Tauri event binding
   js/i18n/index.js          t(key, vars), plurals, locale detection, translateDom() for data-i18n attributes
@@ -44,6 +45,7 @@ src-tauri/
   src/ble.rs                btleplug: FTMS (ERG), Cycling Power, Heart Rate, reconnect
   src/shifter.rs            Zwift Ride / Click / Play protocol (RideOn handshake, button decoding), controller scan/connect
   src/obc.rs                OpenBikeControl protocol (button state, one action per press, App Information)
+  src/battery.rs            battery level of connected devices (Battery Service 0x180F, read every 2 min, event `battery`)
   tauri.conf.json           window, CSP, bundle, plugins.updater (pubkey, endpoint); Info.plist (Bluetooth usage, App Nap off)
   tauri.updater.conf.json   CI-only overlay: createUpdaterArtifacts (needs TAURI_SIGNING_PRIVATE_KEY)
   capabilities/default.json Tauri permissions (keep minimal)
@@ -72,6 +74,7 @@ ZWO_TEST_DIR=~/Downloads/zwo cargo test scan_real_library -- --nocapture   # par
 node --check ui/js/app.js                            # quick syntax check for edited JS modules
 node scripts/check-i18n.mjs                          # translations complete and consistent (en / de / fr)
 node --test scripts/compact-ride.test.mjs             # compact/full transition lifecycle
+node --test scripts/battery.test.mjs                   # battery state, lowest level, badge
 node scripts/sync-version.mjs [x.y.z]                # print / set the app version
 ```
 
@@ -102,7 +105,8 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 - **IPC:** the UI talks to Rust only through `window.__TAURI__.core.invoke` (wrapped in `ble.js` as `invoke`) and `event.listen` (`withGlobalTauri: true`). Every new capability is a `#[tauri::command]` in `lib.rs` and must be registered in `generate_handler!`.
 - **Commands** (current set): `open_link app_state save_profile create_profile rename_profile edit_profile delete_profile switch_profile sync_targets sync_config sync_now pick_sync_dir scan_library load_workout pick_zwo_dir save_activity reveal_in_library trash_in_library export_activity garmin_import pick_garmin_dir open_url garmin_status garmin_connect garmin_disconnect garmin_upload services_status service_connect service_disconnect service_upload service_manual keep_awake ride_window ble_scan ble_connect ble_disconnect ble_current trainer_set_power trainer_free_ride trainer_resume ctrl_scan ctrl_connect ctrl_disconnect ctrl_list update_status update_prefs update_check update_install`.
 - **Events Rust → UI:**
-  - `device-status {kind: trainer|hr|controller, connected, reconnecting, name, erg, count}`
+  - `device-status {kind: trainer|hr|controller, connected, reconnecting, name, erg, count, ids}` (`ids`: connected controller ids)
+  - `battery {kind: trainer|hr|controller, id, level}` (0–100; only devices with a readable Battery Level characteristic; the UI clears it when the device disconnects and shows it only in the devices popover)
   - `sensor {power?, cadence?, speed?, hr?}`
   - `button {button, device, erg?}` (`erg`: OpenBikeControl's pick for ERG segments)
   - `ctrl-raw {device, hex}`

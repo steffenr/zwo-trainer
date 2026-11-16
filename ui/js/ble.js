@@ -130,9 +130,10 @@ export class Controllers extends Emitter {
 }
 
 /** Wire Rust events to the device objects. Sensor data from real devices goes to `onData`. */
-export async function bindNative(trainer, hrm, onData, ctrls, onButton) {
+export async function bindNative(trainer, hrm, onData, ctrls, onButton, onBattery) {
   await listen('device-status', (s) => (s.kind === 'controller' ? ctrls?.onStatus(s) : (s.kind === 'trainer' ? trainer : hrm).onStatus(s)));
   await listen('button', (e) => onButton?.(e.button, e.device, e.erg));
+  await listen('battery', (e) => onBattery?.(e));
   await listen('ctrl-raw', (e) => ctrls?.emit('raw', e));
   await listen('sensor', (d) => {
     // ignore real readings for a kind that is being simulated
