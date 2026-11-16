@@ -231,6 +231,7 @@ impl Controllers {
     /// and OpenBikeControl controllers (they advertise the OpenBikeControl service).
     pub async fn scan(&self, secs: u64) -> Result<Vec<Found>, String> {
         let adapter = self.ble.adapter().await?;
+        let _gate = self.ble.scan_gate.lock().await;
         adapter.start_scan(ScanFilter::default()).await.map_err(|e| e.to_string())?;
         tokio::time::sleep(Duration::from_secs(secs.clamp(1, 15))).await;
         let _ = adapter.stop_scan().await;
@@ -264,15 +265,20 @@ impl Controllers {
         let adapter = self.ble.adapter().await?;
         let mut periph = adapter.peripherals().await.ok().and_then(|ps| ps.into_iter().find(|p| p.id().to_string() == id));
         if periph.is_none() {
-            adapter.start_scan(ScanFilter::default()).await.map_err(|e| e.to_string())?;
-            for _ in 0..25 {
-                tokio::time::sleep(Duration::from_millis(400)).await;
-                periph = adapter.peripherals().await.ok().and_then(|ps| ps.into_iter().find(|p| p.id().to_string() == id));
-                if periph.is_some() {
-                    break;
+            let _gate = self.ble.scan_gate.lock().await;
+            // another scan may have found it while we waited for the gate
+            periph = adapter.peripherals().await.ok().and_then(|ps| ps.into_iter().find(|p| p.id().to_string() == id));
+            if periph.is_none() {
+                adapter.start_scan(ScanFilter::default()).await.map_err(|e| e.to_string())?;
+                for _ in 0..25 {
+                    tokio::time::sleep(Duration::from_millis(400)).await;
+                    periph = adapter.peripherals().await.ok().and_then(|ps| ps.into_iter().find(|p| p.id().to_string() == id));
+                    if periph.is_some() {
+                        break;
+                    }
                 }
+                let _ = adapter.stop_scan().await;
             }
-            let _ = adapter.stop_scan().await;
         }
         let periph = periph.ok_or("Controller not found — press a button to wake it")?;
         let ty = periph.properties().await.ok().flatten().and_then(|p| {

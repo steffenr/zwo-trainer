@@ -99,11 +99,14 @@ pub struct Ble {
     adapter: OnceCell<Adapter>,
     trainer: Mutex<Option<Conn>>,
     hr: Mutex<Option<Conn>>,
+    /// One scan at a time: every scan ends with `stop_scan()` and a new `start_scan()` replaces the
+    /// previous filter, so concurrent scans (trainer + HR + controllers at app start) cancel each other.
+    pub(crate) scan_gate: Mutex<()>,
 }
 
 impl Ble {
     pub fn new(app: AppHandle) -> Arc<Self> {
-        Arc::new(Self { app, adapter: OnceCell::new(), trainer: Mutex::new(None), hr: Mutex::new(None) })
+        Arc::new(Self { app, adapter: OnceCell::new(), trainer: Mutex::new(None), hr: Mutex::new(None), scan_gate: Mutex::new(()) })
     }
 
     fn slot(&self, kind: Kind) -> &Mutex<Option<Conn>> {
@@ -141,6 +144,7 @@ impl Ble {
     pub async fn scan(self: &Arc<Self>, kind: Kind, secs: u64) -> Result<Vec<Found>, String> {
         let adapter = self.adapter().await?;
         let services = kind.services();
+        let _gate = self.scan_gate.lock().await;
         adapter.start_scan(ScanFilter { services: services.clone() }).await.map_err(|e| e.to_string())?;
         tokio::time::sleep(Duration::from_secs(secs.clamp(1, 15))).await;
         let _ = adapter.stop_scan().await;
@@ -162,6 +166,11 @@ impl Ble {
         let lookup = || async {
             adapter.peripherals().await.ok().and_then(|ps| ps.into_iter().find(|p| p.id().to_string() == id))
         };
+        if let Some(p) = lookup().await {
+            return Ok(p);
+        }
+        // wait for other scans to finish; they may already have discovered this device
+        let _gate = self.scan_gate.lock().await;
         if let Some(p) = lookup().await {
             return Ok(p);
         }
