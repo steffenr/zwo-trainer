@@ -368,6 +368,7 @@ function bindChrome() {
   window.addEventListener('resize', syncTopbarHeight);
   $('#btn-devices').onclick = (e) => devicesMenu(e.currentTarget);
   $('#btn-settings').onclick = () => openSettings();
+  $('#btn-compact').onclick = () => ride?.compact.set(true);
   $('#btn-profile').onclick = profileMenu;
   $('#mode-switch').onclick = (e) => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); };
   $$('.chip[data-device]').forEach((c) => (c.onclick = () => deviceDialog(c.dataset.device)));
@@ -1062,7 +1063,6 @@ function bindActions(root) {
       }
       case 'more': return moreMenu(el, el.dataset.file);
       case 'menu': return openMenu(el);
-      case 'ride-compact': return ride?.compact.set(true);
       case 'md-link': return invoke('open_link', { url: el.dataset.link }).catch((err) => toast(String(err)));
       case 'desc-toggle': {
         const box = el.closest('.plan-desc');
@@ -1979,6 +1979,7 @@ class Ride {
     rt.innerHTML = `${this.test ? `<span class="badge test">${t('ftpTest')}</span>` : ''}${plan ? `<span class="badge">${esc(plan.name)}${this.info?.week ? ` · ${t('weekDayCompact', { w: this.info.week, d: this.info.day })}` : ''}</span>` : this.test ? '' : `<span class="badge muted">${t('workout')}</span>`}
       <h1 title="${esc(this.info?.title || this.w.name)}">${esc(this.info?.title || this.w.name)}</h1><span class="erg" id="erg-state"></span>`;
     rt.hidden = false;
+    $('#btn-compact').hidden = false;
     r.innerHTML = `
       <div class="ride-top">
         <section class="panel live">
@@ -2045,7 +2046,6 @@ class Ride {
           <button class="ctl int-b" data-int="-1" title="${t('intDownTitle')}" aria-label="${t('btnIntDown')}">−</button>
           <button class="ctl int-b" data-int="1" title="${t('intUpTitle')}" aria-label="${t('btnIntUp')}">+</button>
         </div>
-        ${menuBtn(`<button data-act="ride-compact">${t('compactView')}</button>`)}
       </div>
       <section class="compact-ride" aria-label="${t('compactView')}">
         <header class="compact-head" data-tauri-drag-region>
@@ -2688,6 +2688,7 @@ class Ride {
   }
 
   async finish(completed) {
+    $('#btn-compact').hidden = true;
     clearInterval(this.loop);
     this.running = false;
     // Saving/results must still proceed if the OS rejects a window resize.
@@ -2848,6 +2849,7 @@ class Ride {
     $('#ride').classList.remove('paused');
     document.body.classList.remove('riding');
     $('#ride-title').hidden = true;
+    $('#btn-compact').hidden = true;
     $('#ride-title').innerHTML = '';
     ride = null;
     route();
