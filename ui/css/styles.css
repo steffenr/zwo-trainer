@@ -313,7 +313,7 @@ body.riding .brand { pointer-events: none; }
 .progress-svg .g-target { stroke-width: 12; transition: d .25s linear; }
 .ring-center b { font-size: 40px; line-height: 1.05; font-family: var(--num); font-weight: 750; }
 .ring-center b.range { font-size: 30px; }
-.ring-center small { font-size: 19px; color: var(--text); font-variant-numeric: tabular-nums; }
+.ring-center small { font-size: 19px; color: var(--text); font-variant-numeric: tabular-nums; max-width: 66%; line-height: 1.2; text-wrap: balance; } /* stays inside the ring, long texts wrap */
 .ring-center .k { min-height: 15px; }
 @keyframes pulse { 50% { opacity: .55; } }
 
