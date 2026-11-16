@@ -25,3 +25,16 @@ export class CompactView {
     return this.pending;
   }
 }
+
+// Size tiers for the compact ride panels (see docs/superpowers/specs/2026-11-16-compact-three-panels-design.md).
+// mode: w/n = wide/narrow (560 px), t/s = tall/short. short: controls move into the heading row.
+export function compactMode(width, height) {
+  const wide = width >= 560;
+  return {
+    mode: wide ? (height < 260 ? 'ws' : 'wt') : (height < 300 ? 'ns' : 'nt'),
+    short: height < 240,
+    tiny: width < 260 || height < 170,
+    narrow: width < 420,
+    xs: width < 300,
+  };
+}

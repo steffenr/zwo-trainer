@@ -82,3 +82,32 @@ test('failed exit keeps the compact view available for retry', async () => {
   assert.equal(await f.view.set(false), true);
   assert.equal(f.view.active, false);
 });
+
+import { compactMode } from '../ui/js/compact.js';
+
+test('compactMode: wide tiers', () => {
+  assert.equal(compactMode(960, 200).mode, 'ws');
+  assert.equal(compactMode(900, 640).mode, 'wt');
+  assert.equal(compactMode(560, 259).mode, 'ws');
+  assert.equal(compactMode(560, 260).mode, 'wt');
+});
+
+test('compactMode: narrow tiers', () => {
+  assert.equal(compactMode(320, 200).mode, 'ns');
+  assert.equal(compactMode(240, 520).mode, 'nt');
+  assert.equal(compactMode(559, 299).mode, 'ns');
+  assert.equal(compactMode(559, 300).mode, 'nt');
+});
+
+test('compactMode: flag boundaries', () => {
+  assert.equal(compactMode(600, 239).short, true);
+  assert.equal(compactMode(600, 240).short, false);
+  assert.equal(compactMode(259, 400).tiny, true);
+  assert.equal(compactMode(260, 400).tiny, false);
+  assert.equal(compactMode(600, 169).tiny, true);
+  assert.equal(compactMode(600, 170).tiny, false);
+  assert.equal(compactMode(419, 400).narrow, true);
+  assert.equal(compactMode(420, 400).narrow, false);
+  assert.equal(compactMode(299, 400).xs, true);
+  assert.equal(compactMode(300, 400).xs, false);
+});
