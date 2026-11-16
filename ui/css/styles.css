@@ -319,7 +319,9 @@ body.riding .brand { pointer-events: none; }
 
 @keyframes fadein { from { opacity: 0; transform: translateY(4px); } }
 
-.ride-diagram { display: flex; flex-direction: column; min-height: 220px; padding: 12px 14px 8px; }
+/* min-height must cover the content (padding + clock row + stage + axis labels), otherwise the 1fr
+   grid row shrinks below it on short windows and the chart paints over the controls (#22) */
+.ride-diagram { display: flex; flex-direction: column; min-height: 290px; padding: 12px 14px 8px; }
 .dg-times { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 6px; }
 /* workout clock: grows with the window (≈30 px at 1400 px wide, ≈48 px at 2560 px / full screen) */
 .wt-time { display: flex; align-items: baseline; gap: 10px; font-variant-numeric: tabular-nums; line-height: 1; }
@@ -348,6 +350,20 @@ body.riding .brand { pointer-events: none; }
 .ctl.play .i-pause { display: none; }
 .ctl.play.is-running .i-play { display: none; }
 .ctl.play.is-running .i-pause { display: block; }
+/* 13" laptops and other short windows: compact controls and a shorter chart instead of overlap (#22).
+   Must stay below the base .ctl / .ride-controls / .int-group rules so it wins the cascade. */
+@media (max-height: 900px) {
+  .ride { gap: 8px; padding: 8px 14px 10px; }
+  .ride-diagram { min-height: 200px; }
+  .dg-mount .dg-stage { min-height: 90px; }
+  .ride-controls { gap: 10px; }
+  .ctl { width: 40px; height: 40px; }
+  .ctl svg { width: 19px; height: 19px; }
+  .ctl.play { width: 48px; height: 48px; }
+  .ctl.int-b { width: 34px; height: 34px; font-size: 17px; }
+  .int-group { gap: 8px; margin-left: 6px; padding-left: 12px; }
+  .int-read b { font-size: 17px; }
+}
 .ride.paused .ride-top, .ride.paused .ride-diagram { opacity: .6; }
 
 .ready { position: absolute; left: 50%; bottom: 104px; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--accent); border-radius: 14px; padding: 12px 20px; box-shadow: var(--shadow-lg); }
