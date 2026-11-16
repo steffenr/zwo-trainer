@@ -15,7 +15,7 @@ use serde_json::{json, Map, Value};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
-use tokio::sync::{Mutex, OnceCell};
+use tokio::sync::{broadcast, Mutex, OnceCell};
 use uuid::Uuid;
 
 const FTMS: Uuid = uuid_from_u16(0x1826);
@@ -102,11 +102,37 @@ pub struct Ble {
     /// One scan at a time: every scan ends with `stop_scan()` and a new `start_scan()` replaces the
     /// previous filter, so concurrent scans (trainer + HR + controllers at app start) cancel each other.
     pub(crate) scan_gate: Mutex<()>,
+    /// Ids of peripherals the adapter reported as disconnected. Controllers listen to this because
+    /// their notification stream doesn't end when the device is switched off (e.g. on macOS).
+    dropped: broadcast::Sender<String>,
+}
+
+/// Wait until the adapter reports `id` as disconnected (never returns if the channel stays quiet).
+pub(crate) async fn wait_dropped(rx: &mut broadcast::Receiver<String>, id: &str) {
+    loop {
+        match rx.recv().await {
+            Ok(got) if got == id => return,
+            Err(broadcast::error::RecvError::Closed) => return,
+            _ => {}
+        }
+    }
 }
 
 impl Ble {
     pub fn new(app: AppHandle) -> Arc<Self> {
-        Arc::new(Self { app, adapter: OnceCell::new(), trainer: Mutex::new(None), hr: Mutex::new(None), scan_gate: Mutex::new(()) })
+        Arc::new(Self {
+            app,
+            adapter: OnceCell::new(),
+            trainer: Mutex::new(None),
+            hr: Mutex::new(None),
+            scan_gate: Mutex::new(()),
+            dropped: broadcast::channel(16).0,
+        })
+    }
+
+    /// Subscribe before starting to watch a device, so a disconnect right after connecting isn't missed.
+    pub(crate) fn subscribe_dropped(&self) -> broadcast::Receiver<String> {
+        self.dropped.subscribe()
     }
 
     fn slot(&self, kind: Kind) -> &Mutex<Option<Conn>> {
@@ -329,6 +355,7 @@ impl Ble {
             while let Some(ev) = events.next().await {
                 if let CentralEvent::DeviceDisconnected(pid) = ev {
                     let pid = pid.to_string();
+                    let _ = self.dropped.send(pid.clone());
                     for kind in [Kind::Trainer, Kind::Hr] {
                         let dropped = {
                             let slot = self.slot(kind).lock().await;
@@ -461,6 +488,18 @@ pub fn parse_hr(v: &[u8]) -> Option<Map<String, Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn wait_dropped_ignores_other_devices_and_returns_for_its_own() {
+        let (tx, mut rx) = broadcast::channel(16);
+        tx.send("other".to_string()).unwrap();
+        tx.send("mine".to_string()).unwrap();
+        tokio::time::timeout(Duration::from_secs(1), wait_dropped(&mut rx, "mine")).await.expect("returns once its id is reported");
+
+        let (tx2, mut rx2) = broadcast::channel(16);
+        tx2.send("other".to_string()).unwrap();
+        assert!(tokio::time::timeout(Duration::from_millis(100), wait_dropped(&mut rx2, "mine")).await.is_err(), "other ids don't end the watch");
+    }
 
     #[test]
     fn bike_data() {
