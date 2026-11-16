@@ -2,6 +2,7 @@ import { CompactView, compactMode } from './compact.js';
 import { powerAt, segmentAt, estimateTss } from './zwo.js';
 import { ZONES, FREE_COLOR, zoneOf, zoneColor, zoneInk, fmtTime, fmtDur, miniProfile, Diagram, Gauge, ProgressRing, motionOK } from './render.js';
 import { Trainer, HeartRate, Controllers, bindNative, invoke, listen } from './ble.js';
+import { batteryBadge, lowestLevel } from './battery.js';
 import { renderMarkdown, markdownSummary, markdownPlain, smartTrim } from './markdown.js';
 import { DEFAULT_SHIFTING, gearTable, virtualSpeed, targetWatts } from './vshift.js';
 import { PROTOCOLS, protocolById, isTestWorkout, evaluateGeneric, classifyTest, prepareTestWorkout, vo2max } from './tests.js';
@@ -143,7 +144,7 @@ async function boot() {
   applyAppState(a);
   bindChrome();
   if (syncOn()) await Promise.race([runSync(true), new Promise((r) => setTimeout(r, 4000))]);
-  await bindNative(trainer, hrm, onSensor, ctrls, onButton);
+  await bindNative(trainer, hrm, onSensor, ctrls, onButton, setBattery);
   window.addEventListener('hashchange', route);
   if (profiles.length > 1 && !params.get('profile')) await whoIsRiding();
   await loadLibrary();
@@ -436,10 +437,21 @@ const DEVICE_KINDS = [
   ['controller', 'devShifter', '<svg viewBox="0 0 24 24"><path d="M8 3v18M8 3 4 7M8 3l4 4M16 21V3M16 21l-4-4M16 21l4-4"/></svg>'],
 ];
 const devState = { trainer: {}, hr: {}, controller: {} };
+// battery levels per kind and device id (controllers can be several); only shown in the devices popover
+const battery = { trainer: {}, hr: {}, controller: {} };
+
+function setBattery(e) {
+  if (!battery[e.kind]) return;
+  battery[e.kind][e.id] = e.level;
+  if ($('#popover.dev-pop')) renderDevicesMenu($('#popover.dev-pop'));
+}
 
 function setDev(kind, s) {
   const was = devState[kind] || {};
   devState[kind] = { connected: !!s.connected, reconnecting: !!s.reconnecting, name: s.name || '' };
+  // a device that is gone has no battery; with several controllers keep only the ones still connected
+  if (!s.connected) battery[kind] = {};
+  else if (kind === 'controller' && s.ids) battery[kind] = Object.fromEntries(Object.entries(battery[kind]).filter(([id]) => s.ids.includes(id)));
   const dot = $(`#btn-devices .dev-dots i[data-k="${kind}"]`);
   dot.className = s.connected ? 'on' : s.reconnecting ? 'warn' : '';
   if (motionOK() && s.connected && !was.connected) restartAnim(dot, 'pop');
@@ -457,9 +469,11 @@ function renderDevicesMenu(pop) {
   const saved = state.settings.devices || {};
   pop.innerHTML = `<div class="pop-title">${t('devices')}</div>${DEVICE_KINDS.map(([k, label, icon]) => {
     const d = devState[k];
+    const level = d.connected ? lowestLevel(battery[k]) : null;
+    const batt = batteryBadge(level, t('batteryPct', { n: level }));
     const savedName = k === 'controller' ? (saved.controllers || []).map((c) => c.name).join(' + ') : saved[k]?.name;
     const status = d.connected ? `<span class="ok-text">${esc(d.name || t('connected'))}</span>` : d.reconnecting ? `<span class="warn-text">${d.name ? t('connectingName', { name: esc(d.name) }) : t('connectingDots')}</span>` : `<span class="muted">${savedName ? t('savedOff', { name: esc(savedName) }) : t('notPaired')}</span>`;
-    return `<button class="dev-row" data-dev="${k}"><span class="dev-ico ${d.connected ? 'on' : d.reconnecting ? 'warn' : ''}">${icon}</span><span class="dev-txt"><b>${t(label)}</b>${status}</span><span class="dev-act">${d.connected ? t('change') : t('connect')}</span></button>`;
+    return `<button class="dev-row" data-dev="${k}"><span class="dev-ico ${d.connected ? 'on' : d.reconnecting ? 'warn' : ''}">${icon}</span><span class="dev-txt"><span class="dev-head"><b>${t(label)}</b>${batt}</span>${status}</span><span class="dev-act">${d.connected ? t('change') : t('connect')}</span></button>`;
   }).join('')}`;
 }
 

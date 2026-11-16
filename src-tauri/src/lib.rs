@@ -1,3 +1,4 @@
+mod battery;
 mod ble;
 mod fit;
 mod garmin;

@@ -5,6 +5,7 @@
 //! Events emitted to the UI:
 //!   "sensor"        { power?, cadence?, speed?, hr? }
 //!   "device-status" { kind, connected, name, erg, reconnecting }
+//!   "battery"       { kind, id, level }   (see battery.rs)
 
 use btleplug::api::{bleuuid::uuid_from_u16, Central, CentralEvent, Characteristic, Manager as _, Peripheral as _, ScanFilter, WriteType};
 use btleplug::platform::{Adapter, Manager, Peripheral};
@@ -75,6 +76,8 @@ struct Conn {
     last_target: Option<Target>,
     manual: bool,
     task: tokio::task::JoinHandle<()>,
+    /// Battery polling; stops when the connection is dropped.
+    _battery: Option<crate::battery::Watch>,
 }
 
 impl Conn {
@@ -256,7 +259,8 @@ impl Ble {
             }
         });
 
-        Ok(Conn { periph, id, name, mode, control, last_target: None, manual: false, task })
+        let battery = crate::battery::watch(self.app.clone(), periph.clone(), kind.as_str(), id.clone());
+        Ok(Conn { periph, id, name, mode, control, last_target: None, manual: false, task, _battery: battery })
     }
 
     pub async fn disconnect(&self, kind: Kind) {

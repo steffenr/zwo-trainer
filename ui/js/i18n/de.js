@@ -77,6 +77,7 @@ export const de = {
   devShifter: 'Controller',
   devicesOn: 'Geräte — {n} verbunden',
   devicesNone: 'Geräte — keins verbunden',
+  batteryPct: 'Batterie {n} %',
   devices: 'Geräte',
   connected: 'verbunden',
   connectingName: 'verbinde {name}…',

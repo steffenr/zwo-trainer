@@ -77,6 +77,7 @@ export const fr = {
   devShifter: 'Manette',
   devicesOn: { one: 'Appareils — {n} connecté', other: 'Appareils — {n} connectés' },
   devicesNone: 'Appareils — aucun connecté',
+  batteryPct: 'Batterie {n}\u202f%',
   devices: 'Appareils',
   connected: 'connecté',
   connectingName: 'connexion à {name}…',

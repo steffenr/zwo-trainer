@@ -107,7 +107,7 @@ On the first Bluetooth search macOS asks for Bluetooth access. If you declined, 
 |---|---|---|
 | Logo · **Plans / Workouts / FTP Tests** | | **Devices** · **Ride history** · **Settings** · **Rider avatar** |
 
-- **Devices** (Bluetooth icon): three small dots show trainer, heart rate and shifter. Green means connected, amber means connecting, grey means off. Click it for a menu with each device and *Connect / Change*.
+- **Devices** (Bluetooth icon): three small dots show trainer, heart rate and shifter. Green means connected, amber means connecting, grey means off. Click it for a menu with each device and *Connect / Change*. Click it to see each device; devices that report their **battery** (most heart-rate straps and controllers, a few trainers) show a small battery icon with the percentage there: green from 40 %, amber from 16 %, red at 15 % or less, so you know when to charge or change the battery. Devices that do not report it show nothing.
 - **Ride history** (calendar with a check mark): every ride, with uploads and FIT export.
 - **Settings** (gear): rider data, app preferences (including light/dark appearance) and connections.
 - **Avatar**: switch, add or edit riders.

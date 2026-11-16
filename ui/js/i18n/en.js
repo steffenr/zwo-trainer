@@ -78,6 +78,7 @@ export const en = {
   devShifter: 'Shifter',
   devicesOn: 'Devices — {n} connected',
   devicesNone: 'Devices — none connected',
+  batteryPct: 'Battery {n}%',
   devices: 'Devices',
   connected: 'connected',
   connectingName: 'connecting {name}…',
