@@ -57,6 +57,17 @@ impl Reply {
     }
 }
 
+/// Whether to warn "another app may control the trainer" after a reply to a target:
+/// a refusal raises it, an accepted target clears it, anything else leaves it as it was.
+/// The warning never turns ERG off (some firmware refuses yet follows targets).
+fn denied_after(denied: bool, reply: Reply) -> bool {
+    match reply {
+        Reply::Denied => true,
+        Reply::Success => false,
+        Reply::Failed(_) | Reply::Silent => denied,
+    }
+}
+
 /// FTMS Control Point response indication: `[0x80, request op code, result code, …]`.
 pub fn parse_cp_response(v: &[u8]) -> Option<(u8, u8)> {
     match v {
@@ -119,7 +130,7 @@ struct Conn {
     replies: mpsc::UnboundedReceiver<(u8, u8)>,
     /// The trainer answered "request control" while connecting, so later replies are worth waiting for.
     acks: bool,
-    /// The trainer refused control ("control not permitted"): connected for power only.
+    /// The trainer refused control ("control not permitted"): ERG stays on, the UI warns.
     denied: bool,
     /// Battery polling; stops when the connection is dropped.
     _battery: Option<crate::battery::Watch>,
@@ -156,13 +167,14 @@ impl Conn {
             eprintln!("FTMS control point unavailable — power only");
             return;
         }
+        // Any answer keeps ERG: a refusal only raises the `denied` warning, because some firmware
+        // answers "not permitted" and follows targets anyway. Only a failed write means power only.
         match self.command(&cp, &[OP_REQUEST_CONTROL], Some(REPLY_CONNECT)).await {
             Ok(Reply::Denied) => {
-                eprintln!("FTMS control not permitted — another app controls the trainer; power only");
+                eprintln!("FTMS control not permitted — another app may control the trainer; trying ERG anyway");
                 self.denied = true;
-                return;
+                self.acks = true;
             }
-            // other result codes: keep trying ERG as before; some trainers follow targets anyway
             Ok(Reply::Failed(code)) => {
                 eprintln!("FTMS request control answered {code:#04x} — trying ERG anyway");
                 self.acks = true;
@@ -175,12 +187,14 @@ impl Conn {
         }
         let wait = self.acks.then_some(REPLY_CONNECT);
         match self.command(&cp, &[OP_START], wait).await {
-            Ok(Reply::Denied) => {
-                eprintln!("FTMS start not permitted — power only");
-                self.denied = true;
+            Ok(reply) => {
+                if reply == Reply::Denied {
+                    eprintln!("FTMS start not permitted — trying ERG anyway");
+                    self.denied = true;
+                }
+                // some trainers reject "start" (not supported) but follow targets anyway
+                self.control = Some(cp);
             }
-            // some trainers reject "start" (not supported) but follow targets anyway
-            Ok(_) => self.control = Some(cp),
             Err(e) => eprintln!("FTMS start failed: {e} — power only"),
         }
     }
@@ -450,21 +464,20 @@ impl Ble {
             }
         }
         match reply {
-            Ok(Reply::Denied) => {
-                eprintln!("FTMS control not permitted — another app controls the trainer; power only");
-                c.control = None;
-                c.denied = true;
-                self.conn_status(Kind::Trainer, c);
-                Ok(())
-            }
-            Ok(Reply::Failed(code)) => {
-                // invalid parameter / not supported: resending the same bytes won't help
-                eprintln!("FTMS target rejected (result {code:#04x})");
+            Ok(reply) => {
+                match reply {
+                    Reply::Denied => eprintln!("FTMS target not permitted — another app may control the trainer"),
+                    // invalid parameter / not supported: resending the same bytes won't help
+                    Reply::Failed(code) => eprintln!("FTMS target rejected (result {code:#04x})"),
+                    _ => {}
+                }
+                // ERG stays on either way; a refusal is not resent for the same target
                 c.last_target = Some(target);
-                Ok(())
-            }
-            Ok(_) => {
-                c.last_target = Some(target);
+                let denied = denied_after(c.denied, reply);
+                if denied != c.denied {
+                    c.denied = denied;
+                    self.conn_status(Kind::Trainer, c);
+                }
                 Ok(())
             }
             Err(e) => {
@@ -664,6 +677,16 @@ mod tests {
         assert_eq!(Reply::from_result(0x02), Reply::Failed(0x02)); // op code not supported
         assert_eq!(Reply::from_result(0x03), Reply::Failed(0x03)); // invalid parameter
         assert_eq!(Reply::from_result(0x04), Reply::Failed(0x04)); // operation failed
+    }
+
+    #[test]
+    fn denied_warning_never_depends_on_silence() {
+        assert!(denied_after(false, Reply::Denied), "a refusal raises the warning");
+        assert!(!denied_after(true, Reply::Success), "an accepted target clears it");
+        assert!(denied_after(true, Reply::Silent), "no reply keeps it");
+        assert!(!denied_after(false, Reply::Silent));
+        assert!(denied_after(true, Reply::Failed(0x03)), "other errors keep it");
+        assert!(!denied_after(false, Reply::Failed(0x03)));
     }
 
     #[tokio::test]
