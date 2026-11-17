@@ -373,7 +373,13 @@ function bindChrome() {
   $('#btn-profile').onclick = profileMenu;
   $('#mode-switch').onclick = (e) => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); };
   $$('.chip[data-device]').forEach((c) => (c.onclick = () => deviceDialog(c.dataset.device)));
-  trainer.on('status', (s) => { setDev('trainer', s); ride?.onDeviceStatus(); });
+  let ergDenied = false; // tell the rider once when the trainer refuses ERG control (auto-connect, reconnect, mid-ride)
+  trainer.on('status', (s) => {
+    setDev('trainer', s);
+    ride?.onDeviceStatus();
+    if (s.ergDenied && !ergDenied) toast(t('ergDenied'));
+    ergDenied = !!s.ergDenied;
+  });
   trainer.on('data', onSensor);
   hrm.on('status', (s) => setDev('hr', s));
   hrm.on('data', onSensor);
@@ -1721,7 +1727,7 @@ function deviceDialog(kind) {
   const label = kind === 'trainer' ? t('devTrainer') : t('hrMonitor');
   const saved = state.settings.devices?.[kind];
   if (dev.connected || dev.reconnecting) {
-    openModal(`<h2>${label}</h2><p>${t(dev.reconnecting ? 'reconnectingTo' : 'connectedTo', { name: `<b>${esc(dev.name)}</b>` })}${kind === 'trainer' && dev.connected ? ` · ${trainer.canErg ? t('ergActive') : t('powerOnlyNoErg')}` : ''}.</p>
+    openModal(`<h2>${label}</h2><p>${t(dev.reconnecting ? 'reconnectingTo' : 'connectedTo', { name: `<b>${esc(dev.name)}</b>` })}${kind === 'trainer' && dev.connected ? ` · ${trainer.canErg ? t('ergActive') : trainer.ergDenied ? t('powerOnlyDenied') : t('powerOnlyNoErg')}` : ''}.</p>
       <div class="modal-actions"><button class="btn ghost" data-a="forget">${t('forgetDevice')}</button><button class="btn ghost" data-a="close">${t('close')}</button><button class="btn danger" data-a="disc">${t('disconnect')}</button></div>`, 'small');
   } else {
     openModal(`<h2>${label}</h2>
@@ -1750,7 +1756,8 @@ function deviceDialog(kind) {
         state.settings.devices = { ...(state.settings.devices || {}), [kind]: { id: b.dataset.id, name: info.name } };
         await api.saveState();
         closeModal();
-        toast(`${t('nameConnected', { name: info.name })}${kind === 'trainer' ? ` · ${info.erg ? t('ergReady') : t('powerOnly')}` : ''}`);
+        if (kind === 'trainer' && info.ergDenied) toast(t('ergDenied'));
+        else toast(`${t('nameConnected', { name: info.name })}${kind === 'trainer' ? ` · ${info.erg ? t('ergReady') : t('powerOnly')}` : ''}`);
       } catch (err) {
         list.innerHTML = `<p class="warn-text">${t('connectionFailed', { e: esc(String(err)) })}</p>`;
       }

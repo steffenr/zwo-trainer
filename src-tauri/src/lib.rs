@@ -541,14 +541,12 @@ async fn ble_current(app: State<'_, App>, kind: String) -> Res<Option<Value>> {
 
 #[tauri::command]
 async fn trainer_set_power(app: State<'_, App>, watts: i32) -> Res<()> {
-    app.ble.set_power(watts).await;
-    Ok(())
+    app.ble.set_power(watts).await
 }
 
 #[tauri::command]
 async fn trainer_free_ride(app: State<'_, App>) -> Res<()> {
-    app.ble.free_ride().await;
-    Ok(())
+    app.ble.free_ride().await
 }
 
 #[tauri::command]
