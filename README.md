@@ -372,7 +372,7 @@ Nothing is sent anywhere except what you enable: uploads to the platforms you co
 | Problem | Try |
 |---|---|
 | Trainer / HR not found | Close Zwift, TrainerRoad and other training apps; wake the device (pedal / wet the strap); check Bluetooth permission for zwoTrainer (macOS), that Bluetooth is on (Windows) or that `bluetoothd` is running (Linux). |
-| ERG doesn't react | Make sure the trainer is connected as **trainer** (FTMS), not as a power meter; "Power only" in the ride header means no ERG. |
+| ERG doesn't react | Make sure the trainer is connected as **trainer** (FTMS), not as a power meter; "Power only" in the ride header means no ERG. If zwoTrainer says another app controls the trainer, close Zwift, the Zwift Companion app and other training apps (also on your phone or tablet), then connect the trainer again. |
 | Zwift Ride buttons do nothing | Connect only the **left** controller; check the *button test* in the Shifter dialog; update the Ride firmware in the Zwift Companion app. |
 | Zwift Click stops after ~1 min | Unlock it once in the Zwift phone app (see above). |
 | A workout is missing | It must be a `.zwo` file inside the workouts folder; use **Settings → App → Rescan**. |

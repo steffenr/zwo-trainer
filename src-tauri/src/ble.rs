@@ -15,7 +15,7 @@ use serde_json::{json, Map, Value};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
-use tokio::sync::{broadcast, Mutex, OnceCell};
+use tokio::sync::{broadcast, mpsc, Mutex, OnceCell};
 use uuid::Uuid;
 
 const FTMS: Uuid = uuid_from_u16(0x1826);
@@ -25,6 +25,45 @@ const CPS: Uuid = uuid_from_u16(0x1818);
 const CP_MEASUREMENT: Uuid = uuid_from_u16(0x2a63);
 const HRS: Uuid = uuid_from_u16(0x180d);
 const HR_MEASUREMENT: Uuid = uuid_from_u16(0x2a37);
+
+// FTMS control point op codes and result codes (FTMS spec 4.16).
+const OP_REQUEST_CONTROL: u8 = 0x00;
+const OP_START: u8 = 0x07;
+const OP_RESPONSE: u8 = 0x80;
+/// Wait for the control point's reply while connecting (some trainers are slow right after connecting).
+const REPLY_CONNECT: Duration = Duration::from_millis(1500);
+/// Wait for the reply to a target during a ride. Only used for trainers that answered while connecting.
+const REPLY_RIDE: Duration = Duration::from_millis(600);
+
+/// What the trainer answered on the control point.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Reply {
+    Success,
+    /// "Control not permitted": another app controls the trainer, or control was never granted.
+    Denied,
+    /// Any other result code (op code not supported, invalid parameter, operation failed).
+    Failed(u8),
+    /// No reply in time; many trainers never send one, so this is not an error.
+    Silent,
+}
+
+impl Reply {
+    fn from_result(code: u8) -> Self {
+        match code {
+            0x01 => Reply::Success,
+            0x05 => Reply::Denied,
+            c => Reply::Failed(c),
+        }
+    }
+}
+
+/// FTMS Control Point response indication: `[0x80, request op code, result code, …]`.
+pub fn parse_cp_response(v: &[u8]) -> Option<(u8, u8)> {
+    match v {
+        [OP_RESPONSE, op, result, ..] => Some((*op, *result)),
+        _ => None,
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Kind {
@@ -76,6 +115,12 @@ struct Conn {
     last_target: Option<Target>,
     manual: bool,
     task: tokio::task::JoinHandle<()>,
+    /// Control point replies `(op code, result)`, forwarded by the notification task.
+    replies: mpsc::UnboundedReceiver<(u8, u8)>,
+    /// The trainer answered "request control" while connecting, so later replies are worth waiting for.
+    acks: bool,
+    /// The trainer refused control ("control not permitted"): connected for power only.
+    denied: bool,
     /// Battery polling; stops when the connection is dropped.
     _battery: Option<crate::battery::Watch>,
 }
@@ -83,6 +128,61 @@ struct Conn {
 impl Conn {
     fn erg(&self) -> bool {
         self.mode == Mode::Ftms && self.control.is_some()
+    }
+
+    fn info(&self) -> Value {
+        json!({ "id": self.id, "name": self.name, "erg": self.erg(), "ergDenied": self.denied })
+    }
+
+    /// Write a control point command and, when `wait` is set, wait for the trainer's reply to it.
+    async fn command(&mut self, cp: &Characteristic, bytes: &[u8], wait: Option<Duration>) -> Result<Reply, String> {
+        while self.replies.try_recv().is_ok() {} // drop stale replies
+        self.periph.write(cp, bytes, WriteType::WithResponse).await.map_err(|e| e.to_string())?;
+        let Some(wait) = wait else { return Ok(Reply::Silent) };
+        let deadline = tokio::time::Instant::now() + wait;
+        loop {
+            match tokio::time::timeout_at(deadline, self.replies.recv()).await {
+                Ok(Some((op, result))) if op == bytes[0] => return Ok(Reply::from_result(result)),
+                Ok(Some(_)) => {} // reply to an earlier command
+                Ok(None) | Err(_) => return Ok(Reply::Silent),
+            }
+        }
+    }
+
+    /// Take control of the trainer: request control, then start / resume.
+    async fn take_control(&mut self, cp: Characteristic) {
+        // indications must be enabled before writing to the control point
+        if self.periph.subscribe(&cp).await.is_err() {
+            eprintln!("FTMS control point unavailable — power only");
+            return;
+        }
+        match self.command(&cp, &[OP_REQUEST_CONTROL], Some(REPLY_CONNECT)).await {
+            Ok(Reply::Denied) => {
+                eprintln!("FTMS control not permitted — another app controls the trainer; power only");
+                self.denied = true;
+                return;
+            }
+            // other result codes: keep trying ERG as before; some trainers follow targets anyway
+            Ok(Reply::Failed(code)) => {
+                eprintln!("FTMS request control answered {code:#04x} — trying ERG anyway");
+                self.acks = true;
+            }
+            Ok(reply) => self.acks = reply == Reply::Success,
+            Err(e) => {
+                eprintln!("FTMS request control failed: {e} — power only");
+                return;
+            }
+        }
+        let wait = self.acks.then_some(REPLY_CONNECT);
+        match self.command(&cp, &[OP_START], wait).await {
+            Ok(Reply::Denied) => {
+                eprintln!("FTMS start not permitted — power only");
+                self.denied = true;
+            }
+            // some trainers reject "start" (not supported) but follow targets anyway
+            Ok(_) => self.control = Some(cp),
+            Err(e) => eprintln!("FTMS start failed: {e} — power only"),
+        }
     }
 }
 
@@ -160,9 +260,18 @@ impl Ble {
     }
 
     fn status(&self, kind: Kind, connected: bool, name: &str, erg: bool, reconnecting: bool) {
+        self.emit_status(kind, connected, name, erg, reconnecting, false);
+    }
+
+    /// Status of a live connection (includes `ergDenied`).
+    fn conn_status(&self, kind: Kind, c: &Conn) {
+        self.emit_status(kind, true, &c.name, c.erg(), false, c.denied);
+    }
+
+    fn emit_status(&self, kind: Kind, connected: bool, name: &str, erg: bool, reconnecting: bool, denied: bool) {
         let _ = self.app.emit(
             "device-status",
-            json!({ "kind": kind.as_str(), "connected": connected, "name": name, "erg": erg, "reconnecting": reconnecting }),
+            json!({ "kind": kind.as_str(), "connected": connected, "name": name, "erg": erg, "reconnecting": reconnecting, "ergDenied": denied }),
         );
     }
 
@@ -220,8 +329,8 @@ impl Ble {
         self.disconnect(kind).await;
         let periph = self.find(kind, id, Duration::from_secs(12)).await?;
         let conn = self.setup(kind, periph, id.to_string()).await?;
-        let info = json!({ "id": conn.id, "name": conn.name, "erg": conn.erg() });
-        self.status(kind, true, &conn.name, conn.erg(), false);
+        let info = conn.info();
+        self.conn_status(kind, &conn);
         *self.slot(kind).lock().await = Some(conn);
         Ok(info)
     }
@@ -255,18 +364,7 @@ impl Ble {
             Kind::Trainer => {
                 if let Some(data) = ch(INDOOR_BIKE_DATA) {
                     periph.subscribe(&data).await.map_err(|e| e.to_string())?;
-                    let mut control = ch(FTMS_CONTROL);
-                    if let Some(cp) = &control {
-                        // indications must be enabled before writing to the control point
-                        let ok = periph.subscribe(cp).await.is_ok()
-                            && periph.write(cp, &[0x00], WriteType::WithResponse).await.is_ok() // request control
-                            && periph.write(cp, &[0x07], WriteType::WithResponse).await.is_ok(); // start / resume
-                        if !ok {
-                            eprintln!("FTMS control point unavailable — power only");
-                            control = None;
-                        }
-                    }
-                    (Mode::Ftms, control)
+                    (Mode::Ftms, ch(FTMS_CONTROL))
                 } else if let Some(m) = ch(CP_MEASUREMENT) {
                     periph.subscribe(&m).await.map_err(|e| e.to_string())?;
                     (Mode::Cps, None)
@@ -277,9 +375,17 @@ impl Ble {
         };
 
         let app = self.app.clone();
+        let (reply_tx, replies) = mpsc::unbounded_channel();
+        // started before taking control, so the control point's replies are already forwarded
         let task = tokio::spawn(async move {
             let mut crank: Option<CrankState> = None;
             while let Some(n) = stream.next().await {
+                if n.uuid == FTMS_CONTROL {
+                    if let Some(r) = parse_cp_response(&n.value) {
+                        let _ = reply_tx.send(r);
+                    }
+                    continue;
+                }
                 let out = match n.uuid {
                     u if u == INDOOR_BIKE_DATA => parse_bike_data(&n.value),
                     u if u == CP_MEASUREMENT => parse_power(&n.value, &mut crank),
@@ -294,8 +400,26 @@ impl Ble {
             }
         });
 
-        let battery = crate::battery::watch(self.app.clone(), periph.clone(), kind.as_str(), id.clone());
-        Ok(Conn { periph, id, name, mode, control, last_target: None, manual: false, task, _battery: battery })
+        let mut conn = Conn {
+            periph: periph.clone(),
+            id: id.clone(),
+            name,
+            mode,
+            control: None,
+            last_target: None,
+            manual: false,
+            task,
+            replies,
+            acks: false,
+            denied: false,
+            _battery: None,
+        };
+        if let Some(cp) = control {
+            conn.take_control(cp).await;
+        }
+        // after taking control, so the first battery read doesn't collide with the handshake
+        conn._battery = crate::battery::watch(self.app.clone(), periph, kind.as_str(), id);
+        Ok(conn)
     }
 
     pub async fn disconnect(&self, kind: Kind) {
@@ -308,29 +432,58 @@ impl Ble {
         }
     }
 
-    async fn write_control(&self, bytes: &[u8], target: Target) {
+    /// Send a target. An `Err` means it didn't reach the trainer and the UI should send it again.
+    async fn write_control(&self, bytes: &[u8], target: Target) -> Result<(), String> {
         let mut slot = self.trainer.lock().await;
-        let Some(c) = slot.as_mut() else { return };
-        let Some(cp) = c.control.clone() else { return };
+        let Some(c) = slot.as_mut() else { return Ok(()) };
+        let Some(cp) = c.control.clone() else { return Ok(()) };
         if c.last_target == Some(target) {
-            return;
+            return Ok(());
         }
-        match c.periph.write(&cp, bytes, WriteType::WithResponse).await {
-            Ok(()) => c.last_target = Some(target),
-            Err(e) => eprintln!("FTMS write failed: {e}"),
+        let wait = c.acks.then_some(REPLY_RIDE);
+        let mut reply = c.command(&cp, bytes, wait).await;
+        if reply == Ok(Reply::Denied) {
+            // the trainer lost or handed over control (reset, another app): ask once more, then resend
+            if c.command(&cp, &[OP_REQUEST_CONTROL], wait).await == Ok(Reply::Success) {
+                let _ = c.command(&cp, &[OP_START], wait).await;
+                reply = c.command(&cp, bytes, wait).await;
+            }
+        }
+        match reply {
+            Ok(Reply::Denied) => {
+                eprintln!("FTMS control not permitted — another app controls the trainer; power only");
+                c.control = None;
+                c.denied = true;
+                self.conn_status(Kind::Trainer, c);
+                Ok(())
+            }
+            Ok(Reply::Failed(code)) => {
+                // invalid parameter / not supported: resending the same bytes won't help
+                eprintln!("FTMS target rejected (result {code:#04x})");
+                c.last_target = Some(target);
+                Ok(())
+            }
+            Ok(_) => {
+                c.last_target = Some(target);
+                Ok(())
+            }
+            Err(e) => {
+                eprintln!("FTMS write failed: {e}");
+                Err(format!("Trainer target not sent: {e}"))
+            }
         }
     }
 
     /// ERG target in watts.
-    pub async fn set_power(&self, watts: i32) {
+    pub async fn set_power(&self, watts: i32) -> Result<(), String> {
         let w = watts.clamp(0, 2000);
         let b = (w as i16).to_le_bytes();
-        self.write_control(&[0x05, b[0], b[1]], Target::Watts(w)).await;
+        self.write_control(&[0x05, b[0], b[1]], Target::Watts(w)).await
     }
 
     /// Free ride: leave ERG and simulate a flat road (wind 0, grade 0 %, crr 0.004, cw 0.51).
-    pub async fn free_ride(&self) {
-        self.write_control(&[0x11, 0, 0, 0, 0, 40, 51], Target::Free).await;
+    pub async fn free_ride(&self) -> Result<(), String> {
+        self.write_control(&[0x11, 0, 0, 0, 0, 40, 51], Target::Free).await
     }
 
     /// Re-send start/resume and force the next target to be re-sent.
@@ -338,14 +491,15 @@ impl Ble {
         let mut slot = self.trainer.lock().await;
         if let Some(c) = slot.as_mut() {
             if let Some(cp) = c.control.clone() {
-                let _ = c.periph.write(&cp, &[0x07], WriteType::WithResponse).await;
+                let wait = c.acks.then_some(REPLY_RIDE);
+                let _ = c.command(&cp, &[OP_START], wait).await;
             }
             c.last_target = None;
         }
     }
 
     pub async fn current(&self, kind: Kind) -> Option<Value> {
-        self.slot(kind).lock().await.as_ref().map(|c| json!({ "id": c.id, "name": c.name, "erg": c.erg() }))
+        self.slot(kind).lock().await.as_ref().map(Conn::info)
     }
 
     /// Watch adapter events and transparently reconnect dropped devices.
@@ -385,7 +539,7 @@ impl Ble {
                 if let Some(old) = slot.take() {
                     old.task.abort();
                 }
-                self.status(kind, true, &conn.name, conn.erg(), false);
+                self.conn_status(kind, &conn);
                 *slot = Some(conn);
                 return;
             }
@@ -488,6 +642,29 @@ pub fn parse_hr(v: &[u8]) -> Option<Map<String, Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn control_point_response() {
+        // request control → success
+        assert_eq!(parse_cp_response(&[0x80, 0x00, 0x01]), Some((0x00, 0x01)));
+        // set target power → control not permitted (another app holds control)
+        assert_eq!(parse_cp_response(&[0x80, 0x05, 0x05]), Some((0x05, 0x05)));
+        // extra response parameters are ignored
+        assert_eq!(parse_cp_response(&[0x80, 0x11, 0x01, 0xaa]), Some((0x11, 0x01)));
+        // not a response, or too short
+        assert_eq!(parse_cp_response(&[0x05, 0x64, 0x00]), None);
+        assert_eq!(parse_cp_response(&[0x80, 0x00]), None);
+        assert_eq!(parse_cp_response(&[]), None);
+    }
+
+    #[test]
+    fn control_point_result_codes() {
+        assert_eq!(Reply::from_result(0x01), Reply::Success);
+        assert_eq!(Reply::from_result(0x05), Reply::Denied);
+        assert_eq!(Reply::from_result(0x02), Reply::Failed(0x02)); // op code not supported
+        assert_eq!(Reply::from_result(0x03), Reply::Failed(0x03)); // invalid parameter
+        assert_eq!(Reply::from_result(0x04), Reply::Failed(0x04)); // operation failed
+    }
 
     #[tokio::test]
     async fn wait_dropped_ignores_other_devices_and_returns_for_its_own() {

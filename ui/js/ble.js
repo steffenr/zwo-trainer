@@ -35,7 +35,7 @@ class Device extends Emitter {
   }
 
   emitStatus() {
-    this.emit('status', { connected: this.connected, name: this.name, erg: this.erg, reconnecting: this.reconnecting });
+    this.emit('status', { connected: this.connected, name: this.name, erg: this.erg, ergDenied: !!this.ergDenied, reconnecting: this.reconnecting });
   }
 
   scan(secs = 4) { return invoke('ble_scan', { kind: this.kind, secs }); }
@@ -47,6 +47,7 @@ class Device extends Emitter {
     this.mode = 'ble';
     this.name = info.name;
     this.erg = !!info.erg;
+    this.ergDenied = !!info.ergDenied;
     this.reconnecting = false;
     this.emitStatus();
     return info;
@@ -72,15 +73,19 @@ export class Trainer extends Device {
     if (!this.canErg || this.reconnecting) return;
     const w = Math.round(watts);
     if (w === this.lastSent) return;
-    this.lastSent = w;
-    invoke('trainer_set_power', { watts: w }).catch(() => {});
+    this.send('trainer_set_power', { watts: w }, w);
   }
 
   setFreeRide() {
     if (this.mode === 'sim') { this.simTarget = null; return; }
     if (!this.canErg || this.lastSent === 'free') return;
-    this.lastSent = 'free';
-    invoke('trainer_free_ride').catch(() => {});
+    this.send('trainer_free_ride', {}, 'free');
+  }
+
+  /** Send a target once; if it didn't reach the trainer, forget it so the next ride tick sends it again. */
+  send(cmd, args, target) {
+    this.lastSent = target;
+    invoke(cmd, args).catch(() => { if (this.lastSent === target) this.lastSent = undefined; });
   }
 
   resume() {
@@ -88,7 +93,7 @@ export class Trainer extends Device {
     if (this.mode === 'ble') invoke('trainer_resume').catch(() => {});
   }
 
-  onStatus(s) { this.lastSent = undefined; super.onStatus(s); }
+  onStatus(s) { this.lastSent = undefined; this.ergDenied = !!s.ergDenied; super.onStatus(s); }
 
   startSim() {
     this.stopSim();
