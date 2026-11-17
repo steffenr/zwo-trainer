@@ -7,7 +7,7 @@
 //!   "device-status" { kind, connected, name, erg, reconnecting }
 //!   "battery"       { kind, id, level }   (see battery.rs)
 
-use btleplug::api::{bleuuid::uuid_from_u16, Central, CentralEvent, Characteristic, Manager as _, Peripheral as _, ScanFilter, WriteType};
+use btleplug::api::{bleuuid::uuid_from_u16, Central, CentralEvent, CharPropFlags, Characteristic, Manager as _, Peripheral as _, ScanFilter, WriteType};
 use btleplug::platform::{Adapter, Manager, Peripheral};
 use futures::StreamExt;
 use serde::Serialize;
@@ -21,6 +21,7 @@ use uuid::Uuid;
 const FTMS: Uuid = uuid_from_u16(0x1826);
 const INDOOR_BIKE_DATA: Uuid = uuid_from_u16(0x2ad2);
 const FTMS_CONTROL: Uuid = uuid_from_u16(0x2ad9);
+const SUPPORTED_POWER_RANGE: Uuid = uuid_from_u16(0x2ad8);
 const CPS: Uuid = uuid_from_u16(0x1818);
 const CP_MEASUREMENT: Uuid = uuid_from_u16(0x2a63);
 const HRS: Uuid = uuid_from_u16(0x180d);
@@ -68,6 +69,42 @@ fn denied_after(denied: bool, reply: Reply) -> bool {
     }
 }
 
+/// Our own limit for ERG targets; a trainer's Supported Power Range can only narrow it.
+const MAX_TARGET: i32 = 2000;
+
+/// Power targets the trainer accepts (FTMS Supported Power Range, 0x2AD8), in watts.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct PowerRange {
+    min: i32,
+    max: i32,
+    step: i32,
+}
+
+impl Default for PowerRange {
+    fn default() -> Self {
+        PowerRange { min: 0, max: MAX_TARGET, step: 1 }
+    }
+}
+
+impl PowerRange {
+    /// `[min: sint16, max: sint16, increment: uint16]`, little endian. `None` for a missing or
+    /// nonsensical range, so a bad value from the trainer never narrows ERG to something unusable.
+    pub fn parse(v: &[u8]) -> Option<Self> {
+        let min = i32::from(i16le(v, 0)?).max(0);
+        let max = i32::from(i16le(v, 2)?).min(MAX_TARGET);
+        let step = i32::from(u16le(v, 4)?).max(1);
+        (max > min && step <= max - min).then_some(PowerRange { min, max, step })
+    }
+
+    /// Keep a target inside the range, on the trainer's increment (counted from `min`).
+    pub fn clamp(self, watts: i32) -> i32 {
+        let w = watts.clamp(self.min, self.max);
+        let snapped = self.min + ((w - self.min) as f64 / self.step as f64).round() as i32 * self.step;
+        // rounding up may pass a max that isn't on the grid: take the last step below it
+        if snapped > self.max { snapped - self.step } else { snapped }
+    }
+}
+
 /// FTMS Control Point response indication: `[0x80, request op code, result code, …]`.
 pub fn parse_cp_response(v: &[u8]) -> Option<(u8, u8)> {
     match v {
@@ -110,6 +147,28 @@ enum Target {
     Free,
 }
 
+impl Target {
+    /// Control point command for this target.
+    fn bytes(self) -> Vec<u8> {
+        match self {
+            // Set Target Power: sint16 watts
+            Target::Watts(w) => {
+                let b = (w.clamp(0, MAX_TARGET) as i16).to_le_bytes();
+                vec![0x05, b[0], b[1]]
+            }
+            // Indoor Bike Simulation, flat road: wind 0, grade 0 %, crr 0.004, cw 0.51
+            Target::Free => vec![0x11, 0, 0, 0, 0, 40, 51],
+        }
+    }
+}
+
+/// Read the trainer's Supported Power Range, if it has a readable one (2 s at most).
+async fn read_power_range(periph: &Peripheral, ch: Option<Characteristic>) -> Option<PowerRange> {
+    let ch = ch.filter(|c| c.properties.contains(CharPropFlags::READ))?;
+    let v = tokio::time::timeout(Duration::from_secs(2), periph.read(&ch)).await.ok()?.ok()?;
+    PowerRange::parse(&v)
+}
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Mode {
     Ftms,
@@ -132,6 +191,8 @@ struct Conn {
     acks: bool,
     /// The trainer refused control ("control not permitted"): ERG stays on, the UI warns.
     denied: bool,
+    /// ERG targets are kept inside this range (the trainer's own, else 0–2000 W).
+    range: PowerRange,
     /// Battery polling; stops when the connection is dropped.
     _battery: Option<crate::battery::Watch>,
 }
@@ -426,9 +487,15 @@ impl Ble {
             replies,
             acks: false,
             denied: false,
+            range: PowerRange::default(),
             _battery: None,
         };
         if let Some(cp) = control {
+            // read before taking control: no control point command is in flight yet
+            if let Some(range) = read_power_range(&periph, ch(SUPPORTED_POWER_RANGE)).await {
+                eprintln!("FTMS supported power range {}–{} W (step {})", range.min, range.max, range.step);
+                conn.range = range;
+            }
             conn.take_control(cp).await;
         }
         // after taking control, so the first battery read doesn't collide with the handshake
@@ -447,13 +514,20 @@ impl Ble {
     }
 
     /// Send a target. An `Err` means it didn't reach the trainer and the UI should send it again.
-    async fn write_control(&self, bytes: &[u8], target: Target) -> Result<(), String> {
+    async fn write_control(&self, target: Target) -> Result<(), String> {
         let mut slot = self.trainer.lock().await;
         let Some(c) = slot.as_mut() else { return Ok(()) };
         let Some(cp) = c.control.clone() else { return Ok(()) };
+        // inside the trainer's range, so it isn't rejected as an invalid parameter
+        let target = match target {
+            Target::Watts(w) => Target::Watts(c.range.clamp(w)),
+            t => t,
+        };
         if c.last_target == Some(target) {
             return Ok(());
         }
+        let bytes = target.bytes();
+        let bytes = bytes.as_slice();
         let wait = c.acks.then_some(REPLY_RIDE);
         let mut reply = c.command(&cp, bytes, wait).await;
         if reply == Ok(Reply::Denied) {
@@ -487,16 +561,14 @@ impl Ble {
         }
     }
 
-    /// ERG target in watts.
+    /// ERG target in watts (kept inside the trainer's supported power range).
     pub async fn set_power(&self, watts: i32) -> Result<(), String> {
-        let w = watts.clamp(0, 2000);
-        let b = (w as i16).to_le_bytes();
-        self.write_control(&[0x05, b[0], b[1]], Target::Watts(w)).await
+        self.write_control(Target::Watts(watts)).await
     }
 
-    /// Free ride: leave ERG and simulate a flat road (wind 0, grade 0 %, crr 0.004, cw 0.51).
+    /// Free ride: leave ERG and simulate a flat road.
     pub async fn free_ride(&self) -> Result<(), String> {
-        self.write_control(&[0x11, 0, 0, 0, 0, 40, 51], Target::Free).await
+        self.write_control(Target::Free).await
     }
 
     /// Re-send start/resume and force the next target to be re-sent.
@@ -677,6 +749,41 @@ mod tests {
         assert_eq!(Reply::from_result(0x02), Reply::Failed(0x02)); // op code not supported
         assert_eq!(Reply::from_result(0x03), Reply::Failed(0x03)); // invalid parameter
         assert_eq!(Reply::from_result(0x04), Reply::Failed(0x04)); // operation failed
+    }
+
+    #[test]
+    fn supported_power_range() {
+        // 0–1500 W, 1 W steps
+        let r = PowerRange::parse(&[0x00, 0x00, 0xdc, 0x05, 0x01, 0x00]).unwrap();
+        assert_eq!(r, PowerRange { min: 0, max: 1500, step: 1 });
+        // 25–2500 W, 5 W steps: the maximum is capped at our own 2000 W
+        let r = PowerRange::parse(&[0x19, 0x00, 0xc4, 0x09, 0x05, 0x00]).unwrap();
+        assert_eq!(r, PowerRange { min: 25, max: 2000, step: 5 });
+        // nonsense is ignored: max ≤ min, short value, step wider than the range
+        assert_eq!(PowerRange::parse(&[0x64, 0x00, 0x64, 0x00, 0x01, 0x00]), None);
+        assert_eq!(PowerRange::parse(&[0x00, 0x00, 0xdc]), None);
+        assert_eq!(PowerRange::parse(&[0x00, 0x00, 0x0a, 0x00, 0x64, 0x00]), None);
+        // a negative minimum counts as 0; a zero step as 1
+        assert_eq!(PowerRange::parse(&[0xf6, 0xff, 0xe8, 0x03, 0x00, 0x00]), Some(PowerRange { min: 0, max: 1000, step: 1 }));
+    }
+
+    #[test]
+    fn targets_stay_inside_the_power_range() {
+        let r = PowerRange { min: 25, max: 1500, step: 5 };
+        assert_eq!(r.clamp(10), 25, "below the minimum");
+        assert_eq!(r.clamp(1800), 1500, "above the maximum");
+        assert_eq!(r.clamp(152), 150, "rounded to the step, counted from min");
+        assert_eq!(r.clamp(153), 155);
+        assert_eq!(PowerRange { min: 0, max: 1003, step: 5 }.clamp(1003), 1000, "never above max after snapping");
+        assert_eq!(PowerRange::default().clamp(-20), 0);
+        assert_eq!(PowerRange::default().clamp(2500), 2000);
+        assert_eq!(PowerRange::default().clamp(173), 173);
+    }
+
+    #[test]
+    fn target_bytes() {
+        assert_eq!(Target::Watts(200).bytes(), vec![0x05, 0xc8, 0x00]);
+        assert_eq!(Target::Free.bytes(), vec![0x11, 0, 0, 0, 0, 40, 51]);
     }
 
     #[test]
