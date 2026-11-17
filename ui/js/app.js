@@ -795,7 +795,7 @@ function renderPlan(id) {
       ${pp.started ? `<div class="plan-prog">${progressBar(pp, plan.id)}<span class="muted">${t('doneSkippedToGo', { done: pp.done, skipped: pp.skipped, left: pp.total - pp.done - pp.skipped })}</span></div>` : ''}
     </section>
     ${descriptionBlock(plan.description)}
-    ${rows}`;
+    <div class="weeks">${rows}</div>`;
   bindActions(v);
 }
 
