@@ -188,7 +188,7 @@ Deleting always goes to the system Trash (the Recycle Bin on Windows), so it can
 **Cadence check:** when a segment has a cadence target, the Live panel shows it next to your cadence (`86 / 90 rpm`) and the Current segment panel shows it as *Target cadence*. The bar marks the target and turns **green** when you're on it, **amber** 5–10 rpm off and **red** beyond 10 rpm (the number turns red too). The next segment's target cadence is shown in its panel, so you can prepare.
 
 **Trainer control:**
-- **ERG** follows every target second by second, including ramps.
+- **ERG** follows every target second by second, including ramps. Targets are kept inside the power range the trainer reports (for example its minimum resistance), so it never rejects one.
 - **Intensity** (− / + in the control bar or ↑ / ↓ for ±1 %, with Shift ±10 %) scales all targets of the workout.
 - **Free-ride and all-out segments** release ERG: you ride with your gears, or with virtual gears.
 
