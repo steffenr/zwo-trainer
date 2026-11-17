@@ -373,7 +373,7 @@ function bindChrome() {
   $('#btn-profile').onclick = profileMenu;
   $('#mode-switch').onclick = (e) => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); };
   $$('.chip[data-device]').forEach((c) => (c.onclick = () => deviceDialog(c.dataset.device)));
-  let ergDenied = false; // tell the rider once when the trainer refuses ERG control (auto-connect, reconnect, mid-ride)
+  let ergDenied = false; // warn once when the trainer refuses ERG control (auto-connect, reconnect, mid-ride); ERG stays on
   trainer.on('status', (s) => {
     setDev('trainer', s);
     ride?.onDeviceStatus();
@@ -1727,7 +1727,7 @@ function deviceDialog(kind) {
   const label = kind === 'trainer' ? t('devTrainer') : t('hrMonitor');
   const saved = state.settings.devices?.[kind];
   if (dev.connected || dev.reconnecting) {
-    openModal(`<h2>${label}</h2><p>${t(dev.reconnecting ? 'reconnectingTo' : 'connectedTo', { name: `<b>${esc(dev.name)}</b>` })}${kind === 'trainer' && dev.connected ? ` · ${trainer.canErg ? t('ergActive') : trainer.ergDenied ? t('powerOnlyDenied') : t('powerOnlyNoErg')}` : ''}.</p>
+    openModal(`<h2>${label}</h2><p>${t(dev.reconnecting ? 'reconnectingTo' : 'connectedTo', { name: `<b>${esc(dev.name)}</b>` })}${kind === 'trainer' && dev.connected ? ` · ${trainer.canErg ? (trainer.ergDenied ? t('ergActiveDenied') : t('ergActive')) : t('powerOnlyNoErg')}` : ''}.</p>
       <div class="modal-actions"><button class="btn ghost" data-a="forget">${t('forgetDevice')}</button><button class="btn ghost" data-a="close">${t('close')}</button><button class="btn danger" data-a="disc">${t('disconnect')}</button></div>`, 'small');
   } else {
     openModal(`<h2>${label}</h2>
