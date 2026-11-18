@@ -30,7 +30,8 @@ test('tText: plain text for attributes, vars survive unchanged, html`` escapes t
   const { tText, plain } = await import('../ui/js/html.js');
   assert.equal(plain('Privacy &amp; <b>Security</b>'), 'Privacy & Security');
   // nested / malformed markup can't leave a tag behind; an escaped < survives as text
-  assert.equal(plain('<<b>script>alert(1)<</b>/script>'), 'scriptalert(1)/script');
+  assert.equal(plain('<<b>script>alert(1)<</b>/script>'), 'alert(1)');
+  assert.equal(plain('a <b>bold</b> < b'), 'a bold  b');
   assert.equal(plain('a &lt;b&gt; c'), 'a <b> c');
   const key = Object.keys(en).find((k) => typeof en[k] === 'string' && /\{name\}/.test(en[k]));
   const out = tText(key, { name: 'A & <B>' });
