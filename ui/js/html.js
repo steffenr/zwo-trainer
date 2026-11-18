@@ -50,8 +50,16 @@ const markupVars = (vars) => Object.fromEntries(Object.entries(vars).map(([k, v]
 /** t() for markup: the dictionary text is trusted, the vars are escaped unless they are Safe. */
 export const tHtml = (key, vars) => new Safe(vars ? t(key, markupVars(vars)) : t(key));
 
-/** Markup → plain text: drop tags, decode the entities we use. */
-export const plain = (markup) => String(markup).replace(/<[^>]*>/g, '').replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (m, e) => DEC[e]);
+/**
+ * Markup → plain text: drop tags, then any stray < or > left by malformed or nested markup (a single
+ * tag-stripping pass turns "<<b>script>" into "<script>"), then decode the entities we use. Real "<"
+ * in a text must be written &lt;, so it survives as "<" only after this point. The result is text,
+ * never markup: it still goes through html`` (escaped) like any other value.
+ */
+export const plain = (markup) => String(markup)
+  .replace(/<[^>]*>/g, '')
+  .replace(/[<>]/g, '')
+  .replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (m, e) => DEC[e]);
 
 /**
  * t() as plain text, for attributes (title, aria-label, placeholder); html`` escapes it there.
