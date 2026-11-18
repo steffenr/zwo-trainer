@@ -84,6 +84,8 @@ export const de = {
   connectingDots: 'verbinde…',
   savedOff: '{name} · aus',
   notPaired: 'nicht gekoppelt',
+  retryConnect: 'Erneut automatisch verbinden',
+  retryConnectTitle: 'Alle gespeicherten Geräte, die aus sind, neu verbinden, z. B. nachdem du den Trainer geweckt oder den Brustgurt angelegt hast',
   change: 'Wechseln',
   connect: 'Verbinden',
   whoRiding: 'Wer fährt?',
