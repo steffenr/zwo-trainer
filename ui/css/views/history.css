@@ -6,7 +6,7 @@
   &:first-child { border-top: none; }
 }
 .trow { grid-template-columns: 130px 1fr 90px 80px 140px; }
-.hhead { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; background: var(--surface-2); }
+.hhead { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; background: var(--surface-2); }
 .hdate, .htitle { display: flex; flex-direction: column; min-width: 0; }
 .hdate small { color: var(--muted); }
 .htitle b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -17,4 +17,4 @@
 }
 
 /* upload state per ride */
-.sync.gok { color: var(--text); font-weight: 700; font-size: 13px; cursor: pointer; }
+.sync.gok { color: var(--text); font-weight: 700; font-size: var(--fs-sm); cursor: pointer; }

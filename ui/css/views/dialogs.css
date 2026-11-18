@@ -4,24 +4,24 @@
 /* ---------- workout preview ---------- */
 .pv-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
 .pv-tools { display: flex; align-items: center; gap: 4px; }
-.pv-diagram { margin-top: 18px; background: var(--surface-2); border-radius: 12px; padding: 10px 10px 4px; }
+.pv-diagram { margin-top: 18px; background: var(--surface-2); border-radius: var(--r-lg); padding: 10px 10px 4px; }
 .seg-info {
-  min-height: 22px; margin-top: 10px; font-size: 13.5px;
+  min-height: 22px; margin-top: 10px; font-size: var(--fs-md);
   & b { color: var(--text); }
 }
-.pv-desc { color: var(--text-2); font-size: 14px; white-space: pre-line; user-select: text; -webkit-user-select: text; }
+.pv-desc { color: var(--text-2); font-size: var(--fs-md); white-space: pre-line; user-select: text; -webkit-user-select: text; }
 
 /* ---------- riders ---------- */
 .who { text-align: center; padding: 8px 0 4px; }
 .who-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-top: 22px; }
 .who-card {
   all: unset; display: flex; flex-direction: column; align-items: center; gap: 10px; width: 112px; padding: 14px 6px;
-  border-radius: 14px; cursor: pointer; font-weight: 600; border: 1px solid transparent;
+  border-radius: var(--radius); cursor: pointer; font-weight: 600; border: 1px solid transparent;
   &:hover { background: var(--surface-2); border-color: var(--line); }
 }
 .profile-list { display: flex; flex-direction: column; gap: 6px; margin: 16px 0; }
 .profile-row {
-  display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 12px; border: 1px solid var(--line);
+  display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: var(--r-lg); border: 1px solid var(--line);
   &.on { border-color: var(--accent); background: var(--accent-soft); }
 }
 .profile-pick { all: unset; flex: 1; display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; padding: 2px 4px; }
@@ -36,9 +36,9 @@
 }
 .pe-fields { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .pe-name {
-  display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-2);
+  display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); color: var(--text-2);
 }
-.pe-label { margin-top: 6px; font-size: 13px; color: var(--text-2); }
+.pe-label { margin-top: 6px; font-size: var(--fs-sm); color: var(--text-2); }
 .swatches {
   display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
   & button {
@@ -49,14 +49,14 @@
 }
 .sw-custom {
   position: relative; width: 22px; height: 22px; border-radius: 50%; border: 1.5px dashed var(--line-strong);
-  display: grid; place-items: center; color: var(--muted); font-size: 14px; cursor: pointer; overflow: hidden;
+  display: grid; place-items: center; color: var(--muted); font-size: var(--fs-md); cursor: pointer; overflow: hidden;
   & input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 }
 .emoji-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 4px;
   & button {
-    all: unset; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 19px; cursor: pointer;
-    &:first-child { font: 700 11px var(--font); color: var(--muted); border: 1px dashed var(--line-strong); }
+    all: unset; height: 34px; border-radius: var(--r-md); display: grid; place-items: center; font-size: 19px; cursor: pointer;
+    &:first-child { font: 700 var(--fs-2xs) var(--font); color: var(--muted); border: 1px dashed var(--line-strong); }
     &:hover { background: var(--surface-2); }
     &.on { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
   }
@@ -66,7 +66,7 @@
 .dev-list { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; min-height: 58px; }
 .dev {
   all: unset; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 11px 14px;
-  border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); cursor: pointer; font-weight: 550;
+  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); cursor: pointer; font-weight: 550;
   &:hover { border-color: var(--accent); }
   &.on { cursor: default; border-color: var(--ok); }
 }
@@ -74,8 +74,8 @@
 
 /* controller button tester */
 .btn-test {
-  display: flex; align-items: baseline; gap: 10px; margin: 12px 0 6px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2, var(--accent-soft));
-  & b { font-size: 15px; }
+  display: flex; align-items: baseline; gap: 10px; margin: 12px 0 6px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2, var(--accent-soft));
+  & b { font-size: var(--fs-base); }
 }
 .btn-map {
   width: 100%; border-collapse: collapse; margin-bottom: 8px;
@@ -90,7 +90,7 @@
   & b { display: block; font-size: 22px; font-family: var(--num); font-variant-numeric: tabular-nums; }
 }
 .next-card {
-  background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px;
   & h3 { font-size: 18px; margin-top: 4px; }
   & .mini { height: 48px; margin-top: 10px; }
 }

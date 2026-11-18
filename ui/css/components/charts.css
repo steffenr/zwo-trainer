@@ -4,13 +4,13 @@
 
 /* ---------- zone bar + legend ---------- */
 .zones-bar {
-  display: flex; height: 10px; border-radius: 99px; overflow: hidden; margin-top: 14px; gap: 2px;
+  display: flex; height: 10px; border-radius: var(--r-pill); overflow: hidden; margin-top: 14px; gap: 2px;
   & i { display: block; }
 }
 .zones-legend {
-  display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 12.5px; color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: var(--fs-sm); color: var(--muted);
   & span { display: inline-flex; align-items: center; gap: 6px; }
-  & i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+  & i { width: 9px; height: 9px; border-radius: var(--r-2xs); display: inline-block; }
   & b { color: var(--text); font-weight: 600; }
 }
 
@@ -39,25 +39,25 @@
   & .diagram-svg { flex: 1; }
 }
 .dg-free { position: absolute; inset: auto 0 6px 34px; height: 14px; pointer-events: none; }
-.dg-free span, .dg-labels span { position: absolute; top: 0; overflow: hidden; white-space: nowrap; font-size: 11px; line-height: 14px; }
+.dg-free span, .dg-labels span { position: absolute; top: 0; overflow: hidden; white-space: nowrap; font-size: var(--fs-2xs); line-height: 14px; }
 .dg-free span { text-align: center; color: var(--text-2); }
 .dg-labels {
   position: relative; height: 16px; margin-top: 3px; margin-left: 34px; flex: none;
   & span {
-    padding-left: 3px; color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums;
+    padding-left: 3px; color: var(--muted); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums;
     &.hide { visibility: hidden; }
   }
 }
 .dg-yaxis {
   position: absolute; left: 0; top: 0; bottom: 0; width: 30px; pointer-events: none;
-  & span { position: absolute; right: 4px; transform: translateY(-50%); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  & span { position: absolute; right: 4px; transform: translateY(-50%); font-size: var(--fs-2xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 }
 
 /* ---------- live overlay toggles (power · cadence · HR traces) ---------- */
 .overlay-toggles { display: inline-flex; gap: 6px; }
 .ov {
-  all: unset; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
-  border: 1px solid var(--line); font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer;
+  all: unset; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--r-pill);
+  border: 1px solid var(--line); font-size: var(--fs-sm); font-weight: 600; color: var(--muted); cursor: pointer;
   & i { width: 9px; height: 9px; border-radius: 50%; background: currentColor; opacity: .35; }
   &.on { color: var(--text); border-color: var(--line-strong); }
   &.on i { opacity: 1; }

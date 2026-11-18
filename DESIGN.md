@@ -89,12 +89,12 @@ Always use tokens (`var(--…)`), never raw hex in components. Dark values apply
 | `h1` | 26 px, 650 |
 | `h2` | 19 px |
 | `h3` | 15 px |
-| meta | 13.5 px, muted |
-| `.small` | 13 px |
-| `.k` labels | 11 px, uppercase, `letter-spacing: .08em`, 600, muted |
-| `.eyebrow` | 11.5 px, uppercase, `.09em` |
+| meta | 14 px (`--fs-md`), muted |
+| `.small` | 13 px (`--fs-sm`) |
+| `.k` labels | 11 px (`--fs-2xs`), uppercase, `letter-spacing: .08em`, 600, muted |
+| `.eyebrow` | 11 px (`--fs-2xs`), uppercase, `.09em` |
 
-Headings use `letter-spacing: -0.01em`.
+UI text uses the type tokens only: `--fs-2xs` 11 · `--fs-xs` 12 · `--fs-sm` 13 · `--fs-md` 14 · `--fs-base` 15 · `--fs-lg` 17. Headings (`h1` 26, `h2` 19) and big readouts keep their own sizes. No half-pixel sizes. Headings use `letter-spacing: -0.01em`.
 
 **Ride readouts:** base sizes at 1400 px width, scaling linearly with `vw` above that, capped at 1.6× (full screen). Use the pattern `clamp(BASEpx, BASE/14 vw, 1.6·BASEpx)`:
 
@@ -116,7 +116,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 | Spacing (multiples of 2) | 4 · 6 · 8 · 10 · 12 · 14 · 16 · 20 · 24 · 32 px |
 | Page | `.view` max-width 1120 px, padding 24 px |
 | Sections | `.section` margin-top 32 px |
-| Radius | dialogs 18 px · cards/panels 14 px (`--radius`) · popovers 12 px · buttons 10 px · small buttons 8 px · tags 5–6 px · pills 999 px · avatars and round buttons 50 % |
+| Radius (tokens) | `--r-xl` 18 dialogs · `--radius` 14 cards/panels · `--r-lg` 12 popovers, inset boxes, rows, toast · `--r-md` 10 buttons, inputs · `--r-sm` 8 small buttons, menu items · `--r-tag` 6 badges, tags, code · `--r-2xs` 3 swatches · `--r-pill` · 50 % avatars and round buttons. Nested corners: inner = outer − padding (`calc(var(--r-md) - 3px)` in the segmented control). |
 | Elevation | `--shadow` is a subtle 1 px shadow on cards (none in dark) · `--shadow-lg` for dialogs, popovers and toasts · dark mode relies on borders, not shadows |
 
 **Z-index layers:**

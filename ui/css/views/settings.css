@@ -26,9 +26,9 @@ dialog.settings {
 .about-links { margin: 6px 0 0; color: var(--muted); }
 
 /* ---------- connections: Garmin, Intervals.icu, COROS, profile sync ---------- */
-.sync-opt small, .svc-head small { font-size: 12.5px; }
+.sync-opt small, .svc-head small { font-size: var(--fs-sm); }
 .svc {
-  border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 14px;
+  border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px; margin-top: 14px;
   & .check { margin-top: 12px; }
   & p { margin: 10px 0 0; }
 }
@@ -36,7 +36,7 @@ dialog.settings {
   display: flex; align-items: center; gap: 12px;
   & > div { flex: 1; display: flex; flex-direction: column; }
 }
-.svc-group { margin: 22px 0 -4px; font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.svc-group { margin: 22px 0 -4px; font-size: var(--fs-xs); font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .svc-ext {
   padding: 12px 14px; margin-top: 10px;
   & > p, & > .cred, & > .sync-mode { margin: 10px 0 0; }
@@ -44,11 +44,11 @@ dialog.settings {
 }
 /* brand tiles */
 .svc-logo {
-  width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: #fff; font: 800 17px var(--font); flex: none;
-  &.sm { width: 26px; height: 26px; border-radius: 7px; font-size: 11px; }
+  width: 34px; height: 34px; border-radius: var(--r-md); display: grid; place-items: center; color: #fff; font: 800 var(--fs-lg) var(--font); flex: none;
+  &.sm { width: 26px; height: 26px; border-radius: var(--r-sm); font-size: var(--fs-2xs); }
   &.garmin { background: var(--garmin-bg); color: var(--garmin-ink); outline: 1px solid var(--line-strong); }
   &.sync { background: var(--accent); color: #fff; }
-  &.ext { background: var(--surface-3); color: var(--text); font-size: 13px; font-weight: 800; letter-spacing: -.02em; outline: 1px solid var(--line-strong); }
+  &.ext { background: var(--surface-3); color: var(--text); font-size: var(--fs-sm); font-weight: 800; letter-spacing: -.02em; outline: 1px solid var(--line-strong); }
 }
 .steps {
   margin: 12px 0; padding-left: 20px; color: var(--text-2);
@@ -65,7 +65,7 @@ dialog.settings {
 /* profile sync: provider choice */
 .sync-opts { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 8px; }
 .sync-opt {
-  display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line); cursor: pointer;
+  display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: var(--r-md); border: 1px solid var(--line); cursor: pointer;
   &:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
   &.na { opacity: .55; cursor: default; }
   & input { margin-top: 3px; accent-color: var(--accent); }
@@ -73,14 +73,14 @@ dialog.settings {
   & small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 /* synced files and connected services */
-.sync-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 14px; overflow: hidden; }
+.sync-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-lg); margin-bottom: 14px; overflow: hidden; }
 .sl-row {
   display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 10px; padding: 8px 12px; min-height: 44px;
   & + .sl-row { border-top: 1px solid var(--line); }
   &.sl-file { grid-template-columns: 1fr auto; }
 }
-.sl-name { font-weight: 600; font-size: 14px; }
-.sl-state { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.sl-name { font-weight: 600; font-size: var(--fs-md); }
+.sl-state { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); }
 
 @media (prefers-reduced-motion: no-preference) {
   .tab-pane:not([hidden]) { animation: mo-fade .18s ease-out; }

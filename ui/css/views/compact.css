@@ -8,7 +8,7 @@ body.compact-riding {
   & .topbar { display: none; }
   & .ride { inset: 0; display: block; padding: 8px 12px; overflow: hidden; }
   & .compact-ride { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 6px; }
-  & .ride-hint { top: 40px; max-width: calc(100% - 24px); font-size: 12px; text-align: center; }
+  & .ride-hint { top: 40px; max-width: calc(100% - 24px); font-size: var(--fs-xs); text-align: center; }
 }
 body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
 
@@ -18,16 +18,16 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
   & .ic { width: 18px; height: 18px; }
 }
 :root[data-os="mac"] .compact-head { padding-left: 80px; }
-.compact-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.compact-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); }
 .compact-state {
-  display: flex; align-items: center; gap: 6px; flex: none; margin-right: auto; color: var(--text-2); font-size: 11px;
+  display: flex; align-items: center; gap: 6px; flex: none; margin-right: auto; color: var(--text-2); font-size: var(--fs-2xs);
   & i {
     width: 6px; height: 6px; border-radius: 50%; background: var(--muted);
     &.on { background: var(--ok); }
   }
 }
 .compact-gears {
-  display: flex; align-items: center; gap: 2px; color: var(--text-2); font-size: 12px; font-variant-numeric: tabular-nums;
+  display: flex; align-items: center; gap: 2px; color: var(--text-2); font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
   & .icon-btn { width: 32px; height: 32px; }
 }
 .compact-ride button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -36,20 +36,20 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
 .compact-short { display: none; align-items: center; gap: 10px; }
 .compact-ctl {
   display: flex; align-items: center; gap: 8px;
-  & .ctl { width: 34px; height: 34px; border-radius: 10px; }
+  & .ctl { width: 34px; height: 34px; border-radius: var(--r-md); }
   & .ctl svg { width: 18px; height: 18px; }
 }
 .cmp-wl {
   display: flex; align-items: baseline; gap: 6px; color: var(--text-2); white-space: nowrap;
   & small { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
-  & b { font: 700 14px var(--num); font-variant-numeric: tabular-nums; color: var(--text); }
+  & b { font: 700 var(--fs-md) var(--num); font-variant-numeric: tabular-nums; color: var(--text); }
 }
 .compact-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; }
 
 /* ---------- mini panels ---------- */
 .compact-main { flex: 1; min-height: 0; display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); }
 .compact-ride[data-mode="nt"] .compact-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.25fr) minmax(0, 1.25fr) minmax(0, .75fr); }
-.cp { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; padding: 6px 8px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.cp { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; padding: 6px 8px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
 .cp-ph {
   display: flex; align-items: center; gap: 6px; flex: none; margin-bottom: 2px; font-size: 10px; font-weight: 700; letter-spacing: .09em;
   text-transform: uppercase; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -76,24 +76,24 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
   & span { display: flex; align-items: baseline; gap: 5px; }
   & small { font-size: 10px; font-weight: 600; letter-spacing: .06em; color: var(--text-2); text-transform: uppercase; }
   & b {
-    font: 700 15px var(--num); font-variant-numeric: tabular-nums;
+    font: 700 var(--fs-base) var(--num); font-variant-numeric: tabular-nums;
     &.off-target { color: var(--danger); }
   }
 }
 .cp-info {
   display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: none;
-  & b { font: 700 15px var(--num); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  & b { font: 700 var(--fs-base) var(--num); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 .cp-bar {
-  height: 5px; border-radius: 3px; background: var(--track); overflow: hidden;
-  & i { display: block; height: 100%; width: 0; border-radius: 3px; background: var(--text-2); }
+  height: 5px; border-radius: var(--r-2xs); background: var(--track); overflow: hidden;
+  & i { display: block; height: 100%; width: 0; border-radius: var(--r-2xs); background: var(--text-2); }
 }
 .cp-nx {
   position: relative; flex: 1; min-width: 0; display: flex; align-items: center; padding-left: 14px;
-  &::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 5px; border-radius: 3px; background: var(--zc, var(--line-strong)); }
+  &::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 5px; border-radius: var(--r-2xs); background: var(--zc, var(--line-strong)); }
   & .nc-txt { gap: 3px; }
   & .nc-txt b { font-size: 24px; }
-  & .nc-v { font-size: 12px; font-weight: 600; }
+  & .nc-v { font-size: var(--fs-xs); font-weight: 600; }
 }
 
 /* ---------- tiers ---------- */
@@ -110,7 +110,7 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
   & .cp { padding: 4px 5px 5px; }
   & .cp-ph { font-size: 9px; letter-spacing: .05em; }
   & .cp-nx { padding-left: 10px; }
-  & .cp-nx .nc-txt b { font-size: 17px; }
+  & .cp-nx .nc-txt b { font-size: var(--fs-lg); }
   & .cp-nx .nc-v { font-size: 10px; }
 }
 .compact-ride[data-mode="ns"] .cp-opt, .compact-ride[data-tiny="1"] .cp-opt { display: none; }

@@ -42,7 +42,23 @@
   --garmin-bg: #1d1d1f;
   --garmin-ink: #ffffff;
 
-  --radius: 14px;
+  /* radius scale */
+  --r-2xs: 3px;            /* swatches, bars */
+  --r-tag: 6px;            /* badges, tags, code */
+  --r-sm: 8px;             /* small buttons, menu items, list items */
+  --r-md: 10px;            /* buttons, inputs, segmented control */
+  --r-lg: 12px;            /* popovers, inset boxes, rows, toast */
+  --radius: 14px;          /* cards, panels */
+  --r-xl: 18px;            /* dialogs */
+  --r-pill: 999px;
+  /* type scale (UI text; big readouts keep their own sizes) */
+  --fs-2xs: 11px;          /* uppercase labels, tags, axis labels */
+  --fs-xs: 12px;           /* fine print, code */
+  --fs-sm: 13px;           /* secondary text, small buttons */
+  --fs-md: 14px;           /* controls, meta, lists */
+  --fs-base: 15px;         /* body */
+  --fs-lg: 17px;           /* emphasis */
+
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI Variable Text", "Segoe UI", Roboto, "Noto Sans", Cantarell, sans-serif;
   --num: "SF Pro Rounded", ui-rounded, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Roboto, "Noto Sans", sans-serif;
   color-scheme: light;

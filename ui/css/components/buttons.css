@@ -1,15 +1,15 @@
 /* Buttons, icon buttons, segmented controls, tabs, links. */
 
 .icon-btn {
-  background: none; border: 1px solid transparent; color: var(--muted); border-radius: 10px;
+  background: none; border: 1px solid transparent; color: var(--muted); border-radius: var(--r-md);
   width: 36px; height: 36px; display: grid; place-items: center; cursor: pointer; font-size: 16px;
   &:hover { color: var(--text); background: var(--surface-2); }
 }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  border: 1px solid var(--line-strong); background: var(--surface); color: var(--text); border-radius: 10px;
-  padding: 9px 16px; font: 600 14px var(--font); cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--text); border-radius: var(--r-md);
+  padding: 9px 16px; font: 600 var(--fs-md) var(--font); cursor: pointer; white-space: nowrap;
   transition: background .15s, border-color .15s, transform .05s;
   &:hover { background: var(--surface-2); }
   &:active { transform: translateY(1px) scale(.98); }
@@ -23,9 +23,9 @@
     background: transparent;
     &:hover { background: var(--surface-2); }
   }
-  &.big { padding: 13px 26px; font-size: 16px; border-radius: 12px; }
-  &.sm { padding: 5px 11px; font-size: 13px; border-radius: 8px; }
-  &.round { border-radius: 50%; width: 34px; height: 34px; padding: 0; font-size: 17px; }
+  &.big { padding: 13px 26px; font-size: 16px; border-radius: var(--r-lg); }
+  &.sm { padding: 5px 11px; font-size: var(--fs-sm); border-radius: var(--r-sm); }
+  &.round { border-radius: 50%; width: 34px; height: 34px; padding: 0; font-size: var(--fs-lg); }
   &.garmin { background: var(--garmin-bg); border-color: var(--garmin-bg); color: var(--garmin-ink); }
 }
 
@@ -36,9 +36,9 @@
 
 /* segmented control (mode switch, settings choices) */
 .seg-ctl {
-  display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 2px;
+  display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 3px; gap: 2px;
   & button {
-    all: unset; padding: 5px 12px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer;
+    all: unset; padding: 5px 12px; border-radius: calc(var(--r-md) - 3px); font-size: var(--fs-sm); font-weight: 600; color: var(--muted); cursor: pointer;
     transition: background .15s, color .15s, box-shadow .15s, outline-color .15s;
     &.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); outline: 1px solid var(--line); }
   }
@@ -47,8 +47,8 @@
 .tabs {
   display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 14px 0 6px;
   & button {
-    all: unset; padding: 8px 12px; cursor: pointer; font-weight: 600; font-size: 14px; color: var(--muted);
-    border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 6px 6px 0 0;
+    all: unset; padding: 8px 12px; cursor: pointer; font-weight: 600; font-size: var(--fs-md); color: var(--muted);
+    border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: var(--r-tag) var(--r-tag) 0 0;
     &:hover { color: var(--text); }
     &.on { color: var(--text); border-bottom-color: var(--accent); }
   }
@@ -58,7 +58,7 @@
 /* star (favourite) and ⋯ (menu) buttons */
 .star, .more {
   all: unset; cursor: pointer; width: 28px; height: 28px; display: inline-grid; place-items: center;
-  border-radius: 8px; color: var(--muted); font-size: 17px; line-height: 1;
+  border-radius: var(--r-sm); color: var(--muted); font-size: var(--fs-lg); line-height: 1;
 }
 .star:hover, .more:hover { background: var(--surface-2); color: var(--text); }
 .star.on { color: var(--star); }

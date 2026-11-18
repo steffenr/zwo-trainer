@@ -17,13 +17,13 @@
 .zone-form { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 16px; }
 .zf {
   display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 10px;
-  & i { width: 14px; height: 14px; border-radius: 4px; }
+  & i { width: 14px; height: 14px; border-radius: var(--r-2xs); }
   & input { width: 70px; text-align: right; padding: 6px 10px; }
   & span:last-child { color: var(--muted); display: flex; align-items: center; gap: 6px; }
 }
 
 /* inline validation message below a field (the field gets aria-invalid) */
-.field-err { margin: -6px 0 2px; color: var(--danger); font-size: 12.5px; text-align: right; }
+.field-err { margin: -6px 0 2px; color: var(--danger); font-size: var(--fs-sm); text-align: right; }
 .zone-form .field-err { margin: 2px 0 0; }
 
 .folder-row {
@@ -34,7 +34,7 @@
 details.adv {
   margin-top: 12px;
   & summary {
-    cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; border-radius: 4px;
+    cursor: pointer; color: var(--muted); font-size: var(--fs-sm); font-weight: 600; border-radius: var(--r-2xs);
     &:hover { color: var(--text); }
     &:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   }

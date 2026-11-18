@@ -12,9 +12,9 @@
 }
 .hero-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
 .hero-count {
-  text-align: right; font-size: 15px; color: var(--muted);
+  text-align: right; font-size: var(--fs-base); color: var(--muted);
   & b { font-size: 30px; color: var(--text); font-family: var(--num); }
-  & small { display: block; font-size: 12px; }
+  & small { display: block; font-size: var(--fs-xs); }
 }
 .upnext {
   display: grid; grid-template-columns: 1fr minmax(200px, 420px); grid-template-areas: "info prof" "act act"; gap: 16px 24px;
@@ -25,13 +25,13 @@
 .upnext-info { grid-area: info; }
 .upnext-profile { grid-area: prof; }
 .upnext-actions { grid-area: act; display: flex; gap: 10px; flex-wrap: wrap; }
-.done-msg { font-size: 17px; margin: 18px 0 0; }
+.done-msg { font-size: var(--fs-lg); margin: 18px 0 0; }
 .upnext-done {
   display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 18px; flex-wrap: wrap;
   & .done-msg { margin: 0; }
 }
 /* week/day tag (W3 D2) */
-.wd { font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 2px 7px; border-radius: 6px; letter-spacing: .03em; text-transform: none; }
+.wd { font-size: var(--fs-2xs); font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 2px 7px; border-radius: var(--r-tag); letter-spacing: .03em; text-transform: none; }
 
 /* ---------- plan cards ---------- */
 .plan-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
@@ -41,7 +41,7 @@
   &.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 }
 .pc-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
-.pc-desc { margin: 8px 0 0; font-size: 13px; line-height: 1.45; color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pc-desc { margin: 8px 0 0; font-size: var(--fs-sm); line-height: 1.45; color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 @media (prefers-reduced-motion: no-preference) {
   .view.view-in { animation: mo-view .22s ease-out; }

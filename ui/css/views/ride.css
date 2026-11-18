@@ -13,7 +13,7 @@ body.riding {
 }
 /* trainer mode: ERG on · power only (off) · virtual shifting (vs); restyled in the ride title below */
 .erg {
-  font-size: 11.5px; font-weight: 700; letter-spacing: .06em; padding: 3px 9px; border-radius: 6px; background: var(--surface-3); color: var(--muted); white-space: nowrap;
+  font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .06em; padding: 3px 9px; border-radius: var(--r-tag); background: var(--surface-3); color: var(--muted); white-space: nowrap;
   &.on { background: var(--ok-soft); color: var(--ok); }
   &.off { background: var(--warn-soft); color: var(--warn); }
   &.vs { background: var(--accent-soft); color: var(--accent); }
@@ -21,14 +21,14 @@ body.riding {
 .ride-title {
   display: flex; align-items: center; gap: 10px; min-width: 0; height: 40px; margin-left: 12px; margin-right: auto;
   &[hidden] { display: none; }
-  & h1 { font-size: 17px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  & h1 { font-size: var(--fs-lg); font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   & .badge {
-    flex: none; border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 600;
+    flex: none; border-radius: var(--r-pill); padding: 3px 11px; font-size: var(--fs-xs); font-weight: 600;
     background: var(--surface-2); color: var(--text-2); border: 1px solid var(--line);
     &.test { background: var(--z4-ink); color: #000; border-color: transparent; }
   }
   & .erg {
-    flex: none; border-radius: 999px; border: 1px solid currentColor; padding: 3px 11px;
+    flex: none; border-radius: var(--r-pill); border: 1px solid currentColor; padding: 3px 11px;
     display: inline-flex; align-items: center; gap: 7px; letter-spacing: .02em; background: transparent;
     &::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
   }
@@ -62,7 +62,7 @@ body.riding {
   & .dg-stage { min-height: 180px; }
   & .diagram-svg { height: 100%; }
 }
-.dg-tip { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 10px; padding: 8px 12px; font-size: 13.5px; display: flex; gap: 12px; align-items: center; box-shadow: var(--shadow-lg); max-width: calc(100% - 28px); }
+.dg-tip { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-md); padding: 8px 12px; font-size: var(--fs-md); display: flex; gap: 12px; align-items: center; box-shadow: var(--shadow-lg); max-width: calc(100% - 28px); }
 
 /* ---------- controls: back · play/pause · forward · intensity ---------- */
 .ride-controls { display: flex; justify-content: center; align-items: center; gap: 18px; }
@@ -98,18 +98,18 @@ body.riding {
   .ctl { width: 40px; height: 40px; }
   .ctl svg { width: 19px; height: 19px; }
   .ctl.play { width: 48px; height: 48px; }
-  .ctl.int-b { width: 34px; height: 34px; font-size: 17px; }
+  .ctl.int-b { width: 34px; height: 34px; font-size: var(--fs-lg); }
   .int-group { gap: 8px; margin-left: 6px; padding-left: 12px; }
-  .int-read b { font-size: 17px; }
+  .int-read b { font-size: var(--fs-lg); }
 }
 .ride.paused .ride-top, .ride.paused .ride-diagram { opacity: .6; }
 
 /* "ready" card above the controls */
 .ready {
   position: absolute; left: 50%; bottom: 104px; transform: translateX(-50%); display: flex; flex-direction: column;
-  background: var(--surface); border: 1px solid var(--accent); border-radius: 14px; padding: 12px 20px; box-shadow: var(--shadow-lg);
+  background: var(--surface); border: 1px solid var(--accent); border-radius: var(--radius); padding: 12px 20px; box-shadow: var(--shadow-lg);
   & div { display: flex; gap: 12px; align-items: baseline; }
-  & b { font-size: 17px; }
+  & b { font-size: var(--fs-lg); }
   & span { color: var(--text-2); }
 }
 
@@ -119,10 +119,10 @@ body.riding {
 
 /* ---------- virtual shifting ---------- */
 .gearbox {
-  display: flex; align-items: center; gap: 12px; padding: 6px 10px; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 12px;
+  display: flex; align-items: center; gap: 12px; padding: 6px 10px; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: var(--r-lg);
   & .gear-lbl { display: flex; flex-direction: column; align-items: center; min-width: 120px; font-variant-numeric: tabular-nums; }
   & b { font-size: 20px; font-family: var(--num); }
-  & small { color: var(--text-2); font-size: 12px; }
+  & small { color: var(--text-2); font-size: var(--fs-xs); }
   & .btn.round { width: 40px; height: 40px; font-size: 22px; }
 }
 .gear-lbl.flash b { animation: gearflash .35s; }
@@ -130,13 +130,13 @@ body.riding {
 
 /* action hint (controller buttons, keys) + auto-pause */
 .ride-hint {
-  position: absolute; left: 50%; top: 18px; transform: translate(-50%, -8px); padding: 8px 16px; border-radius: 999px;
-  background: var(--text); color: var(--bg); font-weight: 600; font-size: 15px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 30;
+  position: absolute; left: 50%; top: 18px; transform: translate(-50%, -8px); padding: 8px 16px; border-radius: var(--r-pill);
+  background: var(--text); color: var(--bg); font-weight: 600; font-size: var(--fs-base); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 30;
   &.show { opacity: .92; transform: translate(-50%, 0); }
 }
 .ride.auto-paused .ride-controls {
   position: relative;
-  &::before { content: attr(data-msg); position: absolute; left: 50%; top: -24px; transform: translateX(-50%); color: var(--text-2); font-size: 13px; white-space: nowrap; }
+  &::before { content: attr(data-msg); position: absolute; left: 50%; top: -24px; transform: translateX(-50%); color: var(--text-2); font-size: var(--fs-sm); white-space: nowrap; }
 }
 
 /* ride readouts scale with the window: base size at 1400 px wide, up to 1.6× in full screen */
@@ -158,13 +158,13 @@ body.riding {
   display: flex; align-items: center; gap: 10px; min-height: 22px;
   & > .ic { width: 19px; height: 19px; color: var(--accent); }
 }
-.ph > b, .ph-mini b { font-size: 12.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--text); }
+.ph > b, .ph-mini b { font-size: var(--fs-sm); font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--text); }
 .ph-dot {
   width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); flex: none;
   &.on { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
 }
 .ph-status {
-  margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); white-space: nowrap;
+  margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); white-space: nowrap;
   &.ok { color: var(--ok); }
   & .ic { width: 14px; height: 14px; color: currentColor; }
 }
@@ -187,19 +187,19 @@ body.riding {
     font: 700 22px/1.1 var(--num); font-variant-numeric: tabular-nums;
     &.off-target { color: var(--danger); }   /* cadence outside ±10 rpm of the target */
   }
-  & small { color: var(--text-2); font-size: 13px; }
+  & small { color: var(--text-2); font-size: var(--fs-sm); }
   & em {
-    font-style: normal; font: 600 15px/1.1 var(--num); color: var(--muted); margin-left: -1px; font-variant-numeric: tabular-nums;
+    font-style: normal; font: 600 var(--fs-base)/1.1 var(--num); color: var(--muted); margin-left: -1px; font-variant-numeric: tabular-nums;
     &.good { color: var(--ok); }
     &.warn { color: var(--warn); }
     &.bad { color: var(--danger); font-weight: 700; }
   }
 }
 .mbar {
-  position: relative; height: 5px; border-radius: 3px; background: var(--track); margin-top: 6px;
-  & .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 3px; background: var(--accent); transition: width .4s; }
+  position: relative; height: 5px; border-radius: var(--r-2xs); background: var(--track); margin-top: 6px;
+  & .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: var(--r-2xs); background: var(--accent); transition: width .4s; }
   & .mark { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--text); border-radius: 1px; }
-  & .band { position: absolute; top: -3px; bottom: -3px; border: 1.5px solid var(--text); border-radius: 4px; opacity: .55; }
+  & .band { position: absolute; top: -3px; bottom: -3px; border: 1.5px solid var(--text); border-radius: var(--r-2xs); opacity: .55; }
 }
 .live .gauge { max-width: 190px; align-self: center; }
 
@@ -236,7 +236,7 @@ body.riding {
 /* coach line: one message at a time below the stats; the space is reserved so nothing jumps */
 .coach-line {
   --cc: var(--accent);
-  display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 50px; padding: 9px 16px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 50px; padding: 9px 16px; border-radius: var(--r-lg);
   border: 1px solid color-mix(in srgb, var(--cc) 45%, transparent); background: color-mix(in srgb, var(--cc) 12%, var(--surface));
   font-weight: 600; font-size: 18px; line-height: 1.25; text-align: center; opacity: 0; transform: translateY(4px); transition: opacity .35s, transform .35s;
   &.show { opacity: 1; transform: none; }
@@ -250,8 +250,8 @@ body.riding {
 /* NEXT SEGMENT (--zc is the zone colour) */
 .nx-card {
   position: relative; flex: 1 1 auto; min-height: 116px; display: flex; align-items: center; gap: 12px; padding: 14px 14px 14px 26px;
-  border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2);
-  &::before { content: ''; position: absolute; left: 11px; top: 12px; bottom: 12px; width: 6px; border-radius: 3px; background: var(--zc, var(--line-strong)); }
+  border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface-2);
+  &::before { content: ''; position: absolute; left: 11px; top: 12px; bottom: 12px; width: 6px; border-radius: var(--r-2xs); background: var(--zc, var(--line-strong)); }
 }
 .nc-txt {
   flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0;

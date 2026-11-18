@@ -16,7 +16,7 @@
 
 .mode-switch {
   margin-right: auto; margin-left: 12px; height: 40px; box-sizing: border-box;
-  & button { padding: 6px 16px; font-size: 13.5px; }
+  & button { padding: 6px 16px; font-size: var(--fs-md); }
 }
 
 /* devices button: icon plus one status dot per device kind */
@@ -31,7 +31,7 @@
 }
 .avatar-btn {
   all: unset; display: grid; place-items: center; width: 36px; height: 36px; margin-left: 6px; border-radius: 50%; cursor: pointer;
-  & .avatar { width: 32px; height: 32px; font-size: 12.5px; transition: box-shadow .15s; }
+  & .avatar { width: 32px; height: 32px; font-size: var(--fs-sm); transition: box-shadow .15s; }
   & .avatar.emoji { font-size: 18px; }
 }
 .avatar-btn:hover .avatar, .avatar-btn:focus-visible .avatar { box-shadow: 0 0 0 3px var(--line-strong); }
@@ -39,22 +39,22 @@
 
 /* ---------- devices popover ---------- */
 .dev-pop { min-width: 300px; padding: 6px; }
-.pop-title { padding: 6px 10px 4px; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.pop-title { padding: 6px 10px 4px; font-size: var(--fs-2xs); font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .dev-row { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; padding: 8px 10px; }
 .dev-ico {
-  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--surface-2); color: var(--muted);
+  width: 34px; height: 34px; border-radius: var(--r-md); display: grid; place-items: center; background: var(--surface-2); color: var(--muted);
   & svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   &.on { background: var(--ok-soft); color: var(--ok); }
   &.warn { color: var(--warn); }
 }
 .dev-txt {
   display: flex; flex-direction: column; min-width: 0;
-  & b { font-size: 14px; font-weight: 600; }
+  & b { font-size: var(--fs-md); font-weight: 600; }
 }
 .dev-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
 /* battery badge (battery.js): ok ≥ 40, low 16–39, critical ≤ 15 */
 .batt {
-  display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ok);
+  display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ok);
   & svg { width: 20px; height: 12px; flex: none; }
   & .body { fill: none; stroke: currentColor; stroke-width: 1.5; }
   & .cap, & .fill { fill: currentColor; }
@@ -62,10 +62,10 @@
   &.low { color: var(--warn); }
   &.critical, &.critical .pct { color: var(--danger); }
 }
-.dev-txt span { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dev-act { font-size: 12.5px; color: var(--accent); font-weight: 600; }
+.dev-txt span { font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dev-act { font-size: var(--fs-sm); color: var(--accent); font-weight: 600; }
 .dev-retry {
-  display: flex; align-items: center; gap: 8px; padding: 8px 10px; font-size: 13px; font-weight: 600; color: var(--accent);
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; font-size: var(--fs-sm); font-weight: 600; color: var(--accent);
   & svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 }
 
