@@ -1,4 +1,4 @@
-/* Form rows, checkboxes, inline errors, zone editor, folder row, disclosure, tip lists. */
+/* Form rows, checkboxes, inline errors, disclosure, tip lists. */
 
 .form {
   display: flex; flex-direction: column; gap: 12px; margin: 16px 0 22px;
@@ -13,23 +13,8 @@
   & .hint { margin: -6px 0 2px; }
 }
 
-/* FTP zone limits */
-.zone-form { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 16px; }
-.zf {
-  display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 10px;
-  & i { width: 14px; height: 14px; border-radius: var(--r-2xs); }
-  & input { width: 70px; text-align: right; padding: 6px 10px; }
-  & span:last-child { color: var(--muted); display: flex; align-items: center; gap: 6px; }
-}
-
 /* inline validation message below a field (the field gets aria-invalid) */
 .field-err { margin: -6px 0 2px; color: var(--danger); font-size: var(--fs-sm); text-align: right; }
-.zone-form .field-err { margin: 2px 0 0; }
-
-.folder-row {
-  display: flex; align-items: center; gap: 8px; margin: 10px 0 4px;
-  & code { flex: 1; padding: 6px 8px; }
-}
 
 details.adv {
   margin-top: 12px;

@@ -10,6 +10,7 @@ body.riding {
   & .topbar { z-index: 30; }
   & .history-btn { opacity: .3; pointer-events: none; }
   & .brand { pointer-events: none; }
+  & .update-card { display: none; }   /* updates never interrupt a ride */
 }
 /* trainer mode: ERG on · power only (off) · virtual shifting (vs); restyled in the ride title below */
 .erg {
@@ -62,6 +63,18 @@ body.riding {
   & .dg-stage { min-height: 180px; }
   & .diagram-svg { height: 100%; }
 }
+/* live overlay toggles above the chart (power · cadence · HR traces) */
+.overlay-toggles { display: inline-flex; gap: 6px; }
+.ov {
+  all: unset; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--r-pill);
+  border: 1px solid var(--line); font-size: var(--fs-sm); font-weight: 600; color: var(--muted); cursor: pointer;
+  & i { width: 9px; height: 9px; border-radius: 50%; background: currentColor; opacity: .35; }
+  &.on { color: var(--text); border-color: var(--line-strong); }
+  &.on i { opacity: 1; }
+}
+.ov-power.on i { background: var(--trace); }
+.ov-cadence.on i { background: var(--cad); }
+.ov-hr.on i { background: var(--hrline); }
 .dg-tip { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-md); padding: 8px 12px; font-size: var(--fs-md); display: flex; gap: 12px; align-items: center; box-shadow: var(--shadow-lg); max-width: calc(100% - 28px); }
 
 /* ---------- controls: back · play/pause · forward · intensity ---------- */

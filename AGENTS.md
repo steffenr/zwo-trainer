@@ -20,7 +20,7 @@ ui/                         frontend — static files served by Tauri (frontendD
   css/styles.css            entry only: @layer order (tokens, base, components, views, utilities) + @imports
   css/tokens.css            theme tokens on :root (light) + dark overrides (OS dark and forced dark)
   css/base.css              elements, native form controls, text helpers (.muted, .k, .ic …), shared @keyframes
-  css/components/           reusable pieces: buttons, surfaces (card, dialog, popover, toast), forms, avatar, charts, markdown
+  css/components/           reusable pieces, one family per file: buttons, card, indicators (badge, tags, progress, spinner), dialog, popover, notice (toast, update card), list (history-style table, sync list, service logo), forms, avatar, charts, markdown
   css/views/                one file per screen/dialog: topbar, home, library, history, tests, dialogs, settings, ride, compact
   css/utilities.css         [hidden], forced text colours, global "Reduce motion"
   js/app.js                 app controller: boot, routing, modes, riders, settings, sync, Ride class
@@ -58,7 +58,7 @@ scripts/sync-version.mjs    print / set the version (Cargo.toml + Cargo.lock; ta
 scripts/updater-manifest.mjs  write latest.json (version, notes, per-platform url + signature) from the signed release files
 scripts/setup-updater-key.sh  one-time: create the updater key in ~/.tauri, write the pubkey, set the GitHub secrets
 scripts/check-i18n.mjs      de/fr have exactly en's keys, plural shapes and placeholders; every t('key') in ui/ exists
-scripts/check-css.mjs       ui/css: layer order, every file imported once into a layer, balanced braces, nested selectors start with &
+scripts/check-css.mjs       ui/css: layer order, every file imported once into a layer, balanced braces, nested selectors start with &, components/ never name a view
 site/                       static website (home, features, download) with dark/light screenshots in site/img; no build step
 .github/workflows/
   ci.yml                    push/PR: tests + clippy + UI syntax + i18n + CSS check (Linux), tests (macOS, Windows)

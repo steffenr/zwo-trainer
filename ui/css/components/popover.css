@@ -1,0 +1,19 @@
+/* Popover menus (#popover) and the quiet ⋯ menus (.menu-wrap holds the items in a <template>). */
+
+.popover {
+  position: fixed; z-index: 200; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg); padding: 6px; display: flex; flex-direction: column; min-width: 220px;
+  & button {
+    all: unset; padding: 8px 12px; border-radius: var(--r-sm); cursor: pointer; font-size: var(--fs-md);
+    &:hover { background: var(--surface-2); }
+  }
+  & hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+}
+.menu-wrap {
+  display: inline-flex;
+  & template { display: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .popover { animation: mo-pop-in .14s cubic-bezier(.2, .8, .2, 1); transform-origin: top right; }
+}

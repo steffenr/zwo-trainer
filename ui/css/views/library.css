@@ -41,8 +41,6 @@
   display: flex; align-items: center; justify-content: flex-end; gap: 8px; font-variant-numeric: tabular-nums; font-size: var(--fs-md);
   & small { color: var(--muted); font-size: var(--fs-2xs); }
 }
-/* zone tag; --zc is the zone colour */
-.ztag { display: inline-grid; place-items: center; min-width: 26px; height: 18px; padding: 0 5px; border-radius: var(--r-tag); font-size: var(--fs-2xs); font-weight: 650; color: #000; background: var(--zc); }
 .favtools { display: flex; gap: 2px; }
 
 /* status column */

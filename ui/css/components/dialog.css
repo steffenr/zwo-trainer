@@ -1,0 +1,30 @@
+/* Modal dialog (<dialog id="modal">): sizes, body, header row (title + ✕), action row. */
+
+dialog {
+  background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-xl); padding: 0;
+  width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); box-shadow: var(--shadow-lg);
+  &.small { width: min(460px, calc(100vw - 32px)); }
+  &.wide { width: min(960px, calc(100vw - 32px)); }
+  &::backdrop { background: var(--backdrop); backdrop-filter: blur(3px); }
+}
+.modal-body {
+  padding: 24px;
+  & > p { color: var(--text-2); }
+}
+/* header: title left, ✕ (and tools) right */
+.pv-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+/* actions on the right: cancel/back as ghost, the confirm button last */
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 22px; flex-wrap: wrap; }
+
+@media (prefers-reduced-motion: no-preference) {
+  dialog[open] { animation: mo-dlg-in .2s cubic-bezier(.2, .8, .2, 1); }
+  dialog[open]::backdrop { animation: mo-fade .2s; }
+  dialog.closing { animation: mo-dlg-out .12s ease-in forwards; }
+  dialog.closing::backdrop { animation: mo-fade-out .12s ease-in forwards; }
+  /* .rise (ride summary) rises instead */
+  dialog.rise[open] { animation: mo-pop .4s cubic-bezier(.2, .8, .2, 1); }
+  dialog.rise[open]::backdrop { animation: mo-fade .35s; }
+}
+@keyframes mo-dlg-in { from { opacity: 0; transform: translateY(8px) scale(.97); } }
+@keyframes mo-dlg-out { to { opacity: 0; transform: scale(.98); } }
+@keyframes mo-pop { from { opacity: 0; transform: translateY(16px) scale(.97); } }

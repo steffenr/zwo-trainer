@@ -8,13 +8,14 @@ Plain CSS, no build step. `styles.css` declares the cascade layers and imports t
 
 | Layer | Files | Holds |
 |---|---|---|
-| `tokens` | `tokens.css` | colour, font and radius tokens; dark overrides |
+| `tokens` | `tokens.css` | colour, font, radius and type-scale tokens; dark overrides |
 | `base` | `base.css` | elements, native inputs and their focus/invalid states, text helpers (`.muted`, `.small`, `.eyebrow`, `.meta`, `.k`, `.ic`), shared keyframes |
-| `components` | `components/*.css` | reusable pieces used on several screens: buttons, segmented control, tabs, cards, badges, dialogs, popovers, toast, forms, avatar, chart/gauge/ring, Markdown |
+| `components` | `components/*.css`, one family per file | `buttons` (button, icon button, link, segmented control, tabs, star/⋯) · `card` (card, hero, card header row, section head, back link) · `indicators` (progress bar, badge, week/day tag, zone tag, spinner) · `dialog` · `popover` (+ ⋯ menus) · `notice` (toast, update card) · `list` (history-style table, sync list, service logo) · `forms` · `avatar` · `charts` (chart, mini profile, zone bar, gauge, ring) · `markdown` |
 | `views` | `views/*.css` | one file per screen or dialog: top bar, home, plan + workouts lists, history, FTP tests, dialogs, settings, ride, compact ride |
 | `utilities` | `utilities.css` | `[hidden]`, forced text colours, the global "Reduce motion" switch |
 
-- **Component or view?** If it appears on more than one screen, it is a component. A component file never refers to a view; a view adapts a component in its own file (e.g. `.ride-title .badge` lives in `views/ride.css`).
+- **Component or view?** If it appears on more than one screen, it is a component. A component file never refers to a view (`check-css.mjs` fails on `body.riding`, `.ride`, `dialog.settings` … in `components/`); a view adapts a component in its own file (e.g. `.ride-title .badge` lives in `views/ride.css`). Screen-only pieces stay in their view even when they look generic (zone limits and folder row in `settings.css`, overlay toggles in `ride.css`).
+- **No atomic-design folders:** at this size atoms and molecules are a few lines each; two levels (components, views) plus families per file are easier to find and to decide.
 - **Nesting** groups a component's parts, states and modifiers in one block (`.btn { &:hover {…} &.primary {…} }`), and its motion next to it (`@media (prefers-reduced-motion: no-preference)`). Always write `&`.
 - **Motion:** single-use `@keyframes` sit next to their component; shared ones (`mo-fade`, `mo-fade-out`, `mo-settle`, `mo-pop-in`) are in `base.css`.
 

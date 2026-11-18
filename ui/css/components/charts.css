@@ -1,4 +1,4 @@
-/* Workout chart (Diagram), mini profiles, zone bar, power gauge and progress ring, overlay toggles. */
+/* Workout chart (Diagram), mini profiles, zone bar, power gauge and progress ring. */
 
 .mini { display: block; width: 100%; }
 
@@ -52,19 +52,6 @@
   position: absolute; left: 0; top: 0; bottom: 0; width: 30px; pointer-events: none;
   & span { position: absolute; right: 4px; transform: translateY(-50%); font-size: var(--fs-2xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 }
-
-/* ---------- live overlay toggles (power · cadence · HR traces) ---------- */
-.overlay-toggles { display: inline-flex; gap: 6px; }
-.ov {
-  all: unset; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--r-pill);
-  border: 1px solid var(--line); font-size: var(--fs-sm); font-weight: 600; color: var(--muted); cursor: pointer;
-  & i { width: 9px; height: 9px; border-radius: 50%; background: currentColor; opacity: .35; }
-  &.on { color: var(--text); border-color: var(--line-strong); }
-  &.on i { opacity: 1; }
-}
-.ov-power.on i { background: var(--trace); }
-.ov-cadence.on i { background: var(--cad); }
-.ov-hr.on i { background: var(--hrline); }
 
 /* ---------- gauge (power) and progress ring (segment) ---------- */
 .gauge {

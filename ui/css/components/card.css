@@ -1,0 +1,25 @@
+/* Cards and page sections: .card, the larger .hero card with its heading row, card header row,
+   section heading, back link, completion message. */
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+/* hero: the big card at the top of Home, FTP Tests and the empty state */
+.hero {
+  padding: 24px;
+  &.empty p { color: var(--text-2); max-width: 640px; margin: 8px 0 0; }
+  & h1 a:hover { color: var(--accent); }
+}
+.hero-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+/* title left, badge or tools right (plan cards, test cards) */
+.pc-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+
+.section { margin-top: 32px; }
+.section-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px;
+  & small { font-weight: 500; margin-left: 6px; }
+}
+.back {
+  display: inline-block; color: var(--muted); margin-bottom: 14px; font-size: var(--fs-md);
+  &:hover { color: var(--text); }
+}
+/* "plan finished" / "workout done" line (home, ride summary) */
+.done-msg { font-size: var(--fs-lg); margin: 18px 0 0; }

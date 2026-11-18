@@ -2,7 +2,6 @@
    device picker, controller tester, ride summary. */
 
 /* ---------- workout preview ---------- */
-.pv-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
 .pv-tools { display: flex; align-items: center; gap: 4px; }
 .pv-diagram { margin-top: 18px; background: var(--surface-2); border-radius: var(--r-lg); padding: 10px 10px 4px; }
 .seg-info {

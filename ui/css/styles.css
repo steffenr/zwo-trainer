@@ -14,7 +14,12 @@
 @import url("base.css") layer(base);
 
 @import url("components/buttons.css") layer(components);
-@import url("components/surfaces.css") layer(components);
+@import url("components/card.css") layer(components);
+@import url("components/indicators.css") layer(components);
+@import url("components/dialog.css") layer(components);
+@import url("components/popover.css") layer(components);
+@import url("components/notice.css") layer(components);
+@import url("components/list.css") layer(components);
 @import url("components/forms.css") layer(components);
 @import url("components/avatar.css") layer(components);
 @import url("components/charts.css") layer(components);

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Checks the CSS structure (ui/css): styles.css declares the layer order and imports every other
 // .css file exactly once into a declared layer; imports point at existing files; braces balance;
-// nested rules start with "&" (DESIGN.md → CSS structure). Run: node scripts/check-css.mjs (CI does too).
+// nested rules start with "&"; components/ never mention a view (DESIGN.md → CSS structure).
+// Run: node scripts/check-css.mjs (CI does too).
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 const dir = fileURLToPath(new URL('../ui/css/', import.meta.url));
 const errors = [];
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '');
+// roots of the screens in views/ (body states, screen containers, the settings dialog)
+const VIEW_ROOT = /(body\.(?:riding|compact-riding)|\.(?:ride|compact-ride|view|topbar|wk-layout|tab-pane)(?![\w-])|dialog\.settings)/;
 const entry = strip(readFileSync(join(dir, 'styles.css'), 'utf8'));
 
 const order = entry.match(/@layer\s+([\w\s,-]+);/)?.[1].split(',').map((s) => s.trim()) ?? [];
@@ -32,6 +35,11 @@ for (const path of files(dir)) {
   const css = strip(readFileSync(path, 'utf8'));
   if (/@import\b/.test(css)) errors.push(`${rel}: @import only in styles.css`);
   if (/@layer\b/.test(css)) errors.push(`${rel}: the layer comes from styles.css, don't declare one here`);
+  if (rel.startsWith('components/')) {
+    // a component never knows the screen it is used on; screen-specific variants live in views/
+    const m = css.match(VIEW_ROOT);
+    if (m) errors.push(`${rel}: mentions the view "${m[1]}"; move that rule to views/`);
+  }
   let depth = 0, line = 1, ok = true;
   for (const ch of css) {
     if (ch === '\n') line++;
