@@ -387,21 +387,48 @@ function bindChrome() {
   document.addEventListener('keydown', (e) => ride?.onKey(e));
 }
 
-/** Reconnect the devices saved in the active profile (silently — they may be switched off). */
-async function autoConnect() {
+// kinds with a connection attempt from connectSaved() still running (hides "Retry auto-connect" meanwhile)
+const connectingKinds = new Set();
+
+/** Saved devices of the active profile that aren't connected, as [kind, ids]; with several controllers only the missing ones. */
+function offlineSaved() {
   const devs = state.settings.devices || {};
+  const out = [];
   for (const [kind, dev] of [['trainer', trainer], ['hr', hrm]]) {
-    const saved = devs[kind];
-    if (!saved?.id || dev.connected || dev.mode === 'sim') continue;
-    setDev(kind, { reconnecting: true, name: saved.name });
-    dev.connect(saved.id).catch(() => setDev(kind, { connected: false }));
+    if (devs[kind]?.id && !dev.connected && dev.mode !== 'sim') out.push([kind, [devs[kind].id]]);
   }
-  const cs = state.settings.devices?.controllers || [];
-  if (cs.length && !ctrls.connected) {
-    setDev('controller', { reconnecting: true, name: cs.map((c) => c.name).join(' + ') });
-    Promise.allSettled(cs.map((c) => ctrls.connect(c.id))).then((r) => { if (!r.some((x) => x.status === 'fulfilled')) setDev('controller', { connected: false }); });
-  }
+  const missing = (devs.controllers || []).filter((c) => !ctrls.ids.includes(c.id)).map((c) => c.id);
+  if (missing.length) out.push(['controller', missing]);
+  return out;
 }
+
+/** What "Retry auto-connect" would try: offline saved devices without an attempt running (ours, or Rust's own reconnect). */
+function retryable() {
+  return offlineSaved().filter(([kind]) => !connectingKinds.has(kind) && !sensorDevice(kind)?.reconnecting);
+}
+
+const sensorDevice = (kind) => (kind === 'trainer' ? trainer : kind === 'hr' ? hrm : null);
+
+/** Connect saved devices silently (they may be switched off); a failure only resets the status. */
+function connectSaved(list) {
+  const devs = state.settings.devices || {};
+  for (const [kind, ids] of list) {
+    connectingKinds.add(kind);
+    let job;
+    if (kind === 'controller') {
+      if (!ctrls.connected) setDev('controller', { reconnecting: true, name: (devs.controllers || []).map((c) => c.name).join(' + ') });
+      job = Promise.allSettled(ids.map((id) => ctrls.connect(id))).then((r) => { if (!ctrls.connected && !r.some((x) => x.status === 'fulfilled')) setDev('controller', { connected: false }); });
+    } else {
+      setDev(kind, { reconnecting: true, name: devs[kind]?.name });
+      job = sensorDevice(kind).connect(ids[0]).catch(() => setDev(kind, { connected: false }));
+    }
+    job.finally(() => { connectingKinds.delete(kind); refreshDevicesMenu(); });
+  }
+  refreshDevicesMenu();
+}
+
+/** Reconnect the devices saved in the active profile (at launch and after switching riders). */
+function autoConnect() { connectSaved(offlineSaved()); }
 
 /** Controller button → [workout action, dictionary key of its description] (Zwift Ride / Play / Click, OpenBikeControl). */
 export const BUTTON_ACTIONS = {
@@ -449,7 +476,12 @@ const battery = { trainer: {}, hr: {}, controller: {} };
 function setBattery(e) {
   if (!battery[e.kind]) return;
   battery[e.kind][e.id] = e.level;
-  if ($('#popover.dev-pop')) renderDevicesMenu($('#popover.dev-pop'));
+  refreshDevicesMenu();
+}
+
+function refreshDevicesMenu() {
+  const pop = $('#popover.dev-pop');
+  if (pop) renderDevicesMenu(pop);
 }
 
 function setDev(kind, s) {
@@ -463,7 +495,7 @@ function setDev(kind, s) {
   if (motionOK() && s.connected && !was.connected) restartAnim(dot, 'pop');
   if (motionOK() && was.connected && !s.connected) restartAnim(dot, 'drop');
   devicesTitle();
-  if ($('#popover.dev-pop')) renderDevicesMenu($('#popover.dev-pop'));
+  refreshDevicesMenu();
 }
 
 function devicesTitle() {
@@ -480,7 +512,7 @@ function renderDevicesMenu(pop) {
     const savedName = k === 'controller' ? (saved.controllers || []).map((c) => c.name).join(' + ') : saved[k]?.name;
     const status = d.connected ? `<span class="ok-text">${esc(d.name || t('connected'))}</span>` : d.reconnecting ? `<span class="warn-text">${d.name ? t('connectingName', { name: esc(d.name) }) : t('connectingDots')}</span>` : `<span class="muted">${savedName ? t('savedOff', { name: esc(savedName) }) : t('notPaired')}</span>`;
     return `<button class="dev-row" data-dev="${k}"><span class="dev-ico ${d.connected ? 'on' : d.reconnecting ? 'warn' : ''}">${icon}</span><span class="dev-txt"><span class="dev-head"><b>${t(label)}</b>${batt}</span>${status}</span><span class="dev-act">${d.connected ? t('change') : t('connect')}</span></button>`;
-  }).join('')}`;
+  }).join('')}${retryable().length ? `<hr><button class="dev-retry" data-retry title="${t('retryConnectTitle')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>${t('retryConnect')}</button>` : ''}`;
 }
 
 function devicesMenu(anchor) {
@@ -497,7 +529,12 @@ function devicesMenu(anchor) {
   const close = () => { pop.remove(); document.removeEventListener('click', outside, true); };
   const outside = (e) => { if (!pop.contains(e.target) && !anchor.contains(e.target)) close(); };
   setTimeout(() => document.addEventListener('click', outside, true));
-  pop.onclick = (e) => { const b = e.target.closest('[data-dev]'); if (b) { close(); deviceDialog(b.dataset.dev); } };
+  pop.onclick = (e) => {
+    // retry keeps the popover open, so the rows show "Connecting…" and then the result
+    if (e.target.closest('[data-retry]')) return connectSaved(retryable());
+    const b = e.target.closest('[data-dev]');
+    if (b) { close(); deviceDialog(b.dataset.dev); }
+  };
 }
 
 // ------------------------------------------------------------------ profiles

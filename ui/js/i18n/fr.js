@@ -84,6 +84,8 @@ export const fr = {
   connectingDots: 'connexion…',
   savedOff: '{name} · éteint',
   notPaired: 'non appairé',
+  retryConnect: 'Relancer la connexion automatique',
+  retryConnectTitle: 'Reconnecter tous les appareils enregistrés qui sont éteints, par ex. après avoir réveillé le home trainer ou mis la ceinture cardio',
   change: 'Changer',
   connect: 'Connecter',
   whoRiding: 'Qui roule ?',

@@ -85,6 +85,8 @@ export const en = {
   connectingDots: 'connecting…',
   savedOff: '{name} · off',
   notPaired: 'not paired',
+  retryConnect: 'Retry auto-connect',
+  retryConnectTitle: 'Connect all saved devices that are off again, e.g. after waking the trainer or putting on the heart rate strap',
   change: 'Change',
   connect: 'Connect',
   whoRiding: 'Who\'s riding?',

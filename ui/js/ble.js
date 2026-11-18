@@ -125,13 +125,13 @@ export class HeartRate extends Device {
 
 /** Zwift Ride / Click / Play and OpenBikeControl controllers (virtual shifting). Several can be connected (Ride L + R). */
 export class Controllers extends Emitter {
-  constructor() { super(); this.names = ''; this.count = 0; }
+  constructor() { super(); this.names = ''; this.count = 0; this.ids = []; }
   get connected() { return this.count > 0; }
   scan(secs = 4) { return invoke('ctrl_scan', { secs }); }
   async connect(id) { const info = await invoke('ctrl_connect', { id }); return info; }
   async disconnect() { await invoke('ctrl_disconnect').catch(() => {}); }
   list() { return invoke('ctrl_list').catch(() => []); }
-  onStatus(s) { this.count = s.count || 0; this.names = s.name || ''; this.emit('status', { connected: this.count > 0, name: this.names }); }
+  onStatus(s) { this.count = s.count || 0; this.names = s.name || ''; this.ids = s.ids || []; this.emit('status', { connected: this.count > 0, name: this.names }); }
 }
 
 /** Wire Rust events to the device objects. Sensor data from real devices goes to `onData`. */
