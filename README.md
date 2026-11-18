@@ -400,7 +400,10 @@ Nothing is sent anywhere except what you enable: uploads to the platforms you co
 ```bash
 cd src-tauri && cargo test                                                    # unit tests
 ZWO_TEST_DIR=~/Downloads/zwo cargo test scan_real_library -- --nocapture       # parse a whole library
+npx -y -p playwright node scripts/shots/run.mjs                               # retake all website screenshots (site/img)
 ```
+
+The website screenshots are generated from the real interface with a sample rider and library, never taken by hand; see *Website* in [AGENTS.md](AGENTS.md).
 
 ### Releases
 
