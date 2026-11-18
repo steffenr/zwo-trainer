@@ -1,6 +1,6 @@
 // Markup for css/components/indicators.css: badge, week/day tag, zone tag.
 // Text arguments are escaped; pass tHtml(…) or an html`` fragment for translated or marked-up text.
-import { html, tHtml } from '../html.js';
+import { html, tText } from '../html.js';
 import { ZONES } from '../render.js';
 
 /** Badge: kind '' (accent), 'ok', 'warn', 'muted', 'test'. */
@@ -13,5 +13,5 @@ export const wdTag = (text) => html`<span class="wd">${text}</span>`;
 export function zoneTag(z) {
   const zone = ZONES[z - 1];
   if (!zone) return html``;
-  return html`<span class="ztag" style="--zc:${zone.color}" title="${tHtml('trainingIntensity', { zone: `${zone.short} ${zone.name}` })}">${zone.short}</span>`;
+  return html`<span class="ztag" style="--zc:${zone.color}" title="${tText('trainingIntensity', { zone: `${zone.short} ${zone.name}` })}">${zone.short}</span>`;
 }

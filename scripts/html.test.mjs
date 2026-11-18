@@ -18,8 +18,29 @@ test('html: interpolations are escaped, in text and in quoted attributes', () =>
   assert.equal(s(html`<i>${'"quoted"'}</i>`), '<i>&quot;quoted&quot;</i>');
 });
 
-test('html: numbers, null, undefined and false', () => {
-  assert.equal(s(html`${0}|${12.5}|${null}|${undefined}|${false}|${true}`), '0|12.5||||true');
+test('html: numbers render, null / undefined / booleans render nothing', () => {
+  assert.equal(s(html`${0}|${12.5}|${null}|${undefined}|${false}|${true}`), '0|12.5||||');
+});
+
+test('esc: a Safe fragment passes through (no double escaping in legacy strings)', () => {
+  assert.equal(esc(html`<b>${'<x>'}</b>`), '<b>&lt;x&gt;</b>');
+});
+
+test('tText: plain text for attributes, vars survive unchanged, html`` escapes the result', async () => {
+  const { tText, plain } = await import('../ui/js/html.js');
+  assert.equal(plain('Privacy &amp; <b>Security</b>'), 'Privacy & Security');
+  const key = Object.keys(en).find((k) => typeof en[k] === 'string' && /\{name\}/.test(en[k]));
+  const out = tText(key, { name: 'A & <B>' });
+  assert.ok(out.includes('A & <B>'), out);
+  assert.ok(s(html`<i title="${out}"></i>`).includes('A &amp; &lt;B&gt;'));
+});
+
+test('segCtl: extra attributes are an escaped object; a name is required', async () => {
+  const { segCtl } = await import('../ui/js/components/buttons.js');
+  const out = s(segCtl('lang', [['de', 'Deutsch', { lang: 'de"x' }]], 'de', { label: 'Language' }));
+  assert.ok(out.includes(' lang="de&quot;x"'), out);
+  assert.throws(() => segCtl('x', [['a', 'A', 'lang="de"']], 'a', { label: 'L' }), /object/);
+  assert.throws(() => segCtl('x', [['a', 'A']], 'a'), /labelledBy or label/);
 });
 
 test('segCtl: aria-checked says "false" for unselected items', async () => {
@@ -65,5 +86,7 @@ test('mount: fragments become markup, plain strings stay text', () => {
   assert.equal(el.innerHTML, '<b>&lt;i&gt;</b>');
   mount(el, '<i>not markup</i>');
   assert.equal(el.innerHTML, '&lt;i&gt;not markup&lt;/i&gt;');
+  mount(el, [html`<b>1</b>`, '<2>']);
+  assert.equal(el.innerHTML, '<b>1</b>&lt;2&gt;');
   assert.ok(html`` instanceof Safe);
 });

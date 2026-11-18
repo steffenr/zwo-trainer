@@ -12,12 +12,15 @@ import { fileURLToPath } from 'node:url';
 const BASELINE = {
   'html.js': 1,      // mount() itself
   'render.js': 1,
-  'app.js': 47,      // includes setHtml(), the ride loop's cached write
+  // left in app.js: the ride screen skeleton in Ride.build() (title, screen, chart tooltip, live status,
+  // overlay toggle), the top-bar avatar, the ⋯ menu copy from its <template>, the preview's segment info
+  // and star, and two clears (innerHTML = '')
+  'app.js': 11,
 };
 
 const root = fileURLToPath(new URL('../ui/js/', import.meta.url));
 const files = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(join(d, e.name)) : e.name.endsWith('.js') ? [join(d, e.name)] : []));
-const WRITE = /\.(?:innerHTML|outerHTML)\s*=(?!=)|\binsertAdjacentHTML\s*\(/g;
+const WRITE = /\.(?:innerHTML|outerHTML)\s*\+?=(?!=)|\binsertAdjacentHTML\s*\(/g;
 const errors = [], lower = [];
 let total = 0;
 for (const f of files(root)) {
