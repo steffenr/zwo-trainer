@@ -1296,6 +1296,9 @@ function closeModal() {
 }
 modal.addEventListener('click', (e) => { if (e.target === modal && !modal.classList.contains('sticky')) closeModal(); });
 modal.addEventListener('cancel', (e) => { if (modal.classList.contains('sticky')) e.preventDefault(); });
+// a dialog's own clean-up when it closes (Settings redraws the views once)
+let onModalClose = null;
+modal.addEventListener('close', () => { const fn = onModalClose; onModalClose = null; fn?.(); });
 
 function confirmDialog(title, text, ok = 'OK', danger = false) {
   return new Promise((resolve) => {
@@ -1421,7 +1424,33 @@ function syncMode(svc) {
   return (state.settings[svc] || {}).mode || 'auto';
 }
 const MODES = [['off', 'off'], ['manual', 'manual'], ['auto', 'automatic']];
-const modeSelect = (name, cur) => `<div class="frow sync-mode">${t('upload')} <span class="seg-ctl" data-mode-ctl="${name}">${MODES.map(([k, l]) => `<button type="button" data-v="${k}" class="${cur === k ? 'on' : ''}">${t(l)}</button>`).join('')}</span></div>`;
+const modeSelect = (name, cur) => segRow(`mode-${name}`, t('upload'), MODES.map(([k, l]) => [k, t(l)]), cur, 'sync-mode');
+
+/** A labelled segmented control: a radio group of buttons (one tab stop, arrow keys move, see rovingKey). */
+function segRow(id, label, items, cur, cls = '') {
+  const sel = items.some(([v]) => v === cur) ? cur : items[0][0];
+  return `<div class="frow ${cls}"><span id="${id}-l">${label}</span><span class="seg-ctl" id="${id}" role="radiogroup" aria-labelledby="${id}-l">${items.map(([v, text, extra = '']) => `<button type="button" role="radio" data-v="${v}" aria-checked="${v === cur}" tabindex="${v === sel ? 0 : -1}" class="${v === cur ? 'on' : ''}" ${extra}>${text}</button>`).join('')}</span></div>`;
+}
+function selectSeg(ctl, b) {
+  $$('[role=radio]', ctl).forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', on); x.tabIndex = on ? 0 : -1; });
+}
+/** Arrow keys / Home / End inside tab lists and segmented controls (selection follows focus). */
+function rovingKey(e) {
+  const el = e.target.closest?.('[role=tab], .seg-ctl [role=radio]');
+  const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1, Home: 'first', End: 'last' }[e.key];
+  if (!el || step === undefined) return;
+  const items = [...el.parentElement.children].filter((x) => x.getAttribute('role') === el.getAttribute('role') && !x.disabled);
+  const i = items.indexOf(el);
+  const next = items[step === 'first' ? 0 : step === 'last' ? items.length - 1 : (i + step + items.length) % items.length];
+  e.preventDefault();
+  next.focus();
+  next.click();
+}
+modal.addEventListener('keydown', rovingKey);
+
+const ICON_X = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+const ICON_CHECK = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+const fmtNum = (n) => n.toLocaleString(fmtLocale());
 
 /** Language of the UI right now: the rider's choice, else the system language. */
 const uiLang = () => coerceLocale(state.settings.language) || systemLocale();
@@ -1429,9 +1458,14 @@ const uiLang = () => coerceLocale(state.settings.language) || systemLocale();
 /** Hint under a platform in Settings: our own text when we have one, else what Rust sent. */
 const svcHint = (sv) => (t(`svcHint.${sv.id}`) !== `svcHint.${sv.id}` ? t(`svcHint.${sv.id}`) : esc(sv.hint));
 
+// set by Settings while open; the views redraw once when the dialog closes
+let settingsDirty = false;
+
+/** Settings: every control saves as soon as it changes (numbers when the field is left and valid).
+ *  There is no Cancel: Done, ✕, Esc and a click outside all just close. Views redraw on close. */
 async function openSettings(tab = 'rider') {
   const s = state.settings;
-  const themeBefore = s.theme || 'system';
+  const sh = shifting();
   const [garmin, targets, svcs] = await Promise.all([invoke('garmin_status').catch(() => ({})), invoke('sync_targets').catch(() => []), refreshServices()]);
   const svcCard = (sv) => {
     const mode = svcMode(sv);
@@ -1439,71 +1473,76 @@ async function openSettings(tab = 'rider') {
     const action = sv.connected ? `<button class="btn ghost sm" data-a="svc-off" data-id="${sv.id}">${t('disconnect')}</button>` : '';
     let body = '';
     if (sv.connected) body = modeSelect(`svc-${sv.id}`, mode);
-    else if (sv.kind === 'apikey') body = `<div class="cred"><input type="password" name="key-${sv.id}" placeholder="${t('apiKeyPlaceholder', { name: esc(sv.name) })}" autocomplete="off"><button class="btn primary sm" data-a="svc-key" data-id="${sv.id}">${t('connect')}</button></div>
+    else if (sv.kind === 'apikey') body = `<div class="cred"><input type="password" name="key-${sv.id}" placeholder="${t('apiKeyPlaceholder', { name: esc(sv.name) })}" aria-label="${t('apiKeyPlaceholder', { name: esc(sv.name) })}" autocomplete="off"><button class="btn primary sm" data-a="svc-key" data-id="${sv.id}">${t('connect')}</button></div>
       <p class="muted small">${svcHint(sv)} <a href="#" class="link" data-a="svc-getkey">${t('openIntervalsSettings')}</a></p>`;
-    else if (sv.manualUrl) body = `<div class="frow sync-mode">${t('afterRide')} <span class="seg-ctl" data-mode-ctl="svc-${sv.id}">${[['off', 'off'], ['manual', 'showImportButton']].map(([k, l]) => `<button type="button" data-v="${k}" class="${mode === k ? 'on' : ''}">${t(l)}</button>`).join('')}</span></div><p class="muted small">${svcHint(sv)}</p>`;
+    else if (sv.manualUrl) body = `${segRow(`mode-svc-${sv.id}`, t('afterRide'), [['off', t('off')], ['manual', t('showImportButton')]], mode, 'sync-mode')}<p class="muted small">${svcHint(sv)}</p>`;
     return `<div class="svc svc-ext ${sv.connected ? 'on' : ''}"><div class="svc-head"><span class="svc-logo ext">${SVC_LOGO[sv.id] || sv.name[0]}</span><div><b>${esc(sv.name)}</b><small class="muted">${status}</small></div>${action}</div>${body}</div>`;
   };
   const sp = syncOn() ? syncCfg.provider : 'off';
   const syncRow = (id, label, path, found, extra = '') => `<label class="sync-opt ${found ? '' : 'na'}"><input type="radio" name="syncp" value="${id}" ${sp === id ? 'checked' : ''} ${found ? '' : 'disabled'}><span><b>${label}</b><small class="muted">${extra || (path ? esc(path.replace(/^\/Users\/[^/]+/, '~')) : t('syncNotFound', { where: PLAT.onThisMachine }))}</small></span></label>`;
+  // number field: label · input · unit, plus a hidden error line it points to
+  const num = (name, label, value, attrs, unit = '') => `<label for="set-${name}">${label} <span><input type="number" id="set-${name}" name="${name}" value="${value ?? ''}" ${attrs} aria-describedby="err-${name}">${unit ? ` ${unit}` : ''}</span></label><p class="field-err" id="err-${name}" hidden></p>`;
+  const check = (name, on, label, cls = '') => `<label class="check ${cls}"><input type="checkbox" name="${name}" ${on ? 'checked' : ''}> ${label}</label>`;
+  const TABS = [['rider', 'tabRider'], ['riding', 'tabRiding'], ['sync', 'tabConnections'], ['app', 'tabApp']];
+  const devs = s.devices || {};
   openModal(`
-    <div class="pv-head"><h2>${t('settings')} <small class="muted">· ${esc(state.name)}</small></h2><button class="icon-btn" data-a="close" aria-label="${t('close')}">✕</button></div>
-    <div class="tabs" id="set-tabs">${[['rider', 'tabRider'], ['app', 'tabApp'], ['sync', 'tabConnections']].map(([k, l]) => `<button data-tab="${k}" class="${tab === k ? 'on' : ''}">${t(l)}</button>`).join('')}</div>
+    <div class="pv-head"><h2>${t('settings')} <small class="muted">· ${esc(state.name)}</small></h2><button class="icon-btn" data-a="close" aria-label="${t('close')}">${ICON_X}</button></div>
+    <div class="tabs" id="set-tabs" role="tablist" aria-label="${t('settings')}">${TABS.map(([k, l]) => `<button role="tab" id="tab-${k}" aria-controls="pane-${k}" aria-selected="${tab === k}" tabindex="${tab === k ? 0 : -1}" data-tab="${k}" class="${tab === k ? 'on' : ''}">${t(l)}</button>`).join('')}</div>
+    <div class="set-panes">
 
-    <div class="tab-pane" data-pane="rider" ${tab === 'rider' ? '' : 'hidden'}>
+    <div class="tab-pane" role="tabpanel" id="pane-rider" aria-labelledby="tab-rider" data-pane="rider" ${tab === 'rider' ? '' : 'hidden'}>
       <div class="form">
-        <label>FTP <span><input type="number" name="ftp" value="${s.ftp}" min="50" max="600"> W</span></label>
-        <label>${t('maxHr')} <span><input type="number" name="maxHr" value="${s.maxHr}" min="100" max="230"> bpm</span></label>
-        <label>${t('weight')} <span><input type="number" name="weight" value="${s.weight ?? ''}" min="30" max="200" step="0.1" placeholder="kg"> kg</span></label>
+        ${num('ftp', 'FTP', s.ftp, 'min="50" max="600"', 'W')}
+        ${num('maxHr', t('maxHr'), s.maxHr, 'min="100" max="230"', 'bpm')}
+        ${num('weight', t('weight'), s.weight, 'min="30" max="200" step="0.1"', 'kg')}
       </div>
       <h3>${t('personalBests')} <small class="muted">${t('personalBestsHint')}</small></h3>
-      <div class="bests-form">${[['s5', '5 s'], ['m1', '1 min'], ['m5', '5 min'], ['m20', '20 min']].map(([k, l]) => `<label>${l}<span><input type="number" name="b_${k}" value="${s.bests?.[k] ?? ''}" min="0" max="3000"> W</span></label>`).join('')}</div>
+      <div class="form">${[['s5', '5 s'], ['m1', '1 min'], ['m5', '5 min'], ['m20', '20 min']].map(([k, l]) => num(`b_${k}`, l, s.bests?.[k], 'min="1" max="3000"', 'W')).join('')}</div>
       <h3>${t('trainingZones')} <small class="muted">${t('trainingZonesHint')}</small></h3>
-      <div class="zone-form">
+      <div class="zone-form" id="zone-form">
         ${ZONES.map((z, i) => `<div class="zf"><i style="background:${z.color}"></i><span>${z.short} ${z.name}</span>
-          ${i < 4 ? `<span>≤ <input type="number" name="z${i}" value="${s.zones[i]}" min="30" max="200"> %</span>` : `<span>&gt; <em id="z5-lim">${s.zones[3]}</em> %</span>`}</div>`).join('')}
+          ${i < 4 ? `<span>≤ <input type="number" name="z${i}" value="${s.zones[i]}" min="30" max="200" aria-label="${t('zoneLimitAria', { zone: `${z.short} ${z.name}` })}" aria-describedby="err-zones"> %</span>` : `<span>&gt; <b class="z5-lim" id="z5-lim">${s.zones[3]}</b> %</span>`}</div>`).join('')}
+        <p class="field-err" id="err-zones" hidden></p>
       </div>
     </div>
 
-    <div class="tab-pane" data-pane="app" ${tab === 'app' ? '' : 'hidden'}>
+    <div class="tab-pane" role="tabpanel" id="pane-riding" aria-labelledby="tab-riding" data-pane="riding" ${tab === 'riding' ? '' : 'hidden'}>
+      <h3>${t('grpSounds')}</h3>
       <div class="form">
-        <div class="frow">${t('appearance')} <span class="seg-ctl" id="theme-ctl">${['system', 'light', 'dark'].map((th) => `<button type="button" data-theme="${th}" class="${(s.theme || 'system') === th ? 'on' : ''}">${t(THEME_LABEL[th])}</button>`).join('')}</span></div>
-        <div class="frow">${t('language')} <span class="seg-ctl" id="lang-ctl">${LOCALES.map((l) => `<button type="button" data-lang="${l.value}" lang="${l.value}" class="${uiLang() === l.value ? 'on' : ''}">${l.nativeLabel}</button>`).join('')}</span></div>
-        <label class="check"><input type="checkbox" name="beeps" ${s.beeps ? 'checked' : ''}> ${t('optBeeps')}</label>
-        <label class="check sub"><input type="checkbox" name="beepDirection" ${s.beepDirection !== false ? 'checked' : ''} ${s.beeps ? '' : 'disabled'}> ${t('optBeepDirection')}</label>
-        <label class="check"><input type="checkbox" name="endChime" ${s.endChime !== false ? 'checked' : ''}> ${t('optEndChime')}</label>
-        <label class="check"><input type="checkbox" name="autoPause" ${s.autoPause !== false ? 'checked' : ''}> ${t('optAutoPause')}</label>
-        <label class="check"><input type="checkbox" name="coachHints" ${s.coachHints !== false ? 'checked' : ''}> ${t('optCoach')}</label>
-        <label class="check"><input type="checkbox" name="keyboardShortcuts" ${s.keyboardShortcuts !== false ? 'checked' : ''}> ${t('optKeys')}</label>
+        ${check('beeps', s.beeps, t('optBeeps'))}
+        ${check('beepDirection', s.beepDirection !== false, t('optBeepDirection'), 'sub')}
+        ${check('endChime', s.endChime !== false, t('optEndChime'))}
       </div>
-      <h3>${t('workoutsFolder')}</h3>
-      <div class="folder-row"><code>${esc(library.root)}</code><button class="btn ghost sm" data-a="dir">${t('changeDots')}</button><button class="btn ghost sm" data-a="rescan" title="${t('rescanTitle')}">${t('rescan')}</button></div>
+      <h3>${t('grpDuringRide')}</h3>
+      <div class="form">
+        ${check('autoPause', s.autoPause !== false, t('optAutoPause'))}
+        ${check('coachHints', s.coachHints !== false, t('optCoach'))}
+        ${check('keyboardShortcuts', s.keyboardShortcuts !== false, t('optKeys'))}
+      </div>
       <h3>${t('virtualShifting')} <small class="muted">${t('virtualShiftingHint')}</small></h3>
       <div class="form">
-        <div class="frow">${t('vsDefault')} <span class="seg-ctl" id="vs-mode">${[['ask', 'vsAsk'], ['gears', 'realGears'], ['virtual', 'virtualGears']].map(([k, l]) => `<button type="button" data-v="${k}" class="${shifting().mode === k ? 'on' : ''}">${t(l)}</button>`).join('')}</span></div>
-        <div class="frow">${t('difficulty')} <span class="seg-ctl" id="vs-diff">${['easy', 'medium', 'hard'].map((k) => `<button type="button" data-v="${k}" class="${shifting().difficulty === k ? 'on' : ''}">${t(`diff.${k}`)}</button>`).join('')}</span></div>
-        <label>${t('gearRange')} <span><input type="number" name="vsMin" value="${shifting().minRatio}" min="0.4" max="2" step="0.05"> – <input type="number" name="vsMax" value="${shifting().maxRatio}" min="2.5" max="7" step="0.05"></span></label>
-        <label>${t('startGear')} <span><input type="number" name="vsStart" value="${shifting().startGear}" min="1" max="${shifting().gears}"> ${t('ofN', { n: shifting().gears })}</span></label>
+        ${segRow('vs-mode', t('vsDefault'), [['ask', t('vsAsk')], ['gears', t('realGears')], ['virtual', t('virtualGears')]], sh.mode)}
+        <p class="muted small hint" id="vs-mode-hint">${t(`vsHint.${sh.mode}`)}</p>
+        ${segRow('vs-diff', t('difficulty'), ['easy', 'medium', 'hard'].map((k) => [k, t(`diff.${k}`)]), sh.difficulty)}
+        <p class="muted small hint">${t('difficultyHint')}</p>
       </div>
-      <h3>${t('devices')}</h3>
-      <p class="muted small">${t('devicesSummary', { trainer: esc(s.devices?.trainer?.name || t('none')), hr: esc(s.devices?.hr?.name || t('none')), shifter: esc((s.devices?.controllers || []).map((c) => c.name).join(' + ') || t('none')) })}</p>
-      <h3>${t('about')}</h3>
-      <p class="muted small">zwoTrainer <span id="app-ver"></span> · ${t('mitLicense')} · © 2026 SteffenR</p>
-      ${updPrefs.available ? `<div class="form upd-form"><div class="frow"><label class="check"><input type="checkbox" id="upd-auto" ${updPrefs.auto !== false ? 'checked' : ''}> ${t('updAuto')}</label><button class="btn ghost sm" data-a="upd-check">${t('checkNow')}</button></div></div>` : ''}
-      <div class="about-links">
-        <button class="btn ghost sm" data-a="link" data-url="https://steffenr.github.io/zwo-trainer/">${t('website')}</button>
-        <button class="btn ghost sm" data-a="link" data-url="https://github.com/steffenr/zwo-trainer">${t('sourceCode')}</button>
-        <button class="btn ghost sm" data-a="link" data-url="https://github.com/steffenr/zwo-trainer/releases/latest/download/THIRD-PARTY-NOTICES.html">${t('thirdParty')}</button>
-        <button class="btn ghost sm" data-a="link" data-url="https://buymeacoffee.com/steffenr">☕ ${t('buyCoffee')}</button>
-      </div>
+      <details class="adv">
+        <summary>${t('advanced')}</summary>
+        <div class="form">
+          <label for="set-vsMin">${t('gearRange')} <span><input type="number" id="set-vsMin" name="vsMin" value="${sh.minRatio}" min="0.4" max="2" step="0.05" aria-label="${t('gearRangeMin')}" aria-describedby="err-vsMin"> – <input type="number" name="vsMax" value="${sh.maxRatio}" min="2.5" max="7" step="0.05" aria-label="${t('gearRangeMax')}" aria-describedby="err-vsMax"></span></label>
+          <p class="field-err" id="err-vsMin" hidden></p><p class="field-err" id="err-vsMax" hidden></p>
+          <p class="muted small hint">${t('gearRangeHint', { n: sh.gears })}</p>
+          ${num('vsStart', t('startGear'), sh.startGear, `min="1" max="${sh.gears}"`, t('ofN', { n: sh.gears }))}
+        </div>
+      </details>
     </div>
 
-    <div class="tab-pane" data-pane="sync" ${tab === 'sync' ? '' : 'hidden'}>
+    <div class="tab-pane" role="tabpanel" id="pane-sync" aria-labelledby="tab-sync" data-pane="sync" ${tab === 'sync' ? '' : 'hidden'}>
       <div class="svc">
-        <div class="svc-head"><span class="svc-logo sync"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/></svg></span>
+        <div class="svc-head"><span class="svc-logo sync"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/></svg></span>
           <div><b>${t('profileSync')}</b><small class="muted" id="sync-status">${syncOn() ? `${syncLabel(sp)} · ${syncCfg.lastError ? `<span class="warn-text">${esc(syncCfg.lastError)}</span>` : syncCfg.lastSync ? t('lastSynced', { when: agoText(syncCfg.lastSync) }) : t('notSyncedYet')}` : t('syncOffStatus', { where: PLAT.onThisMachine })}</small></div>
           ${syncOn() ? `<button class="btn ghost sm" data-a="sync-now">${t('syncNow')}</button>` : ''}</div>
-        <div class="sync-opts" id="sync-opts">
+        <div class="sync-opts" id="sync-opts" role="radiogroup" aria-label="${t('profileSync')}">
           ${syncRow('off', t('off'), null, true, t('syncOffHint', { where: PLAT.onThisMachine }))}
           ${targets.map((tg) => syncRow(tg.provider, tg.label, tg.path, tg.found)).join('')}
           ${syncRow('folder', t('otherFolder'), sp === 'folder' ? syncCfg.dir : null, true, sp === 'folder' ? esc(syncCfg.dir) : t('otherFolderHint'))}
@@ -1519,26 +1558,136 @@ async function openSettings(tab = 'rider') {
           <summary>${t('manualFit')}</summary>
           <p class="muted small">${t('manualFitHint', { app: PLAT.files })}</p>
           <div class="folder-row"><code>${esc(s.garmin?.folder || 'Downloads')}</code><button class="btn ghost sm" data-a="garmin-dir">${t('changeDots')}</button></div>
-          <label class="check"><input type="checkbox" name="garminAuto" ${s.garmin?.autoOpen ? 'checked' : ''}> ${t('manualFitAuto')}</label>
+          ${check('garminAuto', s.garmin?.autoOpen, t('manualFitAuto'))}
         </details>
       </div>
-      <h3 class="svc-group">${t('morePlatforms')}</h3>
-      ${svcs.map(svcCard).join('')}
+      ${svcs.length ? `<h3 class="svc-group">${t('morePlatforms')}</h3>${svcs.map(svcCard).join('')}` : ''}
     </div>
 
-    <div class="modal-actions"><button class="btn ghost" data-a="cancel">${t('cancel')}</button><button class="btn primary" data-a="save">${t('save')}</button></div>`, 'small settings');
+    <div class="tab-pane" role="tabpanel" id="pane-app" aria-labelledby="tab-app" data-pane="app" ${tab === 'app' ? '' : 'hidden'}>
+      <div class="form">
+        ${segRow('theme-ctl', t('appearance'), ['system', 'light', 'dark'].map((th) => [th, t(THEME_LABEL[th])]), s.theme || 'system')}
+        ${segRow('lang-ctl', t('language'), LOCALES.map((l) => [l.value, l.nativeLabel, `lang="${l.value}"`]), uiLang())}
+      </div>
+      <h3>${t('workoutsFolder')}</h3>
+      <div class="folder-row"><code>${esc(library.root)}</code><button class="btn ghost sm" data-a="dir">${t('changeDots')}</button><button class="btn ghost sm" data-a="rescan" title="${t('rescanTitle')}">${t('rescan')}</button></div>
+      <h3>${t('devices')}</h3>
+      <div class="dev-sum"><p class="muted small">${t('devicesSummary', { trainer: esc(devs.trainer?.name || t('none')), hr: esc(devs.hr?.name || t('none')), shifter: esc((devs.controllers || []).map((c) => c.name).join(' + ') || t('none')) })}</p><button class="btn ghost sm" data-a="devices">${t('manageDevices')}</button></div>
+      ${updPrefs.available ? `<h3>${t('updates')}</h3><div class="form upd-form"><div class="frow">${check('updAuto', updPrefs.auto !== false, t('updAuto'))}<button class="btn ghost sm" data-a="upd-check">${t('checkNow')}</button></div></div>` : ''}
+      <h3>${t('about')}</h3>
+      <p class="muted small">zwoTrainer <span id="app-ver"></span> · ${t('mitLicense')} · © 2026 SteffenR</p>
+      <p class="about-links small">${[['https://steffenr.github.io/zwo-trainer/', 'website'], ['https://github.com/steffenr/zwo-trainer', 'sourceCode'], ['https://github.com/steffenr/zwo-trainer/releases/latest/download/THIRD-PARTY-NOTICES.html', 'thirdParty'], ['https://buymeacoffee.com/steffenr', 'buyCoffee']].map(([url, l]) => `<a href="#" class="link" data-a="link" data-url="${url}">${t(l)}</a>`).join('<span aria-hidden="true"> · </span>')}</p>
+    </div>
+    </div>
+
+    <div class="modal-actions set-foot"><span class="set-status muted small" id="set-status" role="status">${t('autoSaved')}</span><button class="btn" data-a="close">${t('done')}</button></div>`, 'small settings');
+
+  // ---- saving: one model for everything
+  let statusTimer = null;
+  const status = $('#set-status', modal);
+  const save = async () => {
+    settingsDirty = true;
+    await api.saveState();
+    status.innerHTML = `<span class="ok-text">${ICON_CHECK} ${t('savedOk')}</span>`;
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => (status.textContent = t('autoSaved')), 1800);
+  };
+  // views (FTP, zones, …) redraw once, when the dialog closes — never while typing
+  onModalClose = () => { if (settingsDirty && !ride) route(); settingsDirty = false; };
 
   $('#set-tabs', modal).onclick = (e) => {
     const b = e.target.closest('[data-tab]');
     if (!b) return;
-    $$('#set-tabs button', modal).forEach((x) => x.classList.toggle('on', x === b));
+    $$('#set-tabs [role=tab]', modal).forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-selected', on); x.tabIndex = on ? 0 : -1; });
     $$('.tab-pane', modal).forEach((p) => (p.hidden = p.dataset.pane !== b.dataset.tab));
+    $('.set-panes', modal).scrollTop = 0;
   };
-  const z3 = $('[name=z3]', modal);
-  z3.oninput = () => ($('#z5-lim', modal).textContent = z3.value);
+
+  // ---- number fields: check on input once an error shows, save when the field is left and valid
+  const f = (n) => $(`[name=${n}]`, modal);
+  const showErr = (id, msg, inputs) => {
+    const el = $(`#err-${id}`, modal);
+    el.textContent = msg || '';
+    el.hidden = !msg;
+    inputs.forEach((i) => i.setAttribute('aria-invalid', msg ? 'true' : 'false'));
+  };
+  const rangeErr = (el, optional = false) => {
+    if (el.value === '') return optional ? '' : t('errRange', { min: fmtNum(+el.min), max: fmtNum(+el.max) });
+    const v = +el.value;
+    return Number.isFinite(v) && v >= +el.min && v <= +el.max ? '' : t('errRange', { min: fmtNum(+el.min), max: fmtNum(+el.max) });
+  };
+  const FIELDS = {
+    ftp: { apply: (v) => (s.ftp = Math.round(v)) },
+    maxHr: { apply: (v) => (s.maxHr = Math.round(v)) },
+    weight: { optional: true, apply: (v) => (s.weight = v === null ? null : Math.round(v * 10) / 10) },
+    vsMin: { apply: (v) => (s.shifting = { ...shifting(), minRatio: v }) },
+    vsMax: { apply: (v) => (s.shifting = { ...shifting(), maxRatio: v }) },
+    vsStart: { apply: (v) => (s.shifting = { ...shifting(), startGear: Math.round(v) }) },
+  };
+  for (const k of ['s5', 'm1', 'm5', 'm20']) FIELDS[`b_${k}`] = { optional: true, apply: (v) => { const b = { ...(s.bests || {}) }; if (v === null) delete b[k]; else b[k] = Math.round(v); s.bests = b; } };
+  const checkField = (name) => {
+    const el = f(name);
+    const msg = rangeErr(el, FIELDS[name].optional);
+    showErr(name, msg, [el]);
+    return !msg;
+  };
+  const zoneInputs = [0, 1, 2, 3].map((i) => f(`z${i}`));
+  const checkZones = () => {
+    const bad = zoneInputs.find((el) => rangeErr(el));
+    const z = zoneInputs.map((el) => +el.value);
+    const msg = bad ? rangeErr(bad) : z.every((v, i) => i === 0 || v > z[i - 1]) ? '' : t('errZones');
+    showErr('zones', msg, zoneInputs);
+    return msg ? null : z;
+  };
+  for (const name of Object.keys(FIELDS)) {
+    const el = f(name);
+    el.addEventListener('input', () => { if (el.getAttribute('aria-invalid') === 'true') checkField(name); });
+    el.addEventListener('change', () => { if (!checkField(name)) return; FIELDS[name].apply(el.value === '' ? null : +el.value); save(); });
+  }
+  zoneInputs.forEach((el) => {
+    el.addEventListener('input', () => { $('#z5-lim', modal).textContent = zoneInputs[3].value; if (el.getAttribute('aria-invalid') === 'true') checkZones(); });
+    el.addEventListener('change', () => { const z = checkZones(); if (z) { s.zones = z; save(); } });
+  });
+
+  // ---- checkboxes save at once
+  const CHECKS = { beeps: 'beeps', beepDirection: 'beepDirection', endChime: 'endChime', autoPause: 'autoPause', coachHints: 'coachHints', keyboardShortcuts: 'keyboardShortcuts' };
+  for (const [name, key] of Object.entries(CHECKS)) f(name).onchange = (e) => { s[key] = e.target.checked; save(); };
+  // the up/down cue belongs to the countdown beeps
+  f('beepDirection').disabled = !s.beeps;
+  f('beeps').addEventListener('change', (e) => { f('beepDirection').disabled = !e.target.checked; });
+  f('garminAuto').onchange = (e) => { s.garmin = { ...(s.garmin || {}), autoOpen: e.target.checked }; save(); };
+  const updAuto = f('updAuto');
+  if (updAuto) updAuto.onchange = () => invoke('update_prefs', { auto: updAuto.checked }).then((p) => { updPrefs = p; status.innerHTML = `<span class="ok-text">${ICON_CHECK} ${t('savedOk')}</span>`; }).catch((err) => toast(String(err)));
+
+  // ---- segmented controls (radio groups) save at once
+  const SEGS = {
+    'theme-ctl': (v) => { s.theme = v; applyTheme(); save(); },
+    'vs-mode': (v) => { s.shifting = { ...shifting(), mode: v }; $('#vs-mode-hint', modal).textContent = t(`vsHint.${v}`); save(); },
+    'vs-diff': (v) => { s.shifting = { ...shifting(), difficulty: v }; save(); },
+    'mode-garminMode': (v) => { s.garmin = { ...(s.garmin || {}), mode: v }; save(); },
+    // a new language redraws the app and this dialog
+    'lang-ctl': async (v) => {
+      if (v === uiLang()) return;
+      s.language = v;
+      await save();
+      applyLanguage();
+      renderProfileChip();
+      if (!ride) route();
+      settingsDirty = false;
+      toast(t('languageSet', { label: LOCALES.find((x) => x.value === v).nativeLabel }));
+      openSettings('app');
+    },
+  };
+  for (const sv of svcs) SEGS[`mode-svc-${sv.id}`] = (v) => { s.services = { ...(s.services || {}), [sv.id]: { ...(s.services?.[sv.id] || {}), mode: v } }; save(); };
+  $$('[role=radiogroup].seg-ctl', modal).forEach((ctl) => (ctl.onclick = (e) => {
+    const b = e.target.closest('[role=radio]');
+    if (!b || b.getAttribute('aria-checked') === 'true') return;
+    selectSeg(ctl, b);
+    SEGS[ctl.id]?.(b.dataset.v);
+  }));
+
   $('#sync-opts', modal).onchange = async (e) => {
     const v = e.target.value;
-    collect(); await api.saveState();
     let dir = null;
     if (v === 'folder') { dir = await invoke('pick_sync_dir').catch((err) => toast(String(err))); if (!dir) return openSettings('sync'); }
     else if (v !== 'off') dir = targets.find((tg) => tg.provider === v)?.path;
@@ -1548,82 +1697,24 @@ async function openSettings(tab = 'rider') {
     } catch (err) { toast(String(err)); }
     openSettings('sync');
   };
-  $('#theme-ctl', modal).onclick = (e) => {
-    const th = e.target.closest('[data-theme]')?.dataset.theme;
-    if (!th) return;
-    s.theme = th;
-    applyTheme();
-    $$('#theme-ctl button', modal).forEach((x) => x.classList.toggle('on', x.dataset.theme === th));
-  };
-  // a new language applies at once: keep what was typed, save, redraw the app and this dialog
-  $('#lang-ctl', modal).onclick = async (e) => {
-    const l = e.target.closest('[data-lang]')?.dataset.lang;
-    if (!l || l === uiLang()) return;
-    collect();
-    s.language = l;
-    await api.saveState();
-    applyLanguage();
-    renderProfileChip();
-    if (!ride) route(); // the ride screen picks the language up with the next ride
-    toast(t('languageSet', { label: LOCALES.find((x) => x.value === l).nativeLabel }));
-    openSettings('app');
-  };
-  // the up/down cue belongs to the countdown beeps
-  $('[name=beeps]', modal).onchange = (e) => { $('[name=beepDirection]', modal).disabled = !e.target.checked; };
-  $$('#vs-mode, #vs-diff', modal).forEach((ctl) => (ctl.onclick = (e) => {
-    const b = e.target.closest('[data-v]');
-    if (b) $$('button', ctl).forEach((x) => x.classList.toggle('on', x === b));
-  }));
-  $$('[data-mode-ctl]', modal).forEach((ctl) => (ctl.onclick = (e) => {
-    const b = e.target.closest('[data-v]');
-    if (b) $$('button', ctl).forEach((x) => x.classList.toggle('on', x === b));
-  }));
-  const collect = () => {
-    const f = (n) => $(`[name=${n}]`, modal);
-    s.ftp = Math.round(+f('ftp').value) || s.ftp;
-    s.maxHr = Math.round(+f('maxHr').value) || s.maxHr;
-    { const kg = Math.round(+f('weight').value * 10) / 10; s.weight = kg >= 30 && kg <= 200 ? kg : null; }
-    s.beeps = f('beeps').checked;
-    s.beepDirection = f('beepDirection').checked;
-    s.endChime = f('endChime').checked;
-    s.autoPause = f('autoPause').checked;
-    s.coachHints = f('coachHints').checked;
-    s.keyboardShortcuts = f('keyboardShortcuts').checked;
-    const z = [0, 1, 2, 3].map((i) => +f(`z${i}`).value);
-    if (z.every((v, i) => v > 0 && (i === 0 || v > z[i - 1]))) s.zones = z; else toast(t('zonesMustIncrease'));
-    const bests = {};
-    for (const k of ['s5', 'm1', 'm5', 'm20']) { const v = Math.round(+f(`b_${k}`).value); if (v > 0) bests[k] = v; }
-    s.bests = bests;
-    for (const [svc, name] of [['garmin', 'garminMode']]) {
-      const v = $(`[data-mode-ctl=${name}] .on`, modal)?.dataset.v;
-      if (v) s[svc] = { ...(s[svc] || {}), mode: v };
-    }
-    for (const sv of svcs) {
-      const v = $(`[data-mode-ctl=svc-${sv.id}] .on`, modal)?.dataset.v;
-      if (v) s.services = { ...(s.services || {}), [sv.id]: { ...(s.services?.[sv.id] || {}), mode: v } };
-    }
-    s.garmin = { ...(s.garmin || {}), autoOpen: f('garminAuto').checked };
-    {
-      const sh = shifting();
-      const mn = +f('vsMin').value, mx = +f('vsMax').value, st = Math.round(+f('vsStart').value);
-      s.shifting = {
-        ...sh,
-        mode: $('#vs-mode .on', modal)?.dataset.v || sh.mode,
-        difficulty: $('#vs-diff .on', modal)?.dataset.v || sh.difficulty,
-        minRatio: mn > 0 && mn < mx ? mn : sh.minRatio,
-        maxRatio: mx > mn ? mx : sh.maxRatio,
-        startGear: st >= 1 && st <= sh.gears ? st : sh.startGear,
-      };
-    }
-  };
+
   window.__TAURI__?.app?.getVersion?.().then((v) => { const el = $('#app-ver', modal); if (el) el.textContent = v; }).catch(() => {});
-  const updAuto = $('#upd-auto', modal);
-  if (updAuto) updAuto.onchange = () => invoke('update_prefs', { auto: updAuto.checked }).then((p) => (updPrefs = p)).catch((err) => toast(String(err)));
   $$('[data-a]', modal).forEach((b) => (b.onclick = async (e) => {
     e.preventDefault();
     const a = b.dataset.a;
-    if (a === 'close' || a === 'cancel') { if (s.theme !== themeBefore) setTheme(themeBefore); return closeModal(); }
+    if (a === 'close') {
+      // an invalid number isn't saved: show it once instead of closing
+      const bad = $('[aria-invalid=true]', modal);
+      if (bad) {
+        const pane = bad.closest('.tab-pane');
+        if (pane.hidden) $(`#tab-${pane.dataset.pane}`, modal).click();
+        $('details.adv', pane)?.contains(bad) && ($('details.adv', pane).open = true);
+        return bad.focus();
+      }
+      return closeModal();
+    }
     if (a === 'link') return invoke('open_link', { url: b.dataset.url }).catch((err) => toast(String(err)));
+    if (a === 'devices') { closeModal(); return devicesMenu($('#btn-devices')); }
     if (a === 'upd-check') {
       b.disabled = true; b.textContent = t('checking');
       const u = await checkUpdate(false);
@@ -1631,10 +1722,15 @@ async function openSettings(tab = 'rider') {
       if (u && !ride) closeModal();
       return;
     }
-    if (a === 'dir') { closeModal(); return pickDir(); }
-    if (a === 'rescan') { closeModal(); await loadLibrary(); return toast(t('plansFound', { n: library.plans.length })); }
+    if (a === 'dir') { await pickDir(); return openSettings('app'); }
+    if (a === 'rescan') {
+      b.disabled = true; b.textContent = t('rescanning');
+      await loadLibrary();
+      b.disabled = false; b.textContent = t('rescan');
+      settingsDirty = true;
+      return toast(t('plansFound', { n: library.plans.length }));
+    }
     if (a === 'garmin-dir') {
-      collect(); await api.saveState();
       const dir = await invoke('pick_garmin_dir').catch((err) => toast(String(err)));
       if (dir) { state = (await api.appState()).profile; return openSettings('sync'); }
       return;
@@ -1644,7 +1740,6 @@ async function openSettings(tab = 'rider') {
       const id = b.dataset.id;
       const apiKey = $(`[name=key-${id}]`, modal).value.trim();
       if (!apiKey) return toast(t('pasteKeyFirst'));
-      collect(); await api.saveState();
       const label = b.textContent;
       b.disabled = true; b.textContent = t('checking');
       try {
@@ -1659,13 +1754,11 @@ async function openSettings(tab = 'rider') {
     if (a === 'svc-off') {
       const sv = svcs.find((x) => x.id === b.dataset.id);
       if (!await confirmDialog(t('disconnectQ', { name: sv.name }), t('disconnectText'), t('disconnect'), true)) return openSettings('sync');
-      collect(); await api.saveState();
       svcCache = await invoke('service_disconnect', { id: sv.id }).catch((err) => { toast(String(err)); return svcCache; });
       return openSettings('sync');
     }
     if (a === 'sync-now') { b.disabled = true; await runSync(false); return openSettings('sync'); }
     if (a === 'garmin-on') {
-      collect(); await api.saveState();
       b.disabled = true; b.textContent = t('signInWindow');
       try {
         const st = await invoke('garmin_connect');
@@ -1679,12 +1772,6 @@ async function openSettings(tab = 'rider') {
       if (!await confirmDialog(t('garminSignOutQ'), t('garminSignOutText'), t('signOut'), true)) return openSettings('sync');
       await invoke('garmin_disconnect').catch((err) => toast(String(err)));
       return openSettings('sync');
-    }
-    if (a === 'save') {
-      collect();
-      await api.saveState();
-      route();
-      closeModal();
     }
   }));
 }

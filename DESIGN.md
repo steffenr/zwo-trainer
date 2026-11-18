@@ -27,7 +27,7 @@ Always use tokens (`var(--…)`), never raw hex in components. Dark values apply
 | `--line-strong` | `#cfd3da` | `#34343a` | input borders, hover borders |
 | `--text` | `#1f2328` | `#f2f2f3` | primary text |
 | `--text-2` | `#555555` | `#cccccc` | secondary text |
-| `--muted` | `#8a9099` | `#85858d` | labels, meta, placeholders |
+| `--muted` | `#646b75` | `#85858d` | labels, meta, placeholders, hints (≥ 4.5:1 on `--surface` and `--surface-2`) |
 | `--accent` | `#00a3c4` | `#1cc4e6` | primary buttons, links, selection, progress |
 | `--accent-soft` | 10 % accent | 14 % accent | selected backgrounds |
 | `--ok` / `--ok-soft` | `#2e9e4f` | `#4cd07a` | connected, success, ERG on |
@@ -197,7 +197,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 |---|---|
 | **Button** `.btn` | 1 px `--line-strong` border, `--surface`, 600 14 px, radius 10, padding 9 × 16. Variants: `.primary` (accent fill), `.ghost` (transparent), `.danger` (red fill), `.sm` (13 px, radius 8), `.big`, `.round` (34 px circle). One primary per view or dialog, placed last (right). |
 | **Icon button** `.icon-btn` | 36 × 36, transparent, muted icon, `--surface-2` on hover. |
-| **Segmented control** `.seg-ctl` | `--surface-2` track, radius 10, 3 px padding; the selected item is a raised `--surface` pill. Used for the mode switch, duration filter, theme, upload mode and shifting. |
+| **Segmented control** `.seg-ctl` | `--surface-2` track, radius 10, 3 px padding; the selected item is a raised `--surface` pill. Used for the mode switch, duration filter, theme, upload mode and shifting. In dialogs build it with `segRow()`: a `radiogroup` labelled by its row text, buttons are `role="radio"` with `aria-checked`, one tab stop, arrow keys / Home / End move and select (`rovingKey`). Focus shows a 2 px accent outline. |
 | **Card / panel** `.card` `.panel` | `--surface`, 1 px `--line`, radius 14, padding 20 / 16, `--shadow`. |
 | **Workout row** `.wrow` | grid: status · title (+ meta) · mini profile 200 × 28 · duration · intensity tag + TSS · actions (☆, ⋯, primary action), left-aligned so ☆ and ⋯ line up on every row. All rows of a list (all weeks of a plan) share one column grid (`.wlist` / `.weeks`, rows are subgrids): the action column is at least 150 px and grows to the widest row, so longer labels ("Démarrer" + "Sauter", "Überspringen") never overlap the TSS. Radius 11, hover border `--line-strong`. The next workout in a plan gets the accent border and a soft gradient. |
 | **Intensity tag** `.ztag` | zone fill, black 11 px 650 text "Z1–Z5", radius 5, min-width 26. |
@@ -207,6 +207,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 | **FTP result box** `.ftp-result` | accent border + `--accent-soft` for a new FTP; `.incomplete` switches to `--warn` / `--warn-soft` with an "Effort not completed" heading, an explanation and the effort details. |
 | **ERG pill** `.erg` | 11.5 px 700 uppercase-ish, radius 6: `.on` ok, `.off` warn, `.vs` virtual gears. |
 | **Dialog** `dialog` | radius 18, `--shadow-lg`, blurred `--backdrop`. Widths: default 560, `.small` 460, `.settings` 540, `.wide` 960. Header `.pv-head` has the title left and ✕ right; actions go in `.modal-actions` on the right with cancel/back as ghost and the confirm button last. |
+| **Settings** `dialog.settings` | fixed size (540 × up to 720, never jumps between tabs): header and tabs stay put, only `.set-panes` scrolls, footer `.set-foot` has the status line left ("Changes are saved automatically", briefly "✓ Saved") and **Done** right. Tabs Rider · Riding · Connections · App (`role="tablist"`, arrow keys). No Save/Cancel: every control saves on change, numbers when the field is left and valid. An invalid number gets a red border and a `.field-err` line under it (right-aligned, 12.5 px, `--danger`) and is not saved; Done/✕ then focus it instead of closing, Esc and a click outside still close. Groups use an `h3` (Sounds, During a ride, Virtual shifting); rarely changed fields go in `details.adv` ("Advanced"); a one-line muted `.hint` may follow a control. |
 | **Popover / menu** `.popover` | radius 12, `--shadow-lg`, 6 px padding, 220 px minimum. Items are full-width rows with radius 8 and hover `--surface-2`; separate destructive items with `<hr>` and mark them `.danger-text` with a trailing "…". |
 | **"⋯" menu** | `menuBtn(items)` gives a quiet 28–34 px button. Use it for every secondary or destructive action: Finder, Trash, Reset progress, … |
 | **Devices menu** | 300 px popover with the title "DEVICES" and one row per device kind: 34 px icon tile (`.dev-ico`, ok-tinted when connected) · name and status · action text ("Connect" / "Change"). Connected devices that report a battery show a **battery badge** (`.batt`) after the name: a 20 × 12 icon filled to the level plus the percentage. State colours: `ok` (≥ 40 %, `--ok`), `low` (16–39 %, `--warn`), `critical` (≤ 15 %, `--danger`); never colour alone, the percentage and an accessible label always accompany it. With several controllers the lowest level is shown. Battery appears only in this menu, not in the top bar. |
@@ -254,7 +255,9 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
   - Icon-only buttons need a `title` and an `aria-label`.
   - Status is never shown by colour alone: dots are paired with text in the devices menu and tooltips.
   - Contrast is ≥ 4.5:1 for text (use the zone *ink* tokens for coloured text).
-  - Everything should be reachable by keyboard, and rows are focusable (`tabindex="0"`, Enter opens).
+  - Everything should be reachable by keyboard, and rows are focusable (`tabindex="0"`, Enter opens). Controls styled with `all: unset` need their own `:focus-visible` outline (2 px `--accent`, offset 2).
+  - Every input has an accessible name: a `<label>`, or an `aria-label` when the visible text isn't a label (zone limits, the two gear-range fields).
+  - Text is at least 12 px.
 
 ## Checklist for UI changes
 
