@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Checks the UI translations (ui/js/i18n): de.js and fr.js define exactly the keys of en.js, plural
 // entries keep their { one, other } shape, placeholders match en ({Label} counts as {label}), and every
-// t('key') / data-i18n="key" in ui/ exists in en.js. Run: node scripts/check-i18n.mjs (CI does too).
+// t('key') / tHtml('key') / data-i18n="key" in ui/ exists in en.js. Run: node scripts/check-i18n.mjs (CI does too).
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,9 +25,9 @@ for (const [lang, dict] of Object.entries({ de, fr })) {
   for (const k of Object.keys(dict)) if (!(k in en)) errors.push(`${lang}: "${k}" is not in en.js`);
 }
 
-const dir = join(root, 'ui/js');
-const code = [...readdirSync(dir).filter((f) => f.endsWith('.js')).map((f) => readFileSync(join(dir, f), 'utf8')), readFileSync(join(root, 'ui/index.html'), 'utf8')].join('\n');
-for (const m of code.matchAll(/\bt\('([\w.]+)'|data-i18n(?:-title|-aria)?="([\w.]+)"/g)) {
+const jsFiles = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? (e.name === 'i18n' ? [] : jsFiles(join(d, e.name))) : e.name.endsWith('.js') ? [join(d, e.name)] : []));
+const code = [...jsFiles(join(root, 'ui/js')).map((f) => readFileSync(f, 'utf8')), readFileSync(join(root, 'ui/index.html'), 'utf8')].join('\n');
+for (const m of code.matchAll(/\b(?:t|tHtml)\('([\w.]+)'|data-i18n(?:-title|-aria)?="([\w.]+)"/g)) {
   const k = m[1] || m[2];
   if (!(k in en)) errors.push(`code uses "${k}", which en.js doesn't define`);
 }

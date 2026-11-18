@@ -31,6 +31,7 @@ ui/                         frontend — static files served by Tauri (frontendD
   js/tests.js               FTP test protocols, evaluation, VO2max, test-workout detection
   js/vshift.js              virtual drivetrain + flat-road physics (virtual shifting)
   js/sound.js               countdown beep, rising/falling countdown notes and end chime (Web Audio)
+  js/html.js                html`` tagged template (auto-escaping), raw(), tHtml(), mount(), esc()
   js/battery.js             battery badge for the devices popover: state thresholds (ok ≥ 40, low 16–39, critical ≤ 15), lowest level, icon HTML
   sounds/                   power-up.mp3, power-down.mp3 (3 notes ~1 s apart), workout-done.mp3 (all CC0)
   js/ble.js                 device objects (Trainer, HeartRate, Controllers), simulator, Tauri event binding
@@ -82,6 +83,7 @@ node scripts/check-i18n.mjs                          # translations complete and
 node scripts/check-css.mjs                           # every CSS file imported into a layer, braces, & nesting
 node --test scripts/compact-ride.test.mjs             # compact/full transition lifecycle
 node --test scripts/battery.test.mjs                   # battery state, lowest level, badge
+node --test scripts/html.test.mjs                      # html`` escaping, raw/Safe nesting, tHtml, mount
 node scripts/sync-version.mjs [x.y.z]                # print / set the app version
 ```
 
@@ -166,13 +168,13 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 - **Tests:** every parser, encoder, protocol decoder and merge rule has unit tests next to the code (`#[cfg(test)] mod tests`). Add one for every bug fix.
 
 **JavaScript**
-- Plain ES modules, no build step, no dependencies. `$` / `$$` helpers, template strings, and `esc()` for **every** interpolated user or file value (XSS: workout names come from files).
+- Plain ES modules, no build step, no dependencies. `$` / `$$` helpers. Markup is built with the `html` tagged template from `js/html.js`, which escapes **every** interpolated value (XSS: workout names come from files); `raw()` only for markup we generated (icons, `renderMarkdown()`, SVG profiles), `tHtml()` for translations inside markup, `mount(el, fragment)` to set `innerHTML`. Legacy plain template strings still need `esc()` on every user or file value until they are converted.
 - **Views** are functions that render `#view` (`renderHome`, `renderPlan`, `renderWorkouts`, `renderTests`, `renderHistory`); `route()` picks one from the hash and `mode()`.
 - **Actions** use `data-act` attributes, handled by `bindActions(root)`. Menus use `menuBtn(items)` / `openMenu()` (a `<template>` holding `data-act` buttons).
 - **Modals:** `openModal(html, cls)`, `confirmDialog`, `choiceDialog`, `promptDialog`; `toast()` for feedback.
 - **Languages (English, German, French):** every user-visible string goes through `t('key', vars)` from `js/i18n/index.js` and lives in `en.js`, `de.js` **and** `fr.js` (run `node scripts/check-i18n.mjs`). Mirrors wozTools' `src/i18n/`, as plain modules instead of a React hook.
   - Keys are camelCase (`p.ramp.name`, `mac.files`, `tm.*` for test-workout messages); counts use `{ one, other }` with `vars.n` (Intl.PluralRules, so French 0 is singular).
-  - Values may contain our own markup (`<b>`, `<code>`, `&amp;`) for `innerHTML`. Strings for `confirmDialog`, `choiceDialog`, `toast()` and `textContent` are escaped/plain, so their values must be plain text. Pass file and rider values through `esc()` before they go into `vars` of an HTML string.
+  - Values may contain our own markup (`<b>`, `<code>`, `&amp;`) for `innerHTML`. Strings for `confirmDialog`, `choiceDialog`, `toast()` and `textContent` are escaped/plain, so their values must be plain text. In markup use `tHtml('key', vars)`, which escapes the vars (pass an `html` fragment for markup such as `<b>`); with plain `t()` in a legacy HTML string, pass file and rider values through `esc()` first. Never make `t()` itself escape: it also feeds plain-text APIs.
   - Never name a local variable `t` (it shadows the translator); use `el`, `x`, `th`, `ts`…
   - The language is per rider (`settings.language`, copied to new riders like the theme); without it the system language is used, falling back to English. `applyLanguage()` sets it and fills `data-i18n` / `data-i18n-title` / `data-i18n-aria` in index.html; switching in Settings → App redraws the app at once (the ride screen picks it up with the next ride). Dates and times use `fmtLocale()`.
   - Zone names (`ZONES[i].name` in render.js) and test protocol texts (`PROTOCOLS[i].name/about/…` in tests.js) are getters, so they always follow the current language. Test results already saved keep the detail labels of the language they were ridden in; built-in test names are re-translated via `testName()`.

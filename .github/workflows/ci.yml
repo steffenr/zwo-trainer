@@ -41,9 +41,9 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy --locked --all-targets -- -D warnings
       - name: UI syntax check
-        run: for f in ui/js/*.js ui/js/i18n/*.js; do node --check "$f"; done
-      - name: UI lifecycle tests
-        run: node --test scripts/compact-ride.test.mjs scripts/battery.test.mjs
+        run: for f in $(find ui/js -name '*.js'); do node --check "$f"; done
+      - name: UI unit tests
+        run: node --test scripts/compact-ride.test.mjs scripts/battery.test.mjs scripts/html.test.mjs
       - name: Translations (en / de / fr)
         run: node scripts/check-i18n.mjs
       - name: CSS structure (layers, imports, nesting)
