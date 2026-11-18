@@ -51,15 +51,16 @@ const markupVars = (vars) => Object.fromEntries(Object.entries(vars).map(([k, v]
 export const tHtml = (key, vars) => new Safe(vars ? t(key, markupVars(vars)) : t(key));
 
 /**
- * Markup → plain text: drop tags, then any stray < or > left by malformed or nested markup (a single
- * tag-stripping pass turns "<<b>script>" into "<script>"), then decode the entities we use. Real "<"
- * in a text must be written &lt;, so it survives as "<" only after this point. The result is text,
- * never markup: it still goes through html`` (escaped) like any other value.
+ * Markup → plain text: drop tags until none are left (a single pass would turn "<<b>script>" into
+ * "<script>"), drop any stray < or >, then decode the entities we use. A real "<" in a text must be
+ * written &lt;, so it appears only after this point. The result is text, never markup: it still goes
+ * through html`` (escaped) like any other value.
  */
-export const plain = (markup) => String(markup)
-  .replace(/<[^>]*>/g, '')
-  .replace(/[<>]/g, '')
-  .replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (m, e) => DEC[e]);
+export function plain(markup) {
+  let s = String(markup), prev;
+  do { prev = s; s = s.replace(/<[^<>]*>/g, ''); } while (s !== prev);
+  return s.replace(/[<>]/g, '').replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (m, e) => DEC[e]);
+}
 
 /**
  * t() as plain text, for attributes (title, aria-label, placeholder); html`` escapes it there.
