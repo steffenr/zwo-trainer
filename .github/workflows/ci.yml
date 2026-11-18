@@ -46,6 +46,8 @@ jobs:
         run: node --test scripts/compact-ride.test.mjs scripts/battery.test.mjs
       - name: Translations (en / de / fr)
         run: node scripts/check-i18n.mjs
+      - name: CSS structure (layers, imports, nesting)
+        run: node scripts/check-css.mjs
 
   check:
     name: check (${{ matrix.os }})

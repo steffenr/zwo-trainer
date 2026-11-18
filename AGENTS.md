@@ -58,9 +58,10 @@ scripts/sync-version.mjs    print / set the version (Cargo.toml + Cargo.lock; ta
 scripts/updater-manifest.mjs  write latest.json (version, notes, per-platform url + signature) from the signed release files
 scripts/setup-updater-key.sh  one-time: create the updater key in ~/.tauri, write the pubkey, set the GitHub secrets
 scripts/check-i18n.mjs      de/fr have exactly en's keys, plural shapes and placeholders; every t('key') in ui/ exists
+scripts/check-css.mjs       ui/css: layer order, every file imported once into a layer, balanced braces, nested selectors start with &
 site/                       static website (home, features, download) with dark/light screenshots in site/img; no build step
 .github/workflows/
-  ci.yml                    push/PR: tests + clippy + UI syntax + i18n check (Linux), tests (macOS, Windows)
+  ci.yml                    push/PR: tests + clippy + UI syntax + i18n + CSS check (Linux), tests (macOS, Windows)
   release.yml               manual: bump patch/minor/major, commit, tag vX, push (needs RELEASE_PAT)
   build-app.yml             tag v*: build macOS arm64/x64, Windows, Linux → one GitHub release (+ latest.json for updates)
   pages.yml                 site/ change on develop, successful release build, manual: deploy site/ to GitHub Pages
@@ -78,6 +79,7 @@ cd src-tauri && cargo clippy --all-targets           # keep warning-free
 ZWO_TEST_DIR=~/Downloads/zwo cargo test scan_real_library -- --nocapture   # parse a real library
 node --check ui/js/app.js                            # quick syntax check for edited JS modules
 node scripts/check-i18n.mjs                          # translations complete and consistent (en / de / fr)
+node scripts/check-css.mjs                           # every CSS file imported into a layer, braces, & nesting
 node --test scripts/compact-ride.test.mjs             # compact/full transition lifecycle
 node --test scripts/battery.test.mjs                   # battery state, lowest level, badge
 node scripts/sync-version.mjs [x.y.z]                # print / set the app version
