@@ -1,3 +1,10 @@
+// zwoTrainer UI controller. Sections, top to bottom:
+//   state & helpers · library and plan progress · profile sync · in-app updates · theme, riders, top bar
+//   · devices menu · routing and views (renderHome / renderPlan / renderWorkouts / renderTests /
+//   renderHistory) · actions (bindActions, ⋯ menus) · dialogs (openModal, preview, settings, devices,
+//   connections) · the Ride class (ride screen and loop) · ride summary.
+// Markup: html`` from ./html.js (auto-escaping) and the helpers in ./components/ for shared pieces;
+// older parts still build strings with esc(). Rust is reached only through invoke() / listen() (ble.js).
 import { CompactView, compactMode } from './compact.js';
 import { powerAt, segmentAt, estimateTss } from './zwo.js';
 import { ZONES, FREE_COLOR, zoneOf, zoneColor, zoneInk, fmtTime, fmtDur, miniProfile, Diagram, Gauge, ProgressRing, motionOK } from './render.js';
@@ -103,10 +110,12 @@ let justDone = null;         // file just marked done (its check draws itself on
 const workoutInfo = (file) => workoutIndex.get(file);
 const folderOf = (file) => (file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '');
 
+/** Rebuild the lookup maps over the scanned library (workout by file, plan by id) after a scan. */
 function indexLibrary() {
   workoutIndex = new Map(allWorkouts().map((w) => [w.file, w]));
 }
 
+/** Rebuild "last ridden" per workout file from the rider's history (for the ✓ marks and the "ridden 3 d ago" line). */
 function indexHistory() {
   lastRidden = new Map();
   for (const h of state?.history || []) {
@@ -142,6 +151,7 @@ async function toggleFav(file) {
 }
 const starBtn = (file) => `<button class="star ${isFav(file) ? 'on' : ''}" data-act="fav" data-file="${esc(file)}" title="${isFav(file) ? t('favRemove') : t('favAdd')}" aria-label="${t('favorite')}">${isFav(file) ? '★' : '☆'}</button>`;
 
+/** Progress of a plan for the active rider: done / skipped counts, the next workout, started / finished flags. */
 function planProgress(plan) {
   const ps = state.plans[plan.id];
   const entries = ps?.entries || {};
@@ -173,6 +183,7 @@ async function boot() {
   if (params.get('sim') === '1') { trainer.startSim(); hrm.startSim(); }
 }
 
+/** Take a fresh app_state summary from Rust (after create / edit / switch / delete rider or a sync) and make it the UI state. */
 function applyAppState(a) {
   if (a.sync !== undefined) syncCfg = a.sync || {};
   profiles = a.profiles;
@@ -184,6 +195,7 @@ function applyAppState(a) {
   renderModeSwitch();
 }
 
+/** Scan the workouts folder (scan_library in Rust; cached by mtime) and re-index it. */
 async function loadLibrary() {
   library = await api.library();
   indexLibrary();
@@ -202,6 +214,7 @@ const agoText = (iso) => {
 const SYNC_LABEL = { icloud: 'iCloud Drive', dropbox: 'Dropbox', nextcloud: 'Nextcloud' };
 const syncLabel = (p) => SYNC_LABEL[p] || t('syncFolder');
 
+/** Debounced profile sync after a change; never during a ride (sync can re-render). */
 function scheduleSync(delay = 4000) {
   if (!syncOn() || syncCfg.auto === false) return;
   clearTimeout(syncTimer);
@@ -238,6 +251,7 @@ let updFound = null;     // { version, current, notes } from the last check
 let updLater = null;     // version postponed with "Later" (until the next launch)
 let updBusy = false;
 
+/** In-app updates: read the preferences, then check 8 s after start and every 6 h (never while riding). */
 async function initUpdates() {
   updPrefs = await invoke('update_status').catch(() => updPrefs);
   if (!updPrefs.available) return;
@@ -246,6 +260,7 @@ async function initUpdates() {
   setInterval(autoCheckUpdate, 6 * 3600 * 1000);
 }
 
+/** Periodic update check, skipped while riding, when switched off, or while one is in progress. */
 function autoCheckUpdate() {
   if (updPrefs.auto !== false && !ride && !updBusy) checkUpdate(true);
 }
@@ -267,6 +282,7 @@ async function checkUpdate(quiet = false) {
 }
 
 
+/** Show the "update available" card for an update found earlier (not while riding; Later hides it for this version). */
 function showUpdateCard() {
   if (!updFound || ride) return;
   const u = updFound;
@@ -289,6 +305,7 @@ function hideUpdateCard() {
   if (card) card.hidden = true;
 }
 
+/** Download, verify and install the pending update, showing progress in the card; the app restarts afterwards. */
 async function installUpdate() {
   const card = $('#update-card');
   if (ride || !card) return;
@@ -382,6 +399,7 @@ function syncTopbarHeight() {
   document.documentElement.style.setProperty('--topbar-h', `${$('.topbar').getBoundingClientRect().height}px`);
 }
 
+/** Wire the static shell once: top bar buttons, mode switch, device and button events from Rust. */
 function bindChrome() {
   syncTopbarHeight();
   window.addEventListener('resize', syncTopbarHeight);
@@ -694,6 +712,7 @@ function afterRoute() {
   justDone = null;
 }
 
+/** Render #view for the current hash and mode (plans, workouts, tests, history, plan page). Never called during a ride. */
 function routeView() {
   if (!state) return;
   const h = location.hash.replace(/^#\/?/, '');
@@ -707,6 +726,7 @@ function routeView() {
   renderHome();
 }
 
+/** First-run view: no workouts folder chosen yet. */
 function renderEmpty() {
   const missing = library.exists === false;
   const root = `<code>${esc(library.root)}</code>`;
@@ -716,6 +736,7 @@ function renderEmpty() {
   bindActions($('#view'));
 }
 
+/** Plan progress bar (done / skipped); remembers the last widths per plan so the bar can glide to new values. */
 function progressBar(pp, id) {
   const d = (pp.done / pp.total) * 100, s = (pp.skipped / pp.total) * 100;
   return `<div class="pbar"${id ? ` data-pid="${esc(id)}" data-d="${d}" data-s="${s}"` : ''} title="${t('progressTitle', { done: pp.done, skipped: pp.skipped, total: pp.total })}"><i class="d" style="width:${d}%"></i><i class="s" style="width:${s}%"></i></div>`;
@@ -725,6 +746,7 @@ function weekDay(w) {
   return w.week ? wdTag(tHtml('weekDayShort', { w: w.week, d: w.day })) : '';
 }
 
+/** Home (Plans mode): hero with the active plan and its next workout, then all plans as cards with a search. */
 function renderHome() {
   const v = $('#view');
   const active = state.activePlan && planById(state.activePlan);
@@ -793,6 +815,7 @@ function renderHome() {
 }
 
 
+/** One workout row (.wrow): status, title, mini profile, duration, zone/TSS and actions. Used by plans, Workouts, Favorites and FTP Tests. */
 function workoutRow(w, { status, isNext, locked, free, showFolder, note, favTools } = {}) {
   const icon = status === 'done' ? `<span class="st done${justDone === w.file && !document.body.classList.contains('riding') ? ' just-done' : ''}" title="${t('stDone')}">✓</span>`
     : status === 'skipped' ? `<span class="st skipped" title="${t('stSkipped')}">↷</span>`
@@ -814,6 +837,7 @@ function workoutRow(w, { status, isNext, locked, free, showFolder, note, favTool
   </div>`;
 }
 
+/** Plan page: header with progress and actions, optional description, then the workouts grouped by week (or one list for collections). */
 function renderPlan(id) {
   const plan = planById(id);
   const v = $('#view');
@@ -862,6 +886,7 @@ function renderPlan(id) {
 const wf = { folder: '', q: '', dur: 'all', sort: 'name', limit: 80, zones: new Set() };
 const DUR_FILTERS = [['all', 'anyLength'], ['30', '≤ 30 min'], ['60', '30–60 min'], ['90', '60–90 min'], ['90+', '> 90 min']];
 
+/** Workouts mode list after folder, search, duration, zone filters and sort. */
 function filteredWorkouts() {
   let list = wf.folder === '@fav'
     ? favs().map((f) => workoutInfo(f)).filter(Boolean)
@@ -891,6 +916,7 @@ function filteredWorkouts() {
   return list;
 }
 
+/** Workouts mode: folder sidebar, filters, and the (paged) list of matching workouts. */
 function renderWorkouts() {
   const v = $('#view');
   const folders = library.plans;
@@ -971,6 +997,7 @@ function ftpSparkline(tests) {
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-label="${t('ftpHistory')}"><polyline points="${xy.map((p) => p.join(',')).join(' ')}"/>${xy.map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="3"><title>${new Date(pts[i].at).toLocaleDateString(fmtLocale())} · ${pts[i].ftp} W</title></circle>`).join('')}</svg>`;
 }
 
+/** FTP Tests mode: current FTP, zones and bests, the built-in test protocols, test workouts from the library, test history. */
 function renderTests() {
   const v = $('#view');
   const F = ftp();
@@ -1078,6 +1105,7 @@ function historyMenu(h, i) {
   return items ? menuBtn(items, tHtml('sendOther')) : '';
 }
 
+/** Ride history: one row per ride with stats, upload state per service and the ⋯ menu. */
 function renderHistory() {
   const v = $('#view');
   const rows = state.history.map((h, i) => {
@@ -1097,6 +1125,7 @@ function renderHistory() {
   bindActions(v);
 }
 
+/** Event delegation for [data-act] buttons and links inside `root` (views, rows, menus). One handler per action name. */
 function bindActions(root) {
   root.onclick = async (e) => {
     const el = e.target.closest('[data-act]');
@@ -1208,6 +1237,7 @@ function openMenu(anchor) {
   pop.addEventListener('click', (e) => { if (e.target.closest('[data-act]')) setTimeout(close); });
 }
 
+/** ⋯ menu of a workout row / the preview: favourite, open its folder, show in the file manager, move to the trash. */
 function moreMenu(anchor, file) {
   $('#popover')?.remove();
   const r = anchor.getBoundingClientRect();
@@ -1297,6 +1327,7 @@ async function unskip(file) {
 // ------------------------------------------------------------------ modals
 const modal = $('#modal');
 let modalCloseTimer = null;
+/** Show #modal with the given markup and size classes (small, wide, settings …). One dialog at a time. */
 function openModal(html, cls = '') {
   if (modalCloseTimer) { clearTimeout(modalCloseTimer); modalCloseTimer = null; } // reopened while fading out: keep it open
   modal.className = cls;
@@ -1304,6 +1335,7 @@ function openModal(html, cls = '') {
   if (!modal.open) modal.showModal();
   return modal;
 }
+/** Close #modal with its animation; onModalClose (e.g. Settings) runs afterwards. */
 function closeModal() {
   if (!modal.open || modalCloseTimer) return;
   if (!motionOK()) return modal.close();
@@ -1316,6 +1348,7 @@ modal.addEventListener('cancel', (e) => { if (modal.classList.contains('sticky')
 let onModalClose = null;
 modal.addEventListener('close', () => { const fn = onModalClose; onModalClose = null; fn?.(); });
 
+/** Yes/no dialog; resolves true when confirmed. Texts are plain text (escaped here). */
 function confirmDialog(title, text, ok = 'OK', danger = false) {
   return new Promise((resolve) => {
     openModal(`<h2>${esc(title)}</h2><p>${esc(text)}</p><div class="modal-actions"><button class="btn ghost" data-r="0">${t('cancel')}</button><button class="btn ${danger ? 'danger' : 'primary'}" data-r="1">${esc(ok)}</button></div>`, 'small');
@@ -1326,6 +1359,7 @@ function confirmDialog(title, text, ok = 'OK', danger = false) {
   });
 }
 
+/** Dialog with one text field (rename); resolves the entered value, or nothing on cancel. */
 function promptDialog(title, value = '') {
   return new Promise((resolve) => {
     openModal(`<h2>${esc(title)}</h2><form id="pf"><input type="text" name="v" value="${esc(value)}" maxlength="40" class="full" autocomplete="off"><div class="modal-actions"><button class="btn ghost" type="button" data-r="0">${t('cancel')}</button><button class="btn primary" type="submit">${t('save')}</button></div></form>`, 'small');
@@ -1339,6 +1373,7 @@ function promptDialog(title, value = '') {
 }
 
 let toastTimer;
+/** Short plain-text notice at the bottom (3.2 s). */
 function toast(msg) {
   const el = $('#toast');
   el.textContent = msg;
@@ -1351,6 +1386,7 @@ function toast(msg) {
   }, 3200);
 }
 
+/** Workout preview dialog: header, interactive chart with segment info, zones, description and start buttons. */
 async function openPreview(file) {
   const info = workoutInfo(file);
   openModal(`<div class="loading">${t('loading')}</div>`, 'wide');
@@ -1408,6 +1444,7 @@ async function openPreview(file) {
   }));
 }
 
+/** Seconds per zone of a workout, for the zone bar and legend in the preview. */
 function zoneBreakdown(workout) {
   const secs = [0, 0, 0, 0, 0];
   let free = 0;
@@ -1782,6 +1819,7 @@ async function openSettings(tab = 'rider') {
   }));
 }
 
+/** Ask Rust for a folder (native dialog); resolves the path or null. */
 async function pickDir() {
   const dir = await invoke('pick_zwo_dir').catch((e) => toast(String(e)));
   if (!dir) return;
@@ -1790,6 +1828,7 @@ async function pickDir() {
   toast(t('plansIn', { n: library.plans.length, dir: dir.split(/[\\/]/).pop() }));
 }
 
+/** Controller dialog: scan / connect Zwift Ride, Click, Play and OpenBikeControl devices, and the button tester. */
 async function controllerDialog() {
   const connected = await ctrls.list();
   const saved = state.settings.devices?.controllers || [];
@@ -1913,6 +1952,7 @@ function deviceDialog(kind) {
 // ------------------------------------------------------------------ other platforms (Intervals.icu automatic, COROS manual import)
 let svcCache = [];
 const SVC_LOGO = { intervals: 'i', coros: 'C' };
+/** Reload the connection state of Intervals.icu / COROS for the Connections tab. */
 async function refreshServices() { svcCache = await invoke('services_status').catch(() => []); return svcCache; }
 /** Upload mode per platform: 'off' | 'manual' | 'auto' (auto only for connected platforms). */
 function svcMode(sv) {
@@ -1924,6 +1964,7 @@ function svcMode(sv) {
 /** Can this platform take a ride right now, and how? → 'api' | 'manual' | null */
 const svcRoute = (sv) => (sv.connected ? 'api' : sv.manualUrl ? 'manual' : null);
 
+/** Upload one saved ride (FIT) to a connected service and store the result in history[].services. */
 async function uploadToService(h, id) {
   const sv = svcCache.find((x) => x.id === id);
   const { name, description } = rideMeta(h);
@@ -1939,6 +1980,7 @@ async function uploadToService(h, id) {
   }
 }
 
+/** Manual import for services without automatic upload (COROS Training Hub): prepare the file and open the import page. */
 async function manualImport(id, path) {
   const sv = svcCache.find((x) => x.id === id);
   try {
@@ -1990,6 +2032,7 @@ async function uploadToGarmin(h) {
 // ------------------------------------------------------------------ ride
 let ride = null;
 
+/** Load a workout (and test preparation if it is an FTP test) and open the ride screen. */
 async function startRide(file, planId) {
   const { workout } = await api.workout(file);
   if (!workout.segments.length) return toast(t('noSegments'));
@@ -2020,6 +2063,7 @@ function ftpCheck(next, cur, source) {
 }
 
 const SEG_KIND = { steady: 'kindSteady', warmup: 'segWarmup', cooldown: 'segCooldown', ramp: 'segRamp', on: 'kindOn', off: 'kindOff', freeride: 'freeRide', maxeffort: 'maxEffort' };
+/** Short label for the current segment type (warm-up, interval, ramp, free ride, all-out …). */
 const segKind = (s) => `${t(s.erg === false ? 'kindAllOut' : SEG_KIND[s.type] || 'segment')}${s.reps ? ` ${s.rep}/${s.reps}` : ''}`;
 /** Fill a metric bar: frac 0…1, optional target marker (0…1) and colour. */
 /** Count a number up (or down) to its final value once, ~0.8 s ease-out; the end text is exact. */
@@ -2045,6 +2089,7 @@ function restartAnim(el, cls, all = [cls]) {
   el.classList.add(cls);
 }
 
+/** Fill a small metric bar (0–1) and optionally mark a target band. */
 function setBar(el, frac, { mark = null, color = null, band = null } = {}) {
   if (!el) return;
   const f = el.querySelector('.fill');
@@ -2059,6 +2104,8 @@ function setBar(el, frac, { mark = null, color = null, band = null } = {}) {
 const OVERLAY = [['power', 'colPower'], ['cadence', 'cadence'], ['hr', 'devHr']];
 
 class Ride {
+  /** A ride: owns the clock, the target power, recording, auto-pause, controller input and the ride screen.
+   * Lives from startRide() until close(); while it exists nothing else may re-render or block (see AGENTS.md). */
   constructor(workout, file, planId, test = null) {
     this.test = test;
     this.lowCount = 0;
@@ -2099,6 +2146,7 @@ class Ride {
     this.render(true);
   }
 
+  /** Render the ride screen once (panels, chart, controls, compact view). Never called again on resize: compact mode only toggles CSS. */
   build() {
     const r = $('#ride');
     r.hidden = false;
@@ -2258,6 +2306,7 @@ class Ride {
     this.onDeviceStatus();
   }
 
+  /** Show or hide one live trace (power, cadence, HR) on the chart; remembered in settings.overlay. */
   toggleOverlay(k, btn) {
     const ov = { ...(state.settings.overlay || {}) };
     ov[k] = !ov[k];
@@ -2268,6 +2317,7 @@ class Ride {
     api.saveState();
   }
 
+  /** Free-ride segments: real gears (trainer free ride) or virtual gears at a difficulty; saved as the rider's default. */
   chooseShifting(v) {
     this.vs.on = v !== 'gears';
     if (this.vs.on) this.vs.difficulty = v;
@@ -2300,6 +2350,7 @@ class Ride {
     }
   }
 
+  /** Brief centred hint over the ride screen (controller / key actions). */
   hint(text) {
     let el = $('#ride-hint');
     if (!el) { el = document.createElement('div'); el.id = 'ride-hint'; el.className = 'ride-hint'; $('#ride').append(el); }
@@ -2309,6 +2360,7 @@ class Ride {
     this.hintTimer = setTimeout(() => el.classList.remove('show'), 1400);
   }
 
+  /** Virtual gear up/down (controller or +/−); a shift in a free segment switches virtual gears on. */
   shift(dir) {
     const n = Math.max(0, Math.min(this.gears.length - 1, this.gear + dir));
     if (n === this.gear) return;
@@ -2319,6 +2371,7 @@ class Ride {
     this.render(true);
   }
 
+  /** Update the LIVE panel's connection state (dot and label) when a device connects or drops out. */
   onDeviceStatus() {
     const st = $('#live-status'), dot = $('#live-dot');
     if (st) {
@@ -2342,6 +2395,7 @@ class Ride {
 
   mult() { return this.intensity / 100; }
 
+  /** Intensity ± in % (controller, keys, buttons); scales every target until the end of the ride. */
   adjust(d) {
     const old = this.intensity;
     this.intensity = Math.max(50, Math.min(150, this.intensity + d));
@@ -2367,12 +2421,14 @@ class Ride {
     return this.seek(to);
   }
 
+  /** Jump to a time in the workout. Callers go through go(), which applies the FTP-test rules (no skipping inside a measured effort). */
   seek(to) {
     this.t = Math.max(0, Math.min(this.w.duration - 0.01, to));
     this.beeped.clear();
     this.render(true);
   }
 
+  /** Ride controls (buttons, keys, controllers): play/pause, previous/next segment, ±1 min, stop. */
   control(c, elm) {
     const seg = this.w.segments[this.segIdx];
     switch (c) {
@@ -2395,6 +2451,7 @@ class Ride {
     }
   }
 
+  /** Start, pause or resume. auto = true when auto-pause triggered it (resumes by pedalling). */
   toggle(auto = false) {
     if (!this.started) { this.started = true; this.startedAt = new Date(); $('#ready')?.remove(); }
     this.running = !this.running;
@@ -2424,6 +2481,7 @@ class Ride {
     }
   }
 
+  /** Keyboard shortcuts while riding (space, arrows, +/−); ignored in dialogs, inputs, or when switched off in Settings. */
   onKey(e) {
     if (modal.open || e.target.matches('input') || state.settings.keyboardShortcuts === false) return;
     const map ={ ' ': 'play', ArrowRight: 'next', ArrowLeft: 'prev', Escape: 'stop' };
@@ -2435,6 +2493,7 @@ class Ride {
     if (e.key === 'ArrowDown') { e.preventDefault(); this.adjust(e.shiftKey ? -10 : -1); }
   }
 
+  /** Main loop, every 250 ms: advance time, target power and ERG, 1 Hz samples, auto-pause, countdown cues, coach line, render(). */
   tick() {
     const now = performance.now();
     const realDt = (now - this.last) / 1000;
@@ -2518,6 +2577,8 @@ class Ride {
     return el;
   }
 
+  /** Update the ride screen from the current state. Cheap on purpose (4× per second): cached elements, writes only on change;
+   * `force` redraws everything that otherwise only changes with the segment. */
   render(force) {
     const segs = this.w.segments;
     const idx = Math.max(0, segmentAt(segs, Math.min(this.t, this.w.duration - 0.01)));
@@ -2800,6 +2861,7 @@ class Ride {
     k.cur = show;
   }
 
+  /** Stop button / Esc: expand from compact and pause; a ride that never started just closes, otherwise the rider decides how to end it. */
   async stop() {
     if (!await this.compact.set(false)) return;
     const wasRunning = this.running;
@@ -2826,6 +2888,7 @@ class Ride {
     this.finish(false);
   }
 
+  /** Summary numbers of the recorded samples: duration, average / normalized power, HR, cadence, kJ, distance. */
   stats() {
     const ps = this.samples.filter((s) => s.p != null);
     const avg = (arr, k) => { const v = arr.map((x) => x[k]).filter((x) => x != null && x > 0); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null; };
@@ -2841,6 +2904,7 @@ class Ride {
     return { avgPower: avg(this.samples, 'p'), np, avgHr: avg(this.samples, 'hr'), maxHr: Math.max(0, ...this.samples.map((s) => s.hr || 0)) || null, avgCadence: avg(this.samples, 'c'), kj: kj || null, tss };
   }
 
+  /** End of the ride: save the FIT file, add to history and plan, evaluate FTP tests, show the summary, upload to Garmin and services. */
   async finish(completed) {
     $('#btn-compact').hidden = true;
     clearInterval(this.loop);
@@ -2991,6 +3055,7 @@ class Ride {
     else if (fit && !garmin.connected && state.settings.garmin?.autoOpen) garminImport(fit.path);
   }
 
+  /** Leave the ride screen: expand from compact, release devices to idle, restore the normal views and pending updates. */
   async close() {
     if (!await this.compact.set(false)) return;
     clearInterval(this.loop);

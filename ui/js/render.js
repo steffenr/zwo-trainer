@@ -19,11 +19,13 @@ export function zoneOf(frac, bounds) {
   for (let i = 0; i < bounds.length; i++) if (pct <= bounds[i] + 1e-9) return ZONES[i];
   return ZONES[4];
 }
+/** Fill colour for a power fraction of FTP (FREE_COLOR for free-ride segments, which have no target). */
 export const zoneColor = (frac, bounds) => (frac === null ? FREE_COLOR : zoneOf(frac, bounds).color);
 /** Readable text colour for a zone (CSS variable, differs between light and dark theme). */
 export const zoneInk = (frac, bounds) => (frac === null || frac === undefined ? 'var(--muted)' : `var(--z${zoneOf(frac, bounds).id}-ink)`);
 
 const svgNS = 'http://www.w3.org/2000/svg';
+/** Create an SVG element with attributes (and append it to `parent`). */
 const el = (tag, attrs = {}, parent) => {
   const n = document.createElementNS(svgNS, tag);
   for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
@@ -78,6 +80,7 @@ export class Diagram {
 
   get scale() { return this.adjust || 1; }
 
+  /** Build the static SVG: grid, FTP line, one path per segment, axis labels. Called once per workout. */
   draw() {
     const { W, H, top } = this;
     const total = this.w.duration || 1;
@@ -163,15 +166,18 @@ export class Diagram {
     }
   }
 
+  /** Emphasise segment i (the current one, or the one under the pointer in the preview). */
   highlight(i) {
     this.segEls.forEach((g, j) => g.classList.toggle('current', j === i));
   }
 
+  /** Choose which live traces to draw ({ power, cadence, hr }). */
   setOverlay(o) {
     this.overlay = { ...o };
     for (const [k, line] of Object.entries(this.traces)) line.style.display = o[k] ? '' : 'none';
   }
 
+  /** Move the position line and the done bar to `at` seconds and redraw the live traces from the 1 Hz samples. */
   update(at, samples) {
     const X = this.x(at);
     this.pos.setAttribute('x1', X); this.pos.setAttribute('x2', X);
@@ -205,6 +211,7 @@ export class Diagram {
 }
 
 const SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+/** Digits as Unicode superscript, for compact labels. */
 const toSup = (n) => String(n).split('').map((d) => SUP[+d]).join('');
 
 /** True unless the system asks for reduced motion. */
@@ -227,11 +234,13 @@ export class Gauge {
     this.ftpTick = el('line', { class: 'g-ftp' }, svg);
   }
 
+  /** Point on the gauge arc at radius r and fraction f (0 = start, 1 = end of the sweep). */
   pt(r, f) {
     const a = ((this.start + this.sweep * f) * Math.PI) / 180;
     return [this.cx + r * Math.cos(a), this.cy + r * Math.sin(a)];
   }
 
+  /** SVG path of the arc between two fractions. */
   arc(r, f0, f1) {
     f1 = Math.max(f0 + 0.0001, Math.min(1, f1));
     const [x0, y0] = this.pt(r, f0), [x1, y1] = this.pt(r, f1);
@@ -239,6 +248,7 @@ export class Gauge {
     return `M${x0.toFixed(2)},${y0.toFixed(2)} A${r},${r} 0 ${large} 1 ${x1.toFixed(2)},${y1.toFixed(2)}`;
   }
 
+  /** New target and actual power; the arcs animate towards them in step(). */
   update({ target, actual, ftp, bounds }) {
     this.cfg = { ftp, bounds };
     this.goal = { target: target || 0, actual: actual || 0 };
@@ -250,6 +260,7 @@ export class Gauge {
     if (!this.raf) { this.last = performance.now(); this.raf = requestAnimationFrame((ts) => this.step(ts)); }
   }
 
+  /** One animation frame: ease the shown values towards the latest update(). */
   step(now) {
     const dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
@@ -264,6 +275,7 @@ export class Gauge {
     this.raf = moving ? requestAnimationFrame((ts) => this.step(ts)) : null;
   }
 
+  /** Draw the arcs and the FTP tick for the currently shown values. */
   paint() {
     const { ftp, bounds } = this.cfg, { target, actual } = this.cur, goal = this.goal;
     const max = Math.max(ftp * 1.5, goal.target * 1.1, goal.actual * 1.05) || 1;
@@ -291,6 +303,7 @@ export class ProgressRing {
     this.g.actual.remove();
     this.g.innerTrack.remove();
   }
+  /** Progress of the current segment (0–1) in the zone colour. */
   update(frac, color) {
     this.g.target.setAttribute('d', frac > 0 ? this.g.arc(86, 0, frac) : '');
     this.g.target.style.stroke = color;

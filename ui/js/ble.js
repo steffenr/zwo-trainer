@@ -1,16 +1,22 @@
 // Device layer. Real devices live in Rust (btleplug) and talk to us via Tauri commands/events;
 // the simulator runs here so the app can be tried without hardware.
 
+/** Tauri globals (withGlobalTauri); the browser mock provides the same shape. */
 const T = () => window.__TAURI__;
+/** Call a Rust #[tauri::command] (the only IPC surface, see lib.rs). */
 export const invoke = (cmd, args) => T().core.invoke(cmd, args);
+/** Subscribe to an event from Rust (device-status, sensor, button, battery …); `fn` gets the payload. */
 export const listen = (ev, fn) => T().event.listen(ev, (e) => fn(e.payload));
 
+/** Minimal on/emit event emitter for the device objects. */
 class Emitter {
   constructor() { this.handlers = {}; }
   on(ev, fn) { (this.handlers[ev] ||= []).push(fn); return this; }
   emit(ev, data) { (this.handlers[ev] || []).forEach((fn) => fn(data)); }
 }
 
+/** A Bluetooth device role (trainer or heart-rate monitor): connection state mirrored from Rust
+ * events, connect/disconnect via commands, and a simulator for ?sim=1. */
 class Device extends Emitter {
   constructor(kind) {
     super();
@@ -34,12 +40,14 @@ class Device extends Emitter {
     this.emitStatus();
   }
 
+  /** Tell listeners (top bar, ride screen) the current connection state. */
   emitStatus() {
     this.emit('status', { connected: this.connected, name: this.name, erg: this.erg, ergDenied: !!this.ergDenied, reconnecting: this.reconnecting });
   }
 
   scan(secs = 4) { return invoke('ble_scan', { kind: this.kind, secs }); }
 
+  /** Connect to a device found by ble_scan; Rust keeps reconnecting silently afterwards. */
   async connect(id) {
     this.stopSim();
     const info = await invoke('ble_connect', { kind: this.kind, id });
@@ -53,6 +61,7 @@ class Device extends Emitter {
     return info;
   }
 
+  /** Disconnect the device. */
   async disconnect() {
     if (this.mode === 'sim') { this.stopSim(); this.mode = null; this.emitStatus(); return; }
     await invoke('ble_disconnect', { kind: this.kind }).catch(() => {});
@@ -63,6 +72,7 @@ class Device extends Emitter {
   stopSim() { if (this.simTimer) { clearInterval(this.simTimer); this.simTimer = null; } }
 }
 
+/** The smart trainer: ERG targets (deduplicated here and in Rust), free ride and resume. */
 export class Trainer extends Device {
   constructor() { super('trainer'); this.simTarget = 150; this.lastSent = undefined; }
   get canErg() { return this.mode === 'sim' || (this.mode === 'ble' && this.erg); }
@@ -76,6 +86,7 @@ export class Trainer extends Device {
     this.send('trainer_set_power', { watts: w }, w);
   }
 
+  /** Release ERG (free-ride segments, all-out efforts, virtual shifting). */
   setFreeRide() {
     if (this.mode === 'sim') { this.simTarget = null; return; }
     if (!this.canErg || this.lastSent === 'free') return;
@@ -88,6 +99,7 @@ export class Trainer extends Device {
     invoke(cmd, args).catch(() => { if (this.lastSent === target) this.lastSent = undefined; });
   }
 
+  /** Back to ERG after a free-ride segment. */
   resume() {
     this.lastSent = undefined;
     if (this.mode === 'ble') invoke('trainer_resume').catch(() => {});
@@ -110,6 +122,7 @@ export class Trainer extends Device {
   }
 }
 
+/** Heart-rate monitor (or a watch broadcasting HR). */
 export class HeartRate extends Device {
   constructor() { super('hr'); }
 
