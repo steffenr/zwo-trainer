@@ -1,0 +1,123 @@
+/* Workout chart (Diagram), mini profiles, zone bar, power gauge and progress ring, overlay toggles. */
+
+.mini { display: block; width: 100%; }
+
+/* ---------- zone bar + legend ---------- */
+.zones-bar {
+  display: flex; height: 10px; border-radius: 99px; overflow: hidden; margin-top: 14px; gap: 2px;
+  & i { display: block; }
+}
+.zones-legend {
+  display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 12.5px; color: var(--muted);
+  & span { display: inline-flex; align-items: center; gap: 6px; }
+  & i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+  & b { color: var(--text); font-weight: 600; }
+}
+
+/* ---------- diagram ---------- */
+.diagram-svg {
+  width: 100%; height: 220px; display: block; overflow: visible;
+  & .grid {
+    stroke: var(--line-strong); stroke-width: 1; stroke-dasharray: 3 5; vector-effect: non-scaling-stroke;
+    &.ftp { stroke: var(--ftp); stroke-dasharray: 6 4; opacity: .45; }
+  }
+  & .seg { cursor: pointer; }
+  & .seg path { transition: opacity .15s; }
+  & .seg:hover path { opacity: .8; }
+  & .seg.current path { opacity: 1; }
+  & .seg-sep { stroke: var(--bg); stroke-opacity: .55; stroke-width: 1; vector-effect: non-scaling-stroke; }
+  & .pos-line { stroke: var(--pos); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+  & .done-bar { fill: var(--done); }
+  & .trace { fill: none; stroke-width: 1.6; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+  & .trace-pow { stroke: var(--trace); stroke-opacity: .9; }
+  & .trace-cad { stroke: var(--cad); stroke-opacity: .9; }
+  & .trace-hr { stroke: var(--hrline); stroke-opacity: .9; }
+}
+/* the stage leaves 34 px on the left for the y axis; free-ride labels and x-axis labels line up with it */
+.dg-stage {
+  position: relative; flex: 1; min-height: 0; display: flex; padding-left: 34px;
+  & .diagram-svg { flex: 1; }
+}
+.dg-free { position: absolute; inset: auto 0 6px 34px; height: 14px; pointer-events: none; }
+.dg-free span, .dg-labels span { position: absolute; top: 0; overflow: hidden; white-space: nowrap; font-size: 11px; line-height: 14px; }
+.dg-free span { text-align: center; color: var(--text-2); }
+.dg-labels {
+  position: relative; height: 16px; margin-top: 3px; margin-left: 34px; flex: none;
+  & span {
+    padding-left: 3px; color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums;
+    &.hide { visibility: hidden; }
+  }
+}
+.dg-yaxis {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 30px; pointer-events: none;
+  & span { position: absolute; right: 4px; transform: translateY(-50%); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+}
+
+/* ---------- live overlay toggles (power · cadence · HR traces) ---------- */
+.overlay-toggles { display: inline-flex; gap: 6px; }
+.ov {
+  all: unset; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--line); font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer;
+  & i { width: 9px; height: 9px; border-radius: 50%; background: currentColor; opacity: .35; }
+  &.on { color: var(--text); border-color: var(--line-strong); }
+  &.on i { opacity: 1; }
+}
+.ov-power.on i { background: var(--trace); }
+.ov-cadence.on i { background: var(--cad); }
+.ov-hr.on i { background: var(--hrline); }
+
+/* ---------- gauge (power) and progress ring (segment) ---------- */
+.gauge {
+  all: unset; position: relative; cursor: pointer; justify-self: center; width: 100%; max-width: 230px; aspect-ratio: 1;
+  /* on target: soft glow in the zone colour (--glow) around the arcs */
+  &::before {
+    content: ''; position: absolute; inset: 6%; border-radius: 50%; pointer-events: none; opacity: 0; transition: opacity .6s ease;
+    background: radial-gradient(circle, color-mix(in srgb, var(--glow, transparent) 16%, transparent) 0%, transparent 68%);
+  }
+  & .gauge-svg path { transition: filter .6s ease; }
+}
+.gauge-svg, .progress-svg { width: 100%; height: 100%; display: block; }
+.g-track {
+  fill: none; stroke: var(--track); stroke-width: 14; stroke-linecap: round;
+  &.inner { stroke-width: 12; }
+}
+.g-target { fill: none; stroke-width: 14; stroke-linecap: round; }
+.g-actual { fill: none; stroke-width: 12; stroke-linecap: round; }
+.g-ftp { stroke: var(--ftp); stroke-width: 3; stroke-linecap: round; }
+.gauge-center, .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.gauge-center {
+  & b { font-size: 50px; line-height: 1; font-family: var(--num); font-weight: 750; font-variant-numeric: tabular-nums; margin: 2px 0; }
+  & small { font-size: 18px; font-variant-numeric: tabular-nums; }
+}
+.gauge.on-target {
+  & .g-actual, & .g-target { filter: drop-shadow(0 0 5px var(--glow)) drop-shadow(0 0 12px color-mix(in srgb, var(--glow) 55%, transparent)); }
+  &::before { opacity: 1; }
+}
+
+.seg-ring {
+  position: relative; width: 100%; max-width: 210px; aspect-ratio: 1;
+  /* finished: a check draws in the ring */
+  & .ring-check { position: absolute; inset: 22%; display: none; pointer-events: none; }
+  & .ring-check path { fill: none; stroke: var(--ok); stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 120; }
+  &.finished .ring-center { visibility: hidden; }
+  &.finished .ring-check { display: block; }
+}
+.progress-svg .g-target { stroke-width: 12; transition: d .25s linear; }
+.ring-center {
+  & b {
+    font-size: 40px; line-height: 1.05; font-family: var(--num); font-weight: 750;
+    &.range { font-size: 30px; }
+  }
+  /* stays inside the ring, long texts wrap */
+  & small { font-size: 19px; color: var(--text); font-variant-numeric: tabular-nums; max-width: 66%; line-height: 1.2; text-wrap: balance; }
+  & .k { min-height: 15px; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .seg-ring.finished .ring-check path { animation: mo-draw .5s .1s cubic-bezier(.4, 0, .2, 1) both; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gauge.on-target .g-actual, .gauge.on-target .g-target { filter: none; }
+  .gauge.on-target::before { opacity: 0; }
+}
+@keyframes mo-draw { from { stroke-dashoffset: 120; } }

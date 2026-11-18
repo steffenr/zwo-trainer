@@ -1,0 +1,123 @@
+/* Optional compact ride presentation (compact.js): same Ride, small native window.
+   Three mini panels LIVE | CURRENT | NEXT. Tiers come from compactMode() as data-* on .compact-ride:
+   ws wide+short, wt wide+tall, nt narrow+tall (stacked), ns narrow+short (tiny columns);
+   data-short / data-tiny / data-narrow / data-xs drop text first, the gauges stay. */
+
+.compact-ride { display: none; }
+body.compact-riding {
+  & .topbar { display: none; }
+  & .ride { inset: 0; display: block; padding: 8px 12px; overflow: hidden; }
+  & .compact-ride { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 6px; }
+  & #ride-hint { top: 40px; max-width: calc(100% - 24px); font-size: 12px; text-align: center; }
+}
+body.compact-riding .ride > :not(.compact-ride):not(#ride-hint) { display: none; }
+
+.compact-head {
+  display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 32px; flex: none;
+  & .icon-btn { flex: none; width: 32px; height: 32px; }
+  & .ic { width: 18px; height: 18px; }
+}
+:root[data-os="mac"] .compact-head { padding-left: 80px; }
+.compact-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.compact-state {
+  display: flex; align-items: center; gap: 6px; flex: none; margin-right: auto; color: var(--text-2); font-size: 11px;
+  & i {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--muted);
+    &.on { background: var(--ok); }
+  }
+}
+.compact-gears {
+  display: flex; align-items: center; gap: 2px; color: var(--text-2); font-size: 12px; font-variant-numeric: tabular-nums;
+  & .icon-btn { width: 32px; height: 32px; }
+}
+.compact-ride button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* play/stop + "workout left": in the heading row when short, in the footer otherwise */
+.compact-short { display: none; align-items: center; gap: 10px; }
+.compact-ctl {
+  display: flex; align-items: center; gap: 8px;
+  & .ctl { width: 34px; height: 34px; border-radius: 10px; }
+  & .ctl svg { width: 18px; height: 18px; }
+}
+.cmp-wl {
+  display: flex; align-items: baseline; gap: 6px; color: var(--text-2); white-space: nowrap;
+  & small { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  & b { font: 700 14px var(--num); font-variant-numeric: tabular-nums; color: var(--text); }
+}
+.compact-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; }
+
+/* ---------- mini panels ---------- */
+.compact-main { flex: 1; min-height: 0; display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); }
+.compact-ride[data-mode="nt"] .compact-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.25fr) minmax(0, 1.25fr) minmax(0, .75fr); }
+.cp { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; padding: 6px 8px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.cp-ph {
+  display: flex; align-items: center; gap: 6px; flex: none; margin-bottom: 2px; font-size: 10px; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  & i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
+}
+.cp-cur .cp-ph i { background: var(--text-2); }
+.cp-next .cp-ph i { background: var(--zc, var(--line-strong)); }
+.cp-body { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+/* the dial cell is a size container: gauge and numbers scale with the smaller side */
+.cp-cell { flex: 1 1 0; min-height: 0; container-type: size; display: grid; place-items: center; }
+.cp-dial { position: relative; width: min(100cqw, 100cqh); height: min(100cqw, 100cqh); }
+.cp-mount { position: absolute; inset: 0; }
+.cp-center {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; line-height: 1.05;
+  & b { font: 700 min(23cqw, 23cqh)/1 var(--num); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+}
+.cp-cur .cp-center b { font-size: min(19cqw, 19cqh); }
+.cp-center small {
+  font-size: max(9px, min(9cqw, 9cqh)); color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap;
+  @container (max-height: 84px) { display: none; }
+}
+.cp-meta {
+  display: flex; justify-content: center; gap: 12px; flex: none;
+  & span { display: flex; align-items: baseline; gap: 5px; }
+  & small { font-size: 10px; font-weight: 600; letter-spacing: .06em; color: var(--text-2); text-transform: uppercase; }
+  & b {
+    font: 700 15px var(--num); font-variant-numeric: tabular-nums;
+    &.off-target { color: var(--danger); }
+  }
+}
+.cp-info {
+  display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: none;
+  & b { font: 700 15px var(--num); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+.cp-bar {
+  height: 5px; border-radius: 3px; background: var(--track); overflow: hidden;
+  & i { display: block; height: 100%; width: 0; border-radius: 3px; background: var(--text-2); }
+}
+.cp-nx {
+  position: relative; flex: 1; min-width: 0; display: flex; align-items: center; padding-left: 14px;
+  &::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 5px; border-radius: 3px; background: var(--zc, var(--line-strong)); }
+  & .nc-txt { gap: 3px; }
+  & .nc-txt b { font-size: 24px; }
+  & .nc-v { font-size: 12px; font-weight: 600; }
+}
+
+/* ---------- tiers ---------- */
+/* gauge/ring on the left, text on the right when there is width but little height (and in stacked rows) */
+.compact-ride:is([data-mode="ws"], [data-mode="nt"]) {
+  & .cp-body { flex-direction: row; align-items: center; gap: 10px; }
+  & .cp-cell { flex: none; height: 100%; aspect-ratio: 1; }
+  & .cp-meta { flex-direction: column; gap: 3px; justify-content: center; align-items: flex-start; flex: 1; }
+  & .cp-info { flex: 1; justify-content: center; }
+}
+/* narrow + short: three small columns, gauges and numbers only */
+.compact-ride[data-mode="ns"] {
+  & .compact-main { gap: 5px; }
+  & .cp { padding: 4px 5px 5px; }
+  & .cp-ph { font-size: 9px; letter-spacing: .05em; }
+  & .cp-nx { padding-left: 10px; }
+  & .cp-nx .nc-txt b { font-size: 17px; }
+  & .cp-nx .nc-v { font-size: 10px; }
+}
+.compact-ride[data-mode="ns"] .cp-opt, .compact-ride[data-tiny="1"] .cp-opt { display: none; }
+.compact-ride[data-short="1"] {
+  & .compact-foot { display: none; }
+  & .compact-short { display: flex; }
+  & .compact-ctl .ctl { width: 30px; height: 30px; }
+}
+.compact-ride[data-narrow="1"] .compact-name { display: none; }
+.compact-ride[data-xs="1"] .cmp-wl { display: none; }

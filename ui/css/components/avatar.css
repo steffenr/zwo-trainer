@@ -1,0 +1,10 @@
+/* Rider avatar: initials on the rider's colour (--av), or an emoji on a tint of it. */
+
+.avatar {
+  --av: #338cff;
+  width: 28px; height: 28px; border-radius: 50%; display: inline-grid; place-items: center;
+  background: var(--av); color: #fff; font: 700 11.5px var(--font); letter-spacing: .02em; flex: none;
+  &.emoji { background: color-mix(in srgb, var(--av) 22%, var(--surface)); box-shadow: inset 0 0 0 1.5px var(--av); font-size: 16px; letter-spacing: 0; }
+  &.xl.emoji { font-size: 38px; }
+  &.xl { width: 72px; height: 72px; font-size: 24px; }
+}

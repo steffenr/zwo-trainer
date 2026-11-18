@@ -17,7 +17,12 @@ A desktop app (Tauri 2) for riding Zwift `.zwo` workouts on a Bluetooth smart tr
 ```
 ui/                         frontend — static files served by Tauri (frontendDist = ../ui)
   index.html                shell: top bar, #view, #ride, <dialog id="modal">, #toast
-  css/styles.css            ALL styles; theme tokens on :root (light) + dark overrides
+  css/styles.css            entry only: @layer order (tokens, base, components, views, utilities) + @imports
+  css/tokens.css            theme tokens on :root (light) + dark overrides (OS dark and forced dark)
+  css/base.css              elements, native form controls, text helpers (.muted, .k, .ic …), shared @keyframes
+  css/components/           reusable pieces: buttons, surfaces (card, dialog, popover, toast), forms, avatar, charts, markdown
+  css/views/                one file per screen/dialog: topbar, home, library, history, tests, dialogs, settings, ride, compact
+  css/utilities.css         [hidden], forced text colours, global "Reduce motion"
   js/app.js                 app controller: boot, routing, modes, riders, settings, sync, Ride class
   js/compact.js             serialized compact/full ride presentation transitions (same Ride, native resize first) and `compactMode()` size tiers
   js/render.js              zones, colours, mini profiles, Diagram (workout chart), Gauge, ProgressRing
@@ -175,6 +180,10 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 - **Dev URL parameters:** `?sim=1` starts simulated devices, `?speed=N` fast-forwards time (recordings stay 1 Hz), `?profile=…` skips "Who's riding?".
 
 **CSS / UI:** follow [DESIGN.md](DESIGN.md). Only token colours (`var(--…)`), no hard-coded colours except zone and brand colours. Every change must work in **light and dark**, from 900 px up to full screen (the optional Compact ride view supports 320 × 200).
+- **Where a rule goes (cascade layers):** reusable pieces in `css/components/`, screen-specific rules in `css/views/`; a later layer always wins, so a view overrides a component without raising specificity. A component file never names a view (no `.ride .btn` in `buttons.css`); put that in the view. New files need an `@import … layer(…)` line in `styles.css`. No unlayered CSS (it would beat every layer) and no `<style>` blocks.
+- **Nesting:** native CSS nesting, always with `&` (`& .child`, `&.mod`, `&:hover`), declarations before nested rules, and never nest under a selector list whose parts differ in specificity (`&` becomes `:is(…)`, which takes the highest one). Keep nesting shallow (≤ 3 levels).
+- **Order still matters inside a file** where media blocks adjust earlier rules (ride.css: short-window and ≥ 1401 px blocks stay below the rules they change).
+- **Engines:** layers and nesting need Safari 17+ (macOS 13 is the minimum, `minimumSystemVersion`), current WebView2 and WebKitGTK ≥ 2.42. Don't lower the macOS minimum.
 
 ## Testing changes
 

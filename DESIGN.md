@@ -1,6 +1,22 @@
 # DESIGN.md — zwoTrainer design system
 
-The visual and interaction rules for zwoTrainer. Everything lives in `ui/css/styles.css` (tokens on `:root`) and a few constants in `ui/js/render.js` / `ui/js/app.js`. Any new screen or component must follow this document; if you introduce a new pattern, document it here.
+The visual and interaction rules for zwoTrainer. The styles live in `ui/css/` (tokens on `:root` in `tokens.css`, see [CSS structure](#css-structure)) plus a few constants in `ui/js/render.js` / `ui/js/app.js`. Any new screen or component must follow this document; if you introduce a new pattern, document it here.
+
+## CSS structure
+
+Plain CSS, no build step. `styles.css` declares the cascade layers and imports the files. A later layer always wins, whatever the specificity:
+
+| Layer | Files | Holds |
+|---|---|---|
+| `tokens` | `tokens.css` | colour, font and radius tokens; dark overrides |
+| `base` | `base.css` | elements, native inputs and their focus/invalid states, text helpers (`.muted`, `.small`, `.eyebrow`, `.meta`, `.k`, `.ic`), shared keyframes |
+| `components` | `components/*.css` | reusable pieces used on several screens: buttons, chips, segmented control, tabs, cards, badges, dialogs, popovers, toast, forms, avatar, chart/gauge/ring, Markdown |
+| `views` | `views/*.css` | one file per screen or dialog: top bar, home, plan + workouts lists, history, FTP tests, dialogs, settings, ride, compact ride |
+| `utilities` | `utilities.css` | `[hidden]`, forced text colours, the global "Reduce motion" switch |
+
+- **Component or view?** If it appears on more than one screen, it is a component. A component file never refers to a view; a view adapts a component in its own file (e.g. `.ride-title .badge` lives in `views/ride.css`).
+- **Nesting** groups a component's parts, states and modifiers in one block (`.btn { &:hover {…} &.primary {…} }`), and its motion next to it (`@media (prefers-reduced-motion: no-preference)`). Always write `&`.
+- **Motion:** single-use `@keyframes` sit next to their component; shared ones (`mo-fade`, `mo-fade-out`, `mo-settle`, `mo-pop-in`) are in `base.css`.
 
 ## Principles
 
@@ -55,7 +71,7 @@ Always use tokens (`var(--…)`), never raw hex in components. Dark values apply
 ### Brand and third-party colours
 
 - The accent cyan is zwoTrainer's brand colour.
-- Third-party colours appear only on that service's own control: Garmin `#1d1d1f`.
+- Third-party colours appear only on that service's own control: Garmin `#1d1d1f` (the Garmin button flips to light in dark mode via `--garmin-bg` / `--garmin-ink`).
 - Avatar colours (user choice): `#338cff #59bf59 #ff6639 #b47cff #00a3c4 #e0a800 #ff4d8d #7f7f7f` or any custom colour.
 
 ## Typography
@@ -262,6 +278,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 ## Checklist for UI changes
 
 - [ ] Only tokens and zone colours; no new raw colours.
+- [ ] New CSS in the right layer and file (component vs. view, see [CSS structure](#css-structure)).
 - [ ] Checked in light **and** dark.
 - [ ] Checked at 1400 px, at full screen (2560 px) and at the minimum window (900 × 640).
 - [ ] Top bar unchanged; secondary and destructive actions in "⋯" menus.
