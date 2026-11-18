@@ -290,6 +290,21 @@ mod tests {
         WorkoutInfo { file: String::new(), week, day: Some(1), title: String::new(), name: String::new(), duration: 60, tss: 1, zone: 2, zone_time: [0; 5], profile: vec![] }
     }
 
+    /// Screenshot fixture (scripts/shots/fixture/make.mjs): scan FIXTURE_DIR with the real code and
+    /// write library.json + workouts.json (file → load()) to FIXTURE_OUT. Ignored; run only by that script.
+    #[test]
+    #[ignore]
+    fn dump_fixture() {
+        let (Ok(dir), Ok(out)) = (std::env::var("FIXTURE_DIR"), std::env::var("FIXTURE_OUT")) else { return };
+        let root = Path::new(&dir);
+        let lib = Cache::default().scan(root);
+        let files = lib.plans.iter().flat_map(|p| p.workouts.iter()).chain(lib.singles.iter()).map(|w| w.file.clone());
+        let loaded: serde_json::Map<String, serde_json::Value> = files.map(|f| (f.clone(), serde_json::to_value(load(root, &f).unwrap()).unwrap())).collect();
+        let out = Path::new(&out);
+        std::fs::write(out.join("library.json"), serde_json::to_string(&lib).unwrap()).unwrap();
+        std::fs::write(out.join("workouts.json"), serde_json::to_string(&loaded).unwrap()).unwrap();
+    }
+
     #[test]
     fn plan_or_collection() {
         assert_eq!(folder_kind(&[wi(Some(1)), wi(Some(2))]), "plan");
