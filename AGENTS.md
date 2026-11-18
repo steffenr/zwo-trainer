@@ -63,7 +63,7 @@ scripts/setup-updater-key.sh  one-time: create the updater key in ~/.tauri, writ
 scripts/check-i18n.mjs      de/fr have exactly en's keys, plural shapes and placeholders; every t('key') in ui/ exists
 scripts/check-html.mjs      ui/js: no innerHTML/outerHTML write or insertAdjacentHTML outside mount() in html.js
 scripts/check-css.mjs       ui/css: layer order, every file imported once into a layer, balanced braces, nested selectors start with &, components/ never name a view
-scripts/site-shots.mjs      website screenshots of the Settings tabs (Rider, Riding, Connections) → site/img/*-card-{dark,light}.webp; real ui/ in headless Chromium with a stubbed __TAURI__
+scripts/settings-shots.mjs  website screenshots of the Settings dialog only (Rider, Riding, Connections) → site/img/*-card-{dark,light}.webp; real ui/ in headless Chromium with a stubbed __TAURI__
 site/                       static website (home, features, download) with dark/light screenshots in site/img; no build step
 .github/workflows/
   ci.yml                    push/PR: tests + clippy + UI syntax + i18n + CSS + markup checks (Linux), tests (macOS, Windows)
@@ -90,7 +90,7 @@ node --test scripts/compact-ride.test.mjs             # compact/full transition 
 node --test scripts/battery.test.mjs                   # battery state, lowest level, badge
 node --test scripts/html.test.mjs                      # html`` escaping, raw/Safe nesting, tHtml, mount
 node scripts/sync-version.mjs [x.y.z]                # print / set the app version
-npx -y -p playwright node scripts/site-shots.mjs [--out dir] [rider riding sync]   # retake Settings screenshots for site/img
+npx -y -p playwright node scripts/settings-shots.mjs [--out dir] [rider riding sync]   # retake the 6 Settings images in site/img (other site images: by hand)
 ```
 
 ## Releases & platforms
@@ -200,14 +200,14 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 1. `cd src-tauri && cargo test`; all tests must pass, warning-free.
 2. **UI changes:** run the app (`cargo tauri dev`, or the browser mock below) and look at the changed screens in **both themes** and at **1400 px and full-screen width**. Screenshot before/after if you can.
 3. **Without hardware:** use `?sim=1` (or *Use simulator* in a device dialog). Controller buttons can be exercised from the console by emitting `button` events through the mock.
-4. **Browser mock (optional):** serve `ui/` with a small static server and inject a `window.__TAURI__` stub that answers the commands above (`app_state`, `scan_library` → JSON from a sample folder, …). Useful for Playwright screenshots; never ship it. `scripts/site-shots.mjs` is a working example (boot, sample rider, Settings); extend its `tauriStub` / `SHOTS` rather than starting a new mock.
+4. **Browser mock (optional):** serve `ui/` with a small static server and inject a `window.__TAURI__` stub that answers the commands above (`app_state`, `scan_library` → JSON from a sample folder, …). Useful for Playwright screenshots; never ship it. `scripts/settings-shots.mjs` is a working example (boot, sample rider, opens Settings); extend its `tauriStub` / `SHOTS` rather than starting a new mock.
 
 ## Website (`site/`)
 
 - **Keep it in step with releases:** when a release changes what the site describes (features, requirements, settings, dialogs), update the copy in `index.html` / `features.html` / `download.html` and retake the affected screenshots in the same change. Wording follows the README.
-- **Screenshots:** every image exists as `<name>-dark.webp` and `<name>-light.webp`, shown with `class="sd"` / `class="sl"`; the `width`/`height` attributes must match the file (2× device pixels).
-  - Settings tabs: `npx -y -p playwright node scripts/site-shots.mjs` (Playwright via npx, not a repo dependency; `npx -y playwright install chromium` once). It writes `settings-card` (Rider), `riding-card` (Riding) and `sync-card` (Connections) at 1080 × 1440. Use `--out <dir>` to compare before overwriting.
-  - Everything else in `site/img` (ride screen, plans, library, tests, devices menu, summary, history, compact view) is still taken by hand from the app (`?sim=1` for live data). Add new shots to the script when you touch them: a new stub command in `tauriStub` plus a step that opens the screen.
+- **Screenshots:** every image exists as `<name>-dark.webp` and `<name>-light.webp`, shown with `class="sd"` / `class="sl"`; the `width`/`height` attributes must match the file (2× device pixels). Only the Settings dialog is scripted; all other images are taken by hand:
+  - **Scripted (6 files):** `settings-card` (Rider tab), `riding-card` (Riding tab), `sync-card` (Connections tab), 1080 × 1440. Retake with `npx -y -p playwright node scripts/settings-shots.mjs`; `--out <dir>` writes elsewhere to compare first. Playwright comes via npx (not a repo dependency); run `npx -y playwright install chromium` once.
+  - **By hand (24 files):** `home`, `plan`, `workouts`, `ride`, `compact`, `tests`, `test-20min`, `test-20min-vs`, `preview-card`, `summary-card`, `history-card`, `devices-card`. Take them in the app (`cargo tauri dev`, `?sim=1` for live data) and export as WebP at the size in the HTML. To script one, extend `settings-shots.mjs` (more stub commands in `tauriStub`, a step that opens the screen) and rename it.
 - **Checking:** open the pages in both themes at desktop and phone width. Sections reveal on scroll (`.rv` → `.in`), so for full-page captures add `in` to every `.rv` first.
 
 ## Things that are easy to get wrong

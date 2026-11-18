@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// Website screenshots of the Settings dialog (site/img/*-card-{dark,light}.webp), taken from the
+// Website screenshots of the Settings dialog only (Rider, Riding, Connections tabs → site/img/*-card-{dark,light}.webp),
 // real UI in headless Chromium with a stubbed Tauri IPC (sample rider "Lena", no Rust, no devices).
 //
-//   npx -y -p playwright node scripts/site-shots.mjs               # all shots → site/img
-//   npx -y -p playwright node scripts/site-shots.mjs --out /tmp/x  # elsewhere, to compare first
-//   npx -y -p playwright node scripts/site-shots.mjs riding sync   # only these tabs
+//   npx -y -p playwright node scripts/settings-shots.mjs               # all shots → site/img
+//   npx -y -p playwright node scripts/settings-shots.mjs --out /tmp/x  # elsewhere, to compare first
+//   npx -y -p playwright node scripts/settings-shots.mjs riding sync   # only these tabs
 //
 // Playwright is not a repo dependency (there is no package.json on purpose): npx fetches it, and
 // `npx -y playwright install chromium` downloads the browser once. A global install works too.
@@ -38,7 +38,7 @@ function loadPlaywright() {
   for (const root of roots) {
     try { return createRequire(path.join(root, 'noop.js'))('playwright'); } catch { /* next */ }
   }
-  console.error('Playwright not found. Run: npx -y -p playwright node scripts/site-shots.mjs (once before: npx -y playwright install chromium)');
+  console.error('Playwright not found. Run: npx -y -p playwright node scripts/settings-shots.mjs (once before: npx -y playwright install chromium)');
   process.exit(1);
 }
 const { chromium } = loadPlaywright();
