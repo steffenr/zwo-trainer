@@ -90,7 +90,7 @@ export class Diagram {
     const x = (sec) => (sec / total) * W;
     this.x = x; this.y = y;
 
-    this.c.innerHTML = '';
+    this.c.replaceChildren();
     // The bars stretch with the window (preserveAspectRatio none); all text lives in HTML
     // layers on top so it keeps its proportions at any size (full screen included).
     const stage = document.createElement('div');

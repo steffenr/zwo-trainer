@@ -1,21 +1,15 @@
 #!/usr/bin/env node
-// Guards the html`` convention (ui/js/html.js): markup reaches the DOM through mount(el, html`…`),
-// which escapes every interpolated value. Direct innerHTML / outerHTML writes and insertAdjacentHTML
-// bypass that, so their number per file may only go down. When you convert one, lower its BASELINE
-// entry (the script tells you); never raise it, use mount() in new code instead.
-// Run: node scripts/check-html.mjs (CI does too).
+// Guards the html`` convention (ui/js/html.js): markup reaches the DOM only through mount(el, html`…`),
+// which escapes every interpolated value. Any other innerHTML / outerHTML write or insertAdjacentHTML
+// bypasses that and fails this check: build the markup with html`` and call mount(); to empty an
+// element use el.replaceChildren(). Run: node scripts/check-html.mjs (CI does too).
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Direct markup writes still allowed per file (legacy code that builds strings with esc()).
+// The only places allowed to write markup directly.
 const BASELINE = {
   'html.js': 1,      // mount() itself
-  'render.js': 1,
-  // left in app.js: the ride screen skeleton in Ride.build() (title, screen, chart tooltip, live status,
-  // overlay toggle), the top-bar avatar, the ⋯ menu copy from its <template>, the preview's segment info
-  // and star, and two clears (innerHTML = '')
-  'app.js': 11,
 };
 
 const root = fileURLToPath(new URL('../ui/js/', import.meta.url));

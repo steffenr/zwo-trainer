@@ -4,7 +4,8 @@
 //   renderHistory) · actions (bindActions, ⋯ menus) · dialogs (openModal, preview, settings, devices,
 //   connections) · the Ride class (ride screen and loop) · ride summary.
 // Markup: html`` from ./html.js (auto-escaping) and the helpers in ./components/ for shared pieces;
-// older parts still build strings with esc(). Rust is reached only through invoke() / listen() (ble.js).
+// markup reaches the DOM only through mount() (scripts/check-html.mjs). Rust is reached only through
+// invoke() / listen() (ble.js).
 import { CompactView, compactMode } from './compact.js';
 import { powerAt, segmentAt, estimateTss } from './zwo.js';
 import { ZONES, FREE_COLOR, zoneOf, zoneColor, zoneInk, fmtTime, fmtDur, miniProfile, Diagram, Gauge, ProgressRing, motionOK } from './render.js';
@@ -15,7 +16,7 @@ import { DEFAULT_SHIFTING, gearTable, virtualSpeed, targetWatts } from './vshift
 import { PROTOCOLS, protocolById, isTestWorkout, evaluateGeneric, classifyTest, prepareTestWorkout, vo2max } from './tests.js';
 import { t, LOCALES, setLocale, systemLocale, coerceLocale, fmtLocale, translateDom } from './i18n/index.js';
 import { loadSounds, countdown, endChime } from './sound.js';
-import { html, raw, tHtml, tText, mount, esc } from './html.js';
+import { html, raw, tHtml, tText, mount } from './html.js';
 import { IC } from './components/icons.js';
 import { badge, wdTag, zoneTag } from './components/indicators.js';
 import { dialogHead, closeBtn } from './components/dialog.js';
@@ -98,12 +99,14 @@ const showWeekDay = (w) => planById(folderOf(w.file))?.kind === 'plan';
 /** Description block: a smart-trimmed ~300-character preview that expands to the full Markdown. */
 const DESC_PREVIEW = 300;
 function descriptionBlock(md) {
-  if (!md) return '';
+  if (!md) return html``;
   const { text, cut } = smartTrim(markdownPlain(md), DESC_PREVIEW);
-  if (!cut) return `<section class="plan-desc card"><div class="md">${renderMarkdown(md)}</div></section>`;
-  return `<section class="plan-desc card is-collapsed">
-    <div class="md md-preview"><p>${esc(text)} <a href="#" class="md-toggle" data-act="desc-toggle">${t('showMore')}</a></p></div>
-    <div class="md md-full">${renderMarkdown(md)}<p><a href="#" class="md-toggle" data-act="desc-toggle">${t('showLess')}</a></p></div>
+  // renderMarkdown() escapes everything itself and only emits its own tags, so its output is trusted
+  const full = raw(renderMarkdown(md));
+  if (!cut) return html`<section class="plan-desc card"><div class="md">${full}</div></section>`;
+  return html`<section class="plan-desc card is-collapsed">
+    <div class="md md-preview"><p>${text} <a href="#" class="md-toggle" data-act="desc-toggle">${tHtml('showMore')}</a></p></div>
+    <div class="md md-full">${full}<p><a href="#" class="md-toggle" data-act="desc-toggle">${tHtml('showLess')}</a></p></div>
   </section>`;
 }
 let workoutIndex = new Map();
@@ -383,9 +386,10 @@ const AVATAR_EMOJI = ['🚴', '🚵', '🏃', '🏊', '⚡', '🔥', '🚀', '�
 /** Only a #rrggbb colour may reach markup or CSS (same rule as clean_avatar in state.rs). */
 const safeColor = (c) => (typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c) ? c : null);
 const avatarBg = (p) => safeColor(p.avatar?.color) || avatarColor(p.id);
+/** Rider avatar: emoji on a tint, or the initials on the rider's colour (only a #rrggbb colour reaches CSS). */
 const avatar = (p, cls = '') => {
   const e = p.avatar?.emoji;
-  return `<span class="avatar ${esc(cls)} ${e ? 'emoji' : ''}" style="--av:${esc(avatarBg(p))}">${e ? esc(e) : esc(initials(p.name))}</span>`;
+  return html`<span class="avatar ${cls} ${e ? 'emoji' : ''}" style="--av:${avatarBg(p)}">${e || initials(p.name)}</span>`;
 };
 /** DOM version of avatar() for live previews: user input is only ever set as text, never parsed as HTML. */
 const avatarNode = (p, cls = '') => {
@@ -399,7 +403,7 @@ const avatarNode = (p, cls = '') => {
 
 function renderProfileChip() {
   const b = $('#btn-profile');
-  b.innerHTML = avatar(state);
+  mount(b, avatar(state));
   b.title = t('ridersTitle', { name: state.name });
   b.setAttribute('aria-label', t('riderAria', { name: state.name }));
 }
@@ -916,7 +920,7 @@ function renderPlan(id) {
       <div class="plan-actions">${actions}${menuBtn(menu, tText('planActions'))}</div>
       ${pp.started && html`<div class="plan-prog">${progressBar(pp, plan.id)}<span class="muted">${tHtml('doneSkippedToGo', { done: pp.done, skipped: pp.skipped, left: pp.total - pp.done - pp.skipped })}</span></div>`}
     </section>
-    ${raw(descriptionBlock(plan.description))}
+    ${descriptionBlock(plan.description)}
     <div class="weeks">${weeks}</div>`);
   bindActions(v);
 }
@@ -995,7 +999,7 @@ function renderWorkouts() {
       const items = html`<button data-act="reveal" data-rel="${plan.id}">${tHtml('showIn', { app: PLAT.files })}</button>${isPlan(plan)
         ? html`<button data-act="set-kind" data-kind="collection" data-rel="${plan.id}">${tHtml('showAsCollection')}</button>`
         : html`<button data-act="set-kind" data-kind="plan" data-rel="${plan.id}">${tHtml('useAsPlan')}</button>`}<hr><button class="danger-text" data-act="trash-folder" data-rel="${plan.id}">${tHtml('trashFolder', { trash: PLAT.trash })}</button>`;
-      frag = html`<h2>${plan.name}</h2>${badge(isPlan(plan) ? tHtml('plan') : tHtml('collection'), 'muted')}<span class="grow"></span>${isPlan(plan) && html`<a class="btn ghost sm" href="#/plan/${encodeURIComponent(plan.id)}" data-act="open-plan">${tHtml('openPlan')}</a>`}${menuBtn(items, tText('folderActions'))}${plan.description && html`<div class="wk-desc">${raw(descriptionBlock(plan.description))}</div>`}`;
+      frag = html`<h2>${plan.name}</h2>${badge(isPlan(plan) ? tHtml('plan') : tHtml('collection'), 'muted')}<span class="grow"></span>${isPlan(plan) && html`<a class="btn ghost sm" href="#/plan/${encodeURIComponent(plan.id)}" data-act="open-plan">${tHtml('openPlan')}</a>`}${menuBtn(items, tText('folderActions'))}${plan.description && html`<div class="wk-desc">${descriptionBlock(plan.description)}</div>`}`;
     } else if (f === '@fav') frag = html`<h2>${tHtml('favorites')}</h2><span class="muted small">${tHtml('favHint')}</span>`;
     else if (f === '') frag = html`<h2>${tHtml('allWorkouts')}</h2><span class="grow"></span>${menuBtn(html`<button data-act="reveal" data-rel="">${tHtml('showLibraryIn', { app: PLAT.files })}</button>`, tText('libraryActions'))}`;
     mount($('#wk-head'), frag);
@@ -1335,27 +1339,25 @@ function moreMenu(anchor, file) {
   const pop = document.createElement('div');
   pop.id = 'popover';
   pop.className = 'popover';
-  pop.innerHTML = `
-    <button data-p="fav">${isFav(file) ? `★ ${t('favRemove')}` : `☆ ${t('favAdd')}`}</button>
-    <button data-p="reveal">${t('showIn', { app: PLAT.files })}</button>
-    <button data-p="folder">${t('openItsFolder')}</button>
-    <hr><button data-p="trash" class="danger-text">${t('trashWorkout', { trash: PLAT.trash })}</button>`;
+  mount(pop, html`
+    <button data-act="fav">${isFav(file) ? html`★ ${tHtml('favRemove')}` : html`☆ ${tHtml('favAdd')}`}</button>
+    <button data-act="reveal">${tHtml('showIn', { app: PLAT.files })}</button>
+    <button data-act="folder">${tHtml('openItsFolder')}</button>
+    <hr><button data-act="trash" class="danger-text">${tHtml('trashWorkout', { trash: PLAT.trash })}</button>`);
   document.body.appendChild(pop);
   pop.style.top = `${Math.min(r.bottom + 6, window.innerHeight - pop.offsetHeight - 8)}px`;
   pop.style.left = `${Math.max(8, r.right - pop.offsetWidth)}px`;
   const close = () => { pop.remove(); document.removeEventListener('click', outside, true); };
   const outside = (e) => { if (!pop.contains(e.target)) close(); };
   setTimeout(() => document.addEventListener('click', outside, true));
-  pop.onclick = async (e) => {
-    const b = e.target.closest('[data-p]');
-    if (!b) return;
-    close();
-    const a = b.dataset.p;
-    if (a === 'fav') { await toggleFav(file); refreshView(); }
-    if (a === 'reveal') invoke('reveal_in_library', { rel: file }).catch((err) => toast(String(err)));
-    if (a === 'folder') { const f = folderOf(file); if (mode() !== 'workouts') await setMode('workouts'); wf.folder = f && planById(f) ? f : '@singles'; route(); }
-    if (a === 'trash') trashItem(file, false);
-  };
+  // every item closes the menu first, then acts on this workout
+  const act = (fn) => async () => { close(); await fn(); };
+  bindActions(pop, {
+    fav: act(async () => { await toggleFav(file); refreshView(); }),
+    reveal: act(() => openExternal('reveal_in_library', { rel: file })),
+    folder: act(async () => { const f = folderOf(file); if (mode() !== 'workouts') await setMode('workouts'); wf.folder = f && planById(f) ? f : '@singles'; route(); }),
+    trash: act(() => trashItem(file, false)),
+  });
 }
 
 /** Move a workout or a whole plan folder to the Trash and clean up references. */
@@ -1519,13 +1521,13 @@ async function openPreview(file) {
 
   const d = new Diagram($('.pv-diagram', modal), workout, {
     bounds: bounds(), ftp: ftp(),
-    onSelect: (i, s) => { d.highlight(i); $('.seg-info', modal).innerHTML = segmentText(s); },
+    onSelect: (i, s) => { d.highlight(i); mount($('.seg-info', modal), segmentText(s)); },
   });
   if (motionOK()) d.segEls.forEach((g, i) => { g.style.animationDelay = `${80 + Math.min(i, 30) * 12}ms`; g.classList.add('grow'); });
   // the dialog closes first, then the chosen action runs
   const leave = (fn) => async (el) => { closeModal(); await fn(el); };
   bindActions(modal, {
-    fav: async (el) => { await toggleFav(file); el.outerHTML = starBtn(file); refreshView(); },
+    fav: async (el) => { await toggleFav(file); el.replaceWith(mount(document.createElement('template'), starBtn(file)).content); refreshView(); },
     more: (el) => { closeModal(); setTimeout(() => moreMenu(document.querySelector(`.wrow[data-file="${CSS.escape(file)}"] .more`) || el, file), 0); },
     start: leave(() => startRide(file, active.id)),
     free: leave(() => startRide(file, null)),
@@ -1555,10 +1557,11 @@ function targetText(s, mult = 1) {
   return a === b ? `${a}% · ${wa} W` : `${a}–${b}% · ${wa}–${wb} W`;
 }
 
+/** One segment in words (name, type, duration, target, cadence, zone): chart tooltip and preview line. */
 function segmentText(s) {
-  const kind = t({ steady: 'segSteady', warmup: 'segWarmup', cooldown: 'segCooldown', ramp: 'segRamp', on: 'segOn', off: 'segOff', freeride: 'freeRide', maxeffort: 'maxEffort' }[s.type] || 'segment');
+  const kind = tHtml({ steady: 'segSteady', warmup: 'segWarmup', cooldown: 'segCooldown', ramp: 'segRamp', on: 'segOn', off: 'segOff', freeride: 'freeRide', maxeffort: 'maxEffort' }[s.type] || 'segment');
   const z = s.p0 !== null ? zoneOf((s.p0 + s.p1) / 2, bounds()) : null;
-  return `<b>${s.label}${s.reps ? ` (${s.rep}/${s.reps})` : ''}</b> ${kind} · ${fmtTime(s.duration)} · ${targetText(s)}${s.cadence ? ` · ${s.cadence} rpm` : ''}${z ? ` · <span style="color:var(--z${z.id}-ink)">${z.short} ${z.name}</span>` : ''}`;
+  return html`<b>${s.label}${s.reps > 0 && ` (${s.rep}/${s.reps})`}</b> ${kind} · ${fmtTime(s.duration)} · ${targetText(s)}${s.cadence > 0 && ` · ${s.cadence} rpm`}${z && html` · <span style="color:var(--z${z.id}-ink)">${z.short} ${z.name}</span>`}`;
 }
 
 // ------------------------------------------------------------------ settings
@@ -2188,13 +2191,12 @@ async function startRide(file, planId) {
 
 /** Plausibility note for a test result that differs a lot (> 15 %) from the current FTP. */
 function ftpCheck(next, cur, source) {
-  if (!next || !cur) return '';
+  if (!next || !cur) return html``;
   const d = (next - cur) / cur;
-  if (Math.abs(d) <= 0.15) return '';
+  if (Math.abs(d) <= 0.15) return html``;
   const pct = `${Math.round(Math.abs(d) * 100)} %`;
-  const src = source ? t('ftpSrcFrom', { name: `<b>${esc(source)}</b>` }) : t('ftpSrcRight');
-  const why = d > 0 ? t('ftpHigh', { pct, src }) : t('ftpLow', { pct, src });
-  return `<p class="ftp-check">${why}</p>`;
+  const src = source ? tHtml('ftpSrcFrom', { name: html`<b>${source}</b>` }) : tHtml('ftpSrcRight');
+  return html`<p class="ftp-check">${tHtml(d > 0 ? 'ftpHigh' : 'ftpLow', { pct, src })}</p>`;
 }
 
 const SEG_KIND = { steady: 'kindSteady', warmup: 'segWarmup', cooldown: 'segCooldown', ramp: 'segRamp', on: 'kindOn', off: 'kindOff', freeride: 'freeRide', maxeffort: 'maxEffort' };
@@ -2258,7 +2260,7 @@ function summaryTest(r) {
           <dl>${detailRows(r.details)}
             ${wkg(r.ftp) && html`<dt>${tHtml('ftpPerKg')}</dt><dd>${wkg(r.ftp)} W/kg</dd>`}
             ${vo2}</dl>
-          ${raw(ftpCheck(r.ftp, cur, trainer.connected ? trainer.name : null))}
+          ${ftpCheck(r.ftp, cur, trainer.connected ? trainer.name : null)}
           <div class="ftp-actions"><button class="btn primary" data-act="apply">${tHtml('useAsFtp', { w: r.ftp })}</button><button class="btn ghost" data-act="keep">${tHtml('keepW', { w: cur })}</button></div>
         </div>`;
   }
@@ -2361,33 +2363,33 @@ class Ride {
     const plan = this.planId && planById(this.planId);
     const ov = state.settings.overlay || { power: true };
     // compact view: play/stop and "workout left" appear twice (heading row when short, footer otherwise)
-    const cmpCtl = `<span class="compact-ctl"><button class="ctl play" data-act="play" title="${t('btnPlay')}" aria-label="${t('btnPlay')}"><svg viewBox="0 0 24 24" class="i-play" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" class="i-pause" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg></button><button class="ctl" data-act="stop" title="${t('endWorkout')}" aria-label="${t('endWorkout')}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button></span>`;
-    const cmpWl = `<span class="cmp-wl"><small>${t('compactWorkoutLeft')}</small><b class="cmp-wleft">0:00</b></span>`;
+    const cmpCtl = html`<span class="compact-ctl"><button class="ctl play" data-act="play" title="${tText('btnPlay')}" aria-label="${tText('btnPlay')}"><svg viewBox="0 0 24 24" class="i-play" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" class="i-pause" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg></button><button class="ctl" data-act="stop" title="${tText('endWorkout')}" aria-label="${tText('endWorkout')}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button></span>`;
+    const cmpWl = html`<span class="cmp-wl"><small>${tHtml('compactWorkoutLeft')}</small><b class="cmp-wleft">0:00</b></span>`;
     // the ride title lives in the regular top bar (in place of the mode switch)
     const rt = $('#ride-title');
-    rt.innerHTML = `${this.test ? badge(tHtml('ftpTest'), 'test') : ''}${plan ? badge(html`${plan.name}${this.info?.week ? html` · ${tHtml('weekDayCompact', { w: this.info.week, d: this.info.day })}` : ''}`) : this.test ? '' : badge(tHtml('workout'), 'muted')}
-      <h1 title="${esc(this.info?.title || this.w.name)}">${esc(this.info?.title || this.w.name)}</h1><span class="erg" id="erg-state"></span>`;
+    mount(rt, html`${this.test && badge(tHtml('ftpTest'), 'test')}${plan ? badge(html`${plan.name}${this.info?.week && html` · ${tHtml('weekDayCompact', { w: this.info.week, d: this.info.day })}`}`) : !this.test && badge(tHtml('workout'), 'muted')}
+      <h1 title="${this.info?.title || this.w.name}">${this.info?.title || this.w.name}</h1><span class="erg" id="erg-state"></span>`);
     rt.hidden = false;
     $('#btn-compact').hidden = false;
-    r.innerHTML = `
+    mount(r, html`
       <div class="ride-top">
         <section class="panel live">
-          <header class="ph"><span class="ph-dot" id="live-dot"></span><b>${t('live')}</b>${IC.pulse}<span class="ph-status" id="live-status"></span></header>
+          <header class="ph"><span class="ph-dot" id="live-dot"></span><b>${tHtml('live')}</b>${IC.pulse}<span class="ph-status" id="live-status"></span></header>
           <div class="live-body">
-            <button class="gauge" id="gauge" title="${t('gaugeTitle')}">
+            <button class="gauge" id="gauge" title="${tText('gaugeTitle')}">
               <div class="gauge-mount"></div>
-              <div class="gauge-center"><span class="k" id="g-unit">${t('watt')}</span><b id="v-pow">–</b><small id="t-pow">–</small></div>
+              <div class="gauge-center"><span class="k" id="g-unit">${tHtml('watt')}</span><b id="v-pow">–</b><small id="t-pow">–</small></div>
             </button>
             <div class="metrics">
-              <div class="metric">${IC.bolt}<div class="m-txt"><span class="k">${t('colPower')}</span><span class="m-val"><b id="m-pow">–</b><small>W</small></span><div class="mbar" id="b-pow"><i class="fill"></i><i class="mark"></i></div></div></div>
-              <div class="metric">${IC.cad}<div class="m-txt"><span class="k">${t('cadence')}</span><span class="m-val"><b id="v-cad">–</b><em id="t-cad"></em><small>rpm</small></span><div class="mbar" id="b-cad"><i class="band"></i><i class="fill"></i><i class="mark"></i></div></div></div>
-              <div class="metric">${IC.speed}<div class="m-txt"><span class="k">${t('speed')}</span><span class="m-val"><b id="v-spd">–</b><small>km/h</small></span><div class="mbar" id="b-spd"><i class="fill"></i></div></div></div>
-              <div class="metric">${IC.heart}<div class="m-txt"><span class="k">${t('devHr')}</span><span class="m-val"><b id="v-hr">–</b><small>bpm</small><em id="t-hr"></em></span><div class="mbar" id="b-hr"><i class="fill"></i></div></div></div>
+              <div class="metric">${IC.bolt}<div class="m-txt"><span class="k">${tHtml('colPower')}</span><span class="m-val"><b id="m-pow">–</b><small>W</small></span><div class="mbar" id="b-pow"><i class="fill"></i><i class="mark"></i></div></div></div>
+              <div class="metric">${IC.cad}<div class="m-txt"><span class="k">${tHtml('cadence')}</span><span class="m-val"><b id="v-cad">–</b><em id="t-cad"></em><small>rpm</small></span><div class="mbar" id="b-cad"><i class="band"></i><i class="fill"></i><i class="mark"></i></div></div></div>
+              <div class="metric">${IC.speed}<div class="m-txt"><span class="k">${tHtml('speed')}</span><span class="m-val"><b id="v-spd">–</b><small>km/h</small></span><div class="mbar" id="b-spd"><i class="fill"></i></div></div></div>
+              <div class="metric">${IC.heart}<div class="m-txt"><span class="k">${tHtml('devHr')}</span><span class="m-val"><b id="v-hr">–</b><small>bpm</small><em id="t-hr"></em></span><div class="mbar" id="b-hr"><i class="fill"></i></div></div></div>
             </div>
           </div>
         </section>
         <section class="panel seg">
-          <header class="ph">${IC.target}<b>${t('currentSegment')}</b><span class="ph-status" id="seg-kind"></span></header>
+          <header class="ph">${IC.target}<b>${tHtml('currentSegment')}</b><span class="ph-status" id="seg-kind"></span></header>
           <div class="seg-body">
             <div class="seg-left">
               <div class="seg-ring">
@@ -2398,76 +2400,76 @@ class Ride {
                 </div>
                 <svg class="ring-check" viewBox="0 0 100 100" aria-hidden="true"><path d="M27 52 L44 68 L74 34"/></svg>
               </div>
-              <div class="gearbox" id="gearbox" hidden><button class="btn round sm" data-shift="-1" title="${t('shiftDownKey')}">−</button><span id="gear-lbl" class="gear-lbl">${t('gear')}</span><button class="btn round sm" data-shift="1" title="${t('shiftUpKey')}">+</button></div>
+              <div class="gearbox" id="gearbox" hidden><button class="btn round sm" data-shift="-1" title="${tText('shiftDownKey')}">−</button><span id="gear-lbl" class="gear-lbl">${tHtml('gear')}</span><button class="btn round sm" data-shift="1" title="${tText('shiftUpKey')}">+</button></div>
             </div>
             <div class="seg-stats">
-              <div class="stat">${IC.bolt}<div><span class="k" id="s-tw-k">${t('targetPower')}</span><b id="s-tw">–</b></div></div>
-              <div class="stat cad">${IC.cad}<div><span class="k">${t('targetCadence')}</span><b id="s-cad">–</b></div></div>
-              <div class="stat">${IC.watch}<div><span class="k">${t('segment')}</span><b id="s-dur">0:00</b><div class="sbar"><i id="s-bar"></i></div></div></div>
-              <div class="stat rem">${IC.flag}<div><span class="k">${t('remaining')}</span><b id="s-rem">0:00</b></div></div>
+              <div class="stat">${IC.bolt}<div><span class="k" id="s-tw-k">${tHtml('targetPower')}</span><b id="s-tw">–</b></div></div>
+              <div class="stat cad">${IC.cad}<div><span class="k">${tHtml('targetCadence')}</span><b id="s-cad">–</b></div></div>
+              <div class="stat">${IC.watch}<div><span class="k">${tHtml('segment')}</span><b id="s-dur">0:00</b><div class="sbar"><i id="s-bar"></i></div></div></div>
+              <div class="stat rem">${IC.flag}<div><span class="k">${tHtml('remaining')}</span><b id="s-rem">0:00</b></div></div>
             </div>
           </div>
           <div class="coach-line" id="coach" role="status" aria-live="polite"></div>
         </section>
         <section class="panel next">
-          <header class="ph">${IC.layers}<b>${t('btnNext')}</b></header>
+          <header class="ph">${IC.layers}<b>${tHtml('btnNext')}</b></header>
           <div class="nx-card" id="next-card"></div>
         </section>
       </div>
       <div class="ride-diagram panel">
         <div class="dg-times">
-          <div class="wt-head"><span class="ph-mini">${IC.bars}<b>${t('workout')}</b></span><div class="wt-time"><span class="k">${t('elapsed')}</span><b id="d-el">0:00</b></div></div>
-          <span class="overlay-toggles" id="ov">${OVERLAY.map(([k, l]) => `<button data-ov="${k}" class="ov ov-${k} ${ov[k] ? 'on' : ''}"><i></i>${t(l)}</button>`).join('')}</span>
-          <div class="wt-time rem"><span class="k">${t('remainingLc')}</span><b id="d-rem">${fmtTime(this.w.duration)}</b><small id="d-tot">${t('ofTime', { time: fmtTime(this.w.duration) })}</small></div>
+          <div class="wt-head"><span class="ph-mini">${IC.bars}<b>${tHtml('workout')}</b></span><div class="wt-time"><span class="k">${tHtml('elapsed')}</span><b id="d-el">0:00</b></div></div>
+          <span class="overlay-toggles" id="ov">${OVERLAY.map(([k, l]) => html`<button data-ov="${k}" class="ov ov-${k} ${ov[k] ? 'on' : ''}"><i></i>${tHtml(l)}</button>`)}</span>
+          <div class="wt-time rem"><span class="k">${tHtml('remainingLc')}</span><b id="d-rem">${fmtTime(this.w.duration)}</b><small id="d-tot">${tHtml('ofTime', { time: fmtTime(this.w.duration) })}</small></div>
         </div>
         <div class="dg-mount"></div>
         <div class="dg-tip" id="dg-tip" hidden></div>
       </div>
-      <div class="ride-controls" data-msg="${esc(t('autoPaused'))}">
-        <button class="ctl" data-act="prev" title="${t('btnPrev')} (←)"><svg viewBox="0 0 24 24"><path d="M6 5v14M19 5l-9 7 9 7z"/></svg></button>
-        <button class="ctl" data-act="back" title="${t('back1min')}"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4"/></svg></button>
-        <button class="ctl play" data-act="play" title="${t('btnPlay')} (${t('spaceKey')})" id="btn-play"><svg viewBox="0 0 24 24" class="i-play"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" class="i-pause"><path d="M8 5v14M16 5v14"/></svg></button>
-        <button class="ctl" data-act="stop" title="${t('endWorkout')}"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
-        <button class="ctl" data-act="fwd" title="${t('fwd1min')}"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v4h-4"/></svg></button>
-        <button class="ctl" data-act="next" title="${t('btnNext')} (→)"><svg viewBox="0 0 24 24"><path d="M18 5v14M5 5l9 7-9 7z"/></svg></button>
-        <div class="int-group" title="${t('intensityTitle')}">
-          <div class="int-read"><span class="k">${t('intensity')}</span><b id="int-val" class="int-val">100%</b></div>
-          <button class="ctl int-b" data-int="-1" title="${t('intDownTitle')}" aria-label="${t('btnIntDown')}">−</button>
-          <button class="ctl int-b" data-int="1" title="${t('intUpTitle')}" aria-label="${t('btnIntUp')}">+</button>
+      <div class="ride-controls" data-msg="${tText('autoPaused')}">
+        <button class="ctl" data-act="prev" title="${tText('btnPrev')} (←)"><svg viewBox="0 0 24 24"><path d="M6 5v14M19 5l-9 7 9 7z"/></svg></button>
+        <button class="ctl" data-act="back" title="${tText('back1min')}"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4"/></svg></button>
+        <button class="ctl play" data-act="play" title="${tText('btnPlay')} (${tText('spaceKey')})" id="btn-play"><svg viewBox="0 0 24 24" class="i-play"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" class="i-pause"><path d="M8 5v14M16 5v14"/></svg></button>
+        <button class="ctl" data-act="stop" title="${tText('endWorkout')}"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
+        <button class="ctl" data-act="fwd" title="${tText('fwd1min')}"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v4h-4"/></svg></button>
+        <button class="ctl" data-act="next" title="${tText('btnNext')} (→)"><svg viewBox="0 0 24 24"><path d="M18 5v14M5 5l9 7-9 7z"/></svg></button>
+        <div class="int-group" title="${tText('intensityTitle')}">
+          <div class="int-read"><span class="k">${tHtml('intensity')}</span><b id="int-val" class="int-val">100%</b></div>
+          <button class="ctl int-b" data-int="-1" title="${tText('intDownTitle')}" aria-label="${tText('btnIntDown')}">−</button>
+          <button class="ctl int-b" data-int="1" title="${tText('intUpTitle')}" aria-label="${tText('btnIntUp')}">+</button>
         </div>
       </div>
-      <section class="compact-ride" aria-label="${t('compactView')}">
+      <section class="compact-ride" aria-label="${tText('compactView')}">
         <header class="compact-head" data-tauri-drag-region>
-          <span class="compact-name" data-tauri-drag-region title="${esc(this.info?.title || this.w.name)}">${esc(this.info?.title || this.w.name)}</span>
+          <span class="compact-name" data-tauri-drag-region title="${this.info?.title || this.w.name}">${this.info?.title || this.w.name}</span>
           <span class="compact-state" id="cmp-state"><i id="cmp-dot"></i><span id="cmp-status" role="status"></span></span>
-          <div class="compact-gears" id="cmp-gears" hidden><button class="icon-btn" data-shift="-1" title="${t('shiftDownKey')}" aria-label="${t('shiftDownKey')}">−</button><span id="cmp-gear"></span><button class="icon-btn" data-shift="1" title="${t('shiftUpKey')}" aria-label="${t('shiftUpKey')}">+</button></div>
+          <div class="compact-gears" id="cmp-gears" hidden><button class="icon-btn" data-shift="-1" title="${tText('shiftDownKey')}" aria-label="${tText('shiftDownKey')}">−</button><span id="cmp-gear"></span><button class="icon-btn" data-shift="1" title="${tText('shiftUpKey')}" aria-label="${tText('shiftUpKey')}">+</button></div>
           <span class="compact-short">${cmpWl}${cmpCtl}</span>
-          <button class="icon-btn" data-act="expand" title="${t('expandView')}" aria-label="${t('expandView')}">${IC.expand}</button>
+          <button class="icon-btn" data-act="expand" title="${tText('expandView')}" aria-label="${tText('expandView')}">${IC.expand}</button>
         </header>
         <div class="compact-main">
           <section class="cp cp-live">
-            <div class="cp-ph"><i></i>${t('live')}</div>
+            <div class="cp-ph"><i></i>${tHtml('live')}</div>
             <div class="cp-body">
               <div class="cp-cell"><div class="cp-dial"><div class="cp-mount" id="cmp-gauge"></div><div class="cp-center"><b id="cmp-pow">–</b><small id="cmp-pow-sub"></small></div></div></div>
-              <div class="cp-meta cp-opt"><span><small>${t('devHr')}</small><b id="cmp-hr">–</b></span><span><small>${t('cadence')}</small><b id="cmp-cad">–</b></span></div>
+              <div class="cp-meta cp-opt"><span><small>${tHtml('devHr')}</small><b id="cmp-hr">–</b></span><span><small>${tHtml('cadence')}</small><b id="cmp-cad">–</b></span></div>
             </div>
           </section>
           <section class="cp cp-cur">
-            <div class="cp-ph"><i></i>${t('compactCurrent')}</div>
+            <div class="cp-ph"><i></i>${tHtml('compactCurrent')}</div>
             <div class="cp-body">
               <div class="cp-cell"><div class="cp-dial"><div class="cp-mount" id="cmp-ring"></div><div class="cp-center"><b id="cmp-seg">0:00</b><small id="cmp-seg-sub"></small></div></div></div>
               <div class="cp-info cp-opt"><b id="cmp-tgt">–</b><div class="cp-bar"><i id="cmp-bar"></i></div></div>
             </div>
           </section>
           <section class="cp cp-next">
-            <div class="cp-ph"><i></i>${t('compactNext')}</div>
+            <div class="cp-ph"><i></i>${tHtml('compactNext')}</div>
             <div class="cp-body"><div class="cp-nx" id="cmp-next"></div></div>
           </section>
         </div>
         <div class="compact-foot">${cmpCtl}${cmpWl}</div>
       </section>
-      <div class="ready" id="ready"><div><b>${t('ready')}</b><span>${t('readyText')}${trainer.connected ? ` ${t('readyPedal')}` : ''}.</span></div>
-        ${this.hasFree ? `<div class="vs-ask"><span class="k" id="vs-choice-l">${t('freeRideSegments')}</span>${segCtl('vs-choice', [['gears', 'realGears'], ['easy', 'vgEasy'], ['medium', 'diff.medium'], ['hard', 'diff.hard']].map(([k, l]) => [k, tHtml(l)]), this.vs.on ? this.vs.difficulty : 'gears', { labelledBy: 'vs-choice-l' })}</div>` : ''}</div>`;
+      <div class="ready" id="ready"><div><b>${tHtml('ready')}</b><span>${tHtml('readyText')}${trainer.connected && html` ${tHtml('readyPedal')}`}.</span></div>
+        ${this.hasFree && html`<div class="vs-ask"><span class="k" id="vs-choice-l">${tHtml('freeRideSegments')}</span>${segCtl('vs-choice', [['gears', 'realGears'], ['easy', 'vgEasy'], ['medium', 'diff.medium'], ['hard', 'diff.hard']].map(([k, l]) => [k, tHtml(l)]), this.vs.on ? this.vs.difficulty : 'gears', { labelledBy: 'vs-choice-l' })}</div>`}</div>`);
 
     this.gauge = new Gauge($('.gauge-mount', r));
     this.ring = new ProgressRing($('.ring-mount', r));
@@ -2486,7 +2488,7 @@ class Ride {
       bounds: bounds(), ftp: ftp(), maxHr: maxHr(), overlay: ov,
       onSelect: (i, s) => {
         const tip = $('#dg-tip');
-        tip.innerHTML = `${segmentText(s)} <button class="btn ghost sm" data-act="goto" data-i="${i}">${t('jumpHere')}</button>`;
+        mount(tip, html`${segmentText(s)} <button class="btn ghost sm" data-act="goto" data-i="${i}">${tHtml('jumpHere')}</button>`);
         tip.hidden = false;
         clearTimeout(this.tipTimer);
         this.tipTimer = setTimeout(() => (tip.hidden = true), 6000);
@@ -2583,7 +2585,7 @@ class Ride {
     const st = $('#live-status'), dot = $('#live-dot');
     if (st) {
       const on = trainer.connected;
-      st.innerHTML = on ? `${IC.plug}${trainer.mode === 'sim' ? t('simulator') : t('connectedCap')}` : t('noTrainer');
+      mount(st, on ? html`${IC.plug}${tHtml(trainer.mode === 'sim' ? 'simulator' : 'connectedCap')}` : tHtml('noTrainer'));
       st.className = `ph-status ${on ? 'ok' : ''}`;
       dot.className = `ph-dot ${on ? 'on' : ''}`;
     }
@@ -3081,7 +3083,7 @@ class Ride {
     if (!show) { if (cur) { el.classList.remove('show'); k.cur = null; } return; }
     if (!cur || show.key !== cur.key) {
       k.since = now;
-      el.innerHTML = `${show.icon}<span></span>`;
+      mount(el, html`${show.icon}<span></span>`);
       el.classList.remove('show'); void el.offsetWidth;
     }
     el.className = `coach-line show ${show.level}`;
@@ -3267,12 +3269,12 @@ class Ride {
     this.wakeLock?.release().catch(() => {});
     this.wakeLock = null;
     $('#ride').hidden = true;
-    $('#ride').innerHTML = '';
+    $('#ride').replaceChildren();
     $('#ride').classList.remove('paused');
     document.body.classList.remove('riding');
     $('#ride-title').hidden = true;
     $('#btn-compact').hidden = true;
-    $('#ride-title').innerHTML = '';
+    $('#ride-title').replaceChildren();
     ride = null;
     route();
     if (updFound && updLater !== updFound.version) showUpdateCard();

@@ -61,7 +61,7 @@ scripts/sync-version.mjs    print / set the version (Cargo.toml + Cargo.lock; ta
 scripts/updater-manifest.mjs  write latest.json (version, notes, per-platform url + signature) from the signed release files
 scripts/setup-updater-key.sh  one-time: create the updater key in ~/.tauri, write the pubkey, set the GitHub secrets
 scripts/check-i18n.mjs      de/fr have exactly en's keys, plural shapes and placeholders; every t('key') in ui/ exists
-scripts/check-html.mjs      ui/js: direct innerHTML/outerHTML writes per file may only go down (new code uses mount(el, html``))
+scripts/check-html.mjs      ui/js: no innerHTML/outerHTML write or insertAdjacentHTML outside mount() in html.js
 scripts/check-css.mjs       ui/css: layer order, every file imported once into a layer, balanced braces, nested selectors start with &, components/ never name a view
 site/                       static website (home, features, download) with dark/light screenshots in site/img; no build step
 .github/workflows/
@@ -84,7 +84,7 @@ ZWO_TEST_DIR=~/Downloads/zwo cargo test scan_real_library -- --nocapture   # par
 node --check ui/js/app.js                            # quick syntax check for edited JS modules
 node scripts/check-i18n.mjs                          # translations complete and consistent (en / de / fr)
 node scripts/check-css.mjs                           # every CSS file imported into a layer, braces, & nesting
-node scripts/check-html.mjs                          # direct innerHTML writes only within the shrinking baseline
+node scripts/check-html.mjs                          # markup reaches the DOM only through mount()
 node --test scripts/compact-ride.test.mjs             # compact/full transition lifecycle
 node --test scripts/battery.test.mjs                   # battery state, lowest level, badge
 node --test scripts/html.test.mjs                      # html`` escaping, raw/Safe nesting, tHtml, mount
@@ -172,7 +172,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 - **Tests:** every parser, encoder, protocol decoder and merge rule has unit tests next to the code (`#[cfg(test)] mod tests`). Add one for every bug fix.
 
 **JavaScript**
-- Plain ES modules, no build step, no dependencies. `$` / `$$` helpers. Markup is built with the `html` tagged template from `js/html.js`, which escapes **every** interpolated value (XSS: workout names come from files); `raw()` only for markup we generated (icons, `renderMarkdown()`, SVG profiles), `tHtml()` for translations inside element content, `tText()` for translations in attributes (title, aria-label, placeholder — never `tHtml` there), `mount(el, fragment)` to set `innerHTML`. Booleans render nothing; write `${n > 0 && …}`, not `${n && …}`. The few remaining plain template strings (ride screen skeleton) still need `esc()`; `scripts/check-html.mjs` keeps their number from growing.
+- Plain ES modules, no build step, no dependencies. `$` / `$$` helpers. Markup is built with the `html` tagged template from `js/html.js`, which escapes **every** interpolated value (XSS: workout names come from files); `raw()` only for markup we generated (icons, `renderMarkdown()`, SVG profiles), `tHtml()` for translations inside element content, `tText()` for translations in attributes (title, aria-label, placeholder — never `tHtml` there), `mount(el, fragment)` to set `innerHTML`. Booleans render nothing; write `${n > 0 && …}`, not `${n && …}`. There are no plain-string markup builders left: `scripts/check-html.mjs` fails on any `innerHTML` / `outerHTML` write outside `mount()` (empty an element with `replaceChildren()`).
 - **Views** are functions that render `#view` (`renderHome`, `renderPlan`, `renderWorkouts`, `renderTests`, `renderHistory`) from small row/card builders (`workoutRow`, `planCard`, `testCard`, `historyRow`, …); `route()` picks one from the hash and `mode()`.
 - **Actions:** every clickable element has `data-act="name"` (arguments in other `data-*`). `bindActions(root, handlers)` delegates clicks: a handler from `handlers` (dialog- or screen-specific) wins, else the shared `VIEW_ACTIONS` map (`close` included). Dialogs call `bindActions(modal, {...})` after `openModal`; the ride screen dispatches `data-act` to `Ride.control()`. Don't reintroduce `data-a` / `data-c` or per-button `onclick`. Menus use `menuBtn(items)` / `openMenu()` (a `<template>` holding `data-act` buttons).
 - **Modals:** `openModal(fragment, cls)` (an `html` fragment; a plain string would show as text), `confirmDialog`, `choiceDialog`, `promptDialog`; `toast()` for feedback. Big dialogs are split: `openSettings` = one markup function per tab (`settingsRiderTab` …) + `bindSettingsFields` + `settingsActions`; the ride summary = `Ride.saveFit` / `recordTest` / `showSummary` with `summaryTest`, `summaryStats`, `summarySyncList`, `summaryNext`.
