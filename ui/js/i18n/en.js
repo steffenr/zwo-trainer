@@ -549,6 +549,8 @@ export const en = {
   stCadence: 'cadence',
   stEnergy: 'energy',
   rideFile: 'Ride file',
+  shortRideQ: 'Short ride ({time}). Upload to {names}?',
+  dontUpload: 'Don’t upload',
   saveFit: 'Save .fit',
   upNextIn: 'Up next in {name}',
   lastWorkoutDone: 'That was the last workout — plan finished! 🎉',

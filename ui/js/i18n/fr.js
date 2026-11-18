@@ -548,6 +548,8 @@ export const fr = {
   stCadence: 'cadence',
   stEnergy: 'travail',
   rideFile: 'Fichier de la sortie',
+  shortRideQ: 'Sortie courte ({time}). L’envoyer vers {names} ?',
+  dontUpload: 'Ne pas envoyer',
   saveFit: 'Enregistrer le .fit',
   upNextIn: 'À suivre dans {name}',
   lastWorkoutDone: 'C’était la dernière séance — plan bouclé ! 🎉',
