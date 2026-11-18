@@ -170,8 +170,26 @@ function planProgress(plan) {
 }
 
 // ------------------------------------------------------------------ boot
+/**
+ * The styles need cascade layers and CSS nesting (Safari 17+, current WebView2 / WebKitGTK). base.css
+ * sets --css-ok only when both work; without it the app would look broken, so say why instead. The
+ * notice is styled inline because the stylesheet may not apply at all.
+ */
+function checkEngine() {
+  const run = () => {
+    if (getComputedStyle(document.documentElement).getPropertyValue('--css-ok').trim() === '1') return;
+    const note = document.createElement('div');
+    note.setAttribute('role', 'alert');
+    note.style.cssText = 'position:fixed;inset:0 0 auto 0;z-index:9999;padding:14px 18px;background:#fff4d6;color:#000;font:15px/1.4 system-ui,sans-serif;border-bottom:1px solid #d9b45a';
+    note.textContent = t('engineOutdated');
+    document.body.prepend(note);
+  };
+  if (document.readyState === 'complete') run(); else window.addEventListener('load', run, { once: true });
+}
+
 async function boot() {
   translateDom();
+  checkEngine();
   if (!window.__TAURI__) throw new Error(t('needsDesktop'));
   const a = await api.appState();
   applyAppState(a);

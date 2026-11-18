@@ -23,6 +23,7 @@ export const de = {
   favAdd: 'Zu Favoriten hinzufügen',
   favorite: 'Favorit',
   needsDesktop: 'zwoTrainer läuft nur in seiner Desktop-App.',
+  engineOutdated: 'Die Web-Engine dieses Systems ist zu alt, um zwoTrainer richtig darzustellen. Installiere die neuesten Systemupdates (unter macOS: Safari 17 oder neuer, unter Linux: ein aktuelles WebKitGTK) und starte zwoTrainer neu.',
   justNow: 'gerade eben',
   minAgo: 'vor {n} Min.',
   hAgo: 'vor {n} Std.',

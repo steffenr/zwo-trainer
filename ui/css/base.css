@@ -1,6 +1,10 @@
 /* Elements, native form controls, text helpers and the shared keyframes.
    Everything here is a default: any component or view rule overrides it, whatever its specificity. */
 
+/* Engine check: --css-ok is only set when this layered file loaded AND nesting works. app.js shows an
+   "update your system" notice when it is missing (old Safari / WebKitGTK would render the app unstyled). */
+:root { & { --css-ok: 1; } }
+
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {

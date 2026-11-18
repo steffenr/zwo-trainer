@@ -23,6 +23,7 @@ export const fr = {
   favAdd: 'Ajouter aux favoris',
   favorite: 'Favori',
   needsDesktop: 'zwoTrainer ne fonctionne que dans son application de bureau.',
+  engineOutdated: 'Le moteur web de ce système est trop ancien pour afficher zwoTrainer correctement. Installez les dernières mises à jour du système (sur macOS : Safari 17 ou plus récent ; sur Linux : un WebKitGTK récent), puis redémarrez zwoTrainer.',
   justNow: 'à l’instant',
   minAgo: 'il y a {n} min',
   hAgo: 'il y a {n} h',

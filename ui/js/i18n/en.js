@@ -24,6 +24,7 @@ export const en = {
   favAdd: 'Add to favorites',
   favorite: 'Favorite',
   needsDesktop: 'zwoTrainer must run inside its desktop app.',
+  engineOutdated: 'This system’s web engine is too old to display zwoTrainer correctly. Install the latest system updates (on macOS: Safari 17 or newer; on Linux: a current WebKitGTK), then restart zwoTrainer.',
   justNow: 'just now',
   minAgo: '{n} min ago',
   hAgo: '{n} h ago',
