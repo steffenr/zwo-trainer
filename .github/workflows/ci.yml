@@ -48,6 +48,8 @@ jobs:
         run: node scripts/check-i18n.mjs
       - name: CSS structure (layers, imports, nesting)
         run: node scripts/check-css.mjs
+      - name: Markup writes go through html`` / mount()
+        run: node scripts/check-html.mjs
 
   check:
     name: check (${{ matrix.os }})
