@@ -55,7 +55,8 @@ for (const path of files(dir)) {
     if (ch === '\n') line++;
     if (ch === '{') {
       const sel = buf.trim();
-      const parentIsRule = stack.length && stack[stack.length - 1] === 'rule';
+      // nested = any enclosing style rule, also through a nested @media / @supports / @container
+      const parentIsRule = stack.includes('rule');
       const isAt = sel.startsWith('@');
       const inKeyframes = stack.includes('keyframes');
       if (parentIsRule && !isAt && !inKeyframes && !sel.split(',').every((s) => s.trim().startsWith('&'))) {
