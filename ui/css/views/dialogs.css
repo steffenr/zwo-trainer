@@ -37,7 +37,6 @@
 .pe-fields { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .pe-name {
   display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-2);
-  & input { font: inherit; font-size: 14px; border-radius: 9px; padding: 8px 10px; }
 }
 .pe-label { margin-top: 6px; font-size: 13px; color: var(--text-2); }
 .swatches {

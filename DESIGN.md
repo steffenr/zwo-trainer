@@ -10,7 +10,7 @@ Plain CSS, no build step. `styles.css` declares the cascade layers and imports t
 |---|---|---|
 | `tokens` | `tokens.css` | colour, font and radius tokens; dark overrides |
 | `base` | `base.css` | elements, native inputs and their focus/invalid states, text helpers (`.muted`, `.small`, `.eyebrow`, `.meta`, `.k`, `.ic`), shared keyframes |
-| `components` | `components/*.css` | reusable pieces used on several screens: buttons, chips, segmented control, tabs, cards, badges, dialogs, popovers, toast, forms, avatar, chart/gauge/ring, Markdown |
+| `components` | `components/*.css` | reusable pieces used on several screens: buttons, segmented control, tabs, cards, badges, dialogs, popovers, toast, forms, avatar, chart/gauge/ring, Markdown |
 | `views` | `views/*.css` | one file per screen or dialog: top bar, home, plan + workouts lists, history, FTP tests, dialogs, settings, ride, compact ride |
 | `utilities` | `utilities.css` | `[hidden]`, forced text colours, the global "Reduce motion" switch |
 
@@ -71,7 +71,7 @@ Always use tokens (`var(--…)`), never raw hex in components. Dark values apply
 ### Brand and third-party colours
 
 - The accent cyan is zwoTrainer's brand colour.
-- Third-party colours appear only on that service's own control: Garmin `#1d1d1f` (the Garmin button flips to light in dark mode via `--garmin-bg` / `--garmin-ink`).
+- Third-party colours appear only on that service's own control: Garmin `#1d1d1f` (button and logo tile flip to light in dark mode via `--garmin-bg` / `--garmin-ink`). The favourite star uses `--star`.
 - Avatar colours (user choice): `#338cff #59bf59 #ff6639 #b47cff #00a3c4 #e0a800 #ff4d8d #7f7f7f` or any custom colour.
 
 ## Typography
@@ -235,7 +235,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 | **Platform card** `.svc.svc-ext` | compact service card under the "MORE PLATFORMS" group label: neutral letter tile (`.svc-logo.ext`, no brand colours) · name and status ("Connected as …", "Not connected", "Manual import") · one action. Body: API-key field, upload-mode control, or "After a ride: Off / Show import button", plus a one-line hint. Connected cards get an ok-tinted border. |
 | **Sync list** `.sync-list` | ride summary: a bordered list with one 44 px row per destination (`.sl-row`: 26 px logo · name · state/action on the right). Garmin first, then Intervals.icu / COROS when enabled, then "Ride file · Save .fit". States: *Upload*, *Import…*, spinner "Uploading…", "Uploaded ✓" (link), "Failed · Retry". |
 | **Service card** `.svc` | bordered block in Settings → Connections: 34 px logo tile · name and status · action button, then the options and a short muted explanation. |
-| **Inputs** | `--surface`, 1 px `--line-strong`, radius 9, padding 8 × 10, 14 px. Labels sit above in `--text-2` 13 px. |
+| **Inputs** | `--surface`, 1 px `--line-strong`, radius 10, padding 8 × 12, 14 px; focus: `--accent` border + 3 px `--accent-soft` ring; invalid: `--danger` border. One style everywhere (`base.css`), views only set width. Labels sit above in `--text-2` 13 px. |
 
 ## Icons
 

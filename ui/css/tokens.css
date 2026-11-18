@@ -37,7 +37,8 @@
   --z5-ink: #e4501f;
   --cad: #8b3dff;
   --hrline: #e0004d;
-  /* Garmin brand button: dark on light, light on dark */
+  --star: #e0a800;         /* favourite star */
+  /* Garmin brand button and tile: dark on light, light on dark */
   --garmin-bg: #1d1d1f;
   --garmin-ink: #ffffff;
 

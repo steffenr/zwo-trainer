@@ -46,7 +46,7 @@ dialog.settings {
 .svc-logo {
   width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: #fff; font: 800 17px var(--font); flex: none;
   &.sm { width: 26px; height: 26px; border-radius: 7px; font-size: 11px; }
-  &.garmin { background: #1d1d1f; outline: 1px solid var(--line-strong); }
+  &.garmin { background: var(--garmin-bg); color: var(--garmin-ink); outline: 1px solid var(--line-strong); }
   &.sync { background: var(--accent); color: #fff; }
   &.ext { background: var(--surface-3); color: var(--text); font-size: 13px; font-weight: 800; letter-spacing: -.02em; outline: 1px solid var(--line-strong); }
 }
@@ -59,10 +59,7 @@ dialog.settings {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px;
   & input { width: 100%; min-width: 0; }
 }
-.svc-ext .cred {
-  grid-template-columns: minmax(0, 1fr) auto;
-  & input { font: inherit; font-size: 14px; color: var(--text); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 9px; padding: 7px 10px; }
-}
+.svc-ext .cred { grid-template-columns: minmax(0, 1fr) auto; }
 .sync-mode { margin-top: 12px; }
 
 /* profile sync: provider choice */

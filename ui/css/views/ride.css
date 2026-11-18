@@ -6,9 +6,9 @@
    ride title, and ride history is greyed out (it would leave the workout). */
 body.riding {
   overflow: hidden;
-  & .view, & #mode-switch { display: none; }
+  & .view, & .mode-switch { display: none; }
   & .topbar { z-index: 30; }
-  & #btn-history { opacity: .3; pointer-events: none; }
+  & .history-btn { opacity: .3; pointer-events: none; }
   & .brand { pointer-events: none; }
 }
 /* trainer mode: ERG on · power only (off) · virtual shifting (vs); restyled in the ride title below */
@@ -71,7 +71,7 @@ body.riding {
   display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1;
   & b { display: inline-block; font: 700 24px/1.1 var(--num); font-variant-numeric: tabular-nums; }
 }
-#int-val.changed { color: var(--warn); }
+.int-val.changed { color: var(--warn); }
 .ctl {
   width: 58px; height: 58px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--surface); color: var(--text);
   display: grid; place-items: center; cursor: pointer; transition: transform .08s, background .15s; box-shadow: var(--shadow);
@@ -120,23 +120,23 @@ body.riding {
 /* ---------- virtual shifting ---------- */
 .gearbox {
   display: flex; align-items: center; gap: 12px; padding: 6px 10px; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 12px;
-  & #gear-lbl { display: flex; flex-direction: column; align-items: center; min-width: 120px; font-variant-numeric: tabular-nums; }
+  & .gear-lbl { display: flex; flex-direction: column; align-items: center; min-width: 120px; font-variant-numeric: tabular-nums; }
   & b { font-size: 20px; font-family: var(--num); }
   & small { color: var(--text-2); font-size: 12px; }
   & .btn.round { width: 40px; height: 40px; font-size: 22px; }
 }
-#gear-lbl.flash b { animation: gearflash .35s; }
+.gear-lbl.flash b { animation: gearflash .35s; }
 @keyframes gearflash { 0% { color: var(--accent); transform: scale(1.15); } 100% { transform: none; } }
 
 /* action hint (controller buttons, keys) + auto-pause */
-#ride-hint {
+.ride-hint {
   position: absolute; left: 50%; top: 18px; transform: translate(-50%, -8px); padding: 8px 16px; border-radius: 999px;
   background: var(--text); color: var(--bg); font-weight: 600; font-size: 15px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 30;
   &.show { opacity: .92; transform: translate(-50%, 0); }
 }
 .ride.auto-paused .ride-controls {
   position: relative;
-  &::before { content: 'Auto-paused — start pedalling to continue'; position: absolute; left: 50%; top: -24px; transform: translateX(-50%); color: var(--text-2); font-size: 13px; white-space: nowrap; }
+  &::before { content: attr(data-msg); position: absolute; left: 50%; top: -24px; transform: translateX(-50%); color: var(--text-2); font-size: 13px; white-space: nowrap; }
 }
 
 /* ride readouts scale with the window: base size at 1400 px wide, up to 1.6× in full screen */
@@ -307,8 +307,8 @@ body.riding {
   .nx-card.nx-in .nc-txt { animation: mo-rise .3s cubic-bezier(.2, .8, .2, 1) both; }
   .nx-card.nx-in::before { animation: mo-grow .35s cubic-bezier(.2, .8, .2, 1) both; transform-origin: 50% 100%; }
   /* intensity: the value rolls in the direction of the change */
-  #int-val.roll-up { animation: mo-roll-up .2s cubic-bezier(.2, .8, .2, 1); }
-  #int-val.roll-down { animation: mo-roll-down .2s cubic-bezier(.2, .8, .2, 1); }
+  .int-val.roll-up { animation: mo-roll-up .2s cubic-bezier(.2, .8, .2, 1); }
+  .int-val.roll-down { animation: mo-roll-down .2s cubic-bezier(.2, .8, .2, 1); }
 }
 @keyframes mo-sweep { 0% { opacity: 1; transform: translateX(-100%); } 100% { opacity: 0; transform: translateX(100%); } }
 @keyframes mo-rise { from { opacity: 0; transform: translateY(14px); } }

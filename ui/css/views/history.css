@@ -17,9 +17,4 @@
 }
 
 /* upload state per ride */
-.sync.ok { color: #fc5200; font-weight: 700; font-size: 13px; cursor: pointer; }
 .sync.gok { color: var(--text); font-weight: 700; font-size: 13px; cursor: pointer; }
-.sync-row {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 14px;
-  & .svc-logo.garmin { margin-left: auto; }
-}

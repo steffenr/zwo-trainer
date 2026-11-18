@@ -8,9 +8,9 @@ body.compact-riding {
   & .topbar { display: none; }
   & .ride { inset: 0; display: block; padding: 8px 12px; overflow: hidden; }
   & .compact-ride { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 6px; }
-  & #ride-hint { top: 40px; max-width: calc(100% - 24px); font-size: 12px; text-align: center; }
+  & .ride-hint { top: 40px; max-width: calc(100% - 24px); font-size: 12px; text-align: center; }
 }
-body.compact-riding .ride > :not(.compact-ride):not(#ride-hint) { display: none; }
+body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
 
 .compact-head {
   display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 32px; flex: none;

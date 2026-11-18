@@ -372,7 +372,6 @@ function bindChrome() {
   $('#btn-compact').onclick = () => ride?.compact.set(true);
   $('#btn-profile').onclick = profileMenu;
   $('#mode-switch').onclick = (e) => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); };
-  $$('.chip[data-device]').forEach((c) => (c.onclick = () => deviceDialog(c.dataset.device)));
   let ergDenied = false; // warn once when the trainer refuses ERG control (auto-connect, reconnect, mid-ride); ERG stays on
   trainer.on('status', (s) => {
     setDev('trainer', s);
@@ -2156,7 +2155,7 @@ class Ride {
                 </div>
                 <svg class="ring-check" viewBox="0 0 100 100" aria-hidden="true"><path d="M27 52 L44 68 L74 34"/></svg>
               </div>
-              <div class="gearbox" id="gearbox" hidden><button class="btn round sm" data-shift="-1" title="${t('shiftDownKey')}">−</button><span id="gear-lbl">${t('gear')}</span><button class="btn round sm" data-shift="1" title="${t('shiftUpKey')}">+</button></div>
+              <div class="gearbox" id="gearbox" hidden><button class="btn round sm" data-shift="-1" title="${t('shiftDownKey')}">−</button><span id="gear-lbl" class="gear-lbl">${t('gear')}</span><button class="btn round sm" data-shift="1" title="${t('shiftUpKey')}">+</button></div>
             </div>
             <div class="seg-stats">
               <div class="stat">${IC.bolt}<div><span class="k" id="s-tw-k">${t('targetPower')}</span><b id="s-tw">–</b></div></div>
@@ -2181,7 +2180,7 @@ class Ride {
         <div class="dg-mount"></div>
         <div class="dg-tip" id="dg-tip" hidden></div>
       </div>
-      <div class="ride-controls">
+      <div class="ride-controls" data-msg="${esc(t('autoPaused'))}">
         <button class="ctl" data-c="prev" title="${t('btnPrev')} (←)"><svg viewBox="0 0 24 24"><path d="M6 5v14M19 5l-9 7 9 7z"/></svg></button>
         <button class="ctl" data-c="back" title="${t('back1min')}"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4"/></svg></button>
         <button class="ctl play" data-c="play" title="${t('btnPlay')} (${t('spaceKey')})" id="btn-play"><svg viewBox="0 0 24 24" class="i-play"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" class="i-pause"><path d="M8 5v14M16 5v14"/></svg></button>
@@ -2189,7 +2188,7 @@ class Ride {
         <button class="ctl" data-c="fwd" title="${t('fwd1min')}"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v4h-4"/></svg></button>
         <button class="ctl" data-c="next" title="${t('btnNext')} (→)"><svg viewBox="0 0 24 24"><path d="M18 5v14M5 5l9 7-9 7z"/></svg></button>
         <div class="int-group" title="${t('intensityTitle')}">
-          <div class="int-read"><span class="k">${t('intensity')}</span><b id="int-val">100%</b></div>
+          <div class="int-read"><span class="k">${t('intensity')}</span><b id="int-val" class="int-val">100%</b></div>
           <button class="ctl int-b" data-int="-1" title="${t('intDownTitle')}" aria-label="${t('btnIntDown')}">−</button>
           <button class="ctl int-b" data-int="1" title="${t('intUpTitle')}" aria-label="${t('btnIntUp')}">+</button>
         </div>
@@ -2311,7 +2310,7 @@ class Ride {
 
   hint(text) {
     let el = $('#ride-hint');
-    if (!el) { el = document.createElement('div'); el.id = 'ride-hint'; $('#ride').append(el); }
+    if (!el) { el = document.createElement('div'); el.id = 'ride-hint'; el.className = 'ride-hint'; $('#ride').append(el); }
     el.textContent = text;
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
     clearTimeout(this.hintTimer);
