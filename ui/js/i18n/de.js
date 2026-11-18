@@ -548,6 +548,8 @@ export const de = {
   stCadence: 'Trittfrequenz',
   stEnergy: 'Arbeit',
   rideFile: 'Fahrtdatei',
+  shortRideQ: 'Kurze Fahrt ({time}). Zu {names} hochladen?',
+  dontUpload: 'Nicht hochladen',
   saveFit: '.fit speichern',
   upNextIn: 'Als Nächstes in {name}',
   lastWorkoutDone: 'Das war das letzte Workout — Plan durchgezogen! 🎉',

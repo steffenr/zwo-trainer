@@ -88,6 +88,13 @@
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 20px 0;
   & b { display: block; font-size: 22px; font-family: var(--num); font-variant-numeric: tabular-nums; }
 }
+/* short ride: ask before the automatic uploads (warn callout above the sync list) */
+.short-ride {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; padding: 10px 12px;
+  border-radius: var(--r-lg); background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  font-size: var(--fs-md);
+  & p { margin: 0; flex: 1 1 220px; }
+}
 .next-card {
   background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px;
   & h3 { font-size: 18px; margin-top: 4px; }

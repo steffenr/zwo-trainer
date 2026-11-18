@@ -288,6 +288,7 @@ Settings → Connections → **More platforms**.
 | **COROS** | **Manual import** into the Training Hub | Turn on *Show import button*. After a ride, zwoTrainer saves it as a **ZIP** (Training Hub only accepts ZIPs), shows it in Finder and opens the Training Hub; there choose *Activity List → Import Data*. |
 
 - **After a ride:** the summary lists Garmin, Intervals.icu and COROS with *Upload* or *Import…*; automatic uploads start by themselves.
+- **Short rides:** a ride shorter than 15 minutes (a test spin, a stopped workout) is not uploaded automatically. The summary asks first: *Upload* sends it everywhere it would have gone automatically, *Don’t upload* leaves it on your computer (you can still use the *Upload* buttons later, also from the ride history).
 - **In the ride history:** a ✓ marks where a ride went, and the row's **⋯** menu sends older rides to the others.
 
 Other platforms (Wahoo, TrainingPeaks, Suunto) only accept uploads from approved partner apps, so zwoTrainer doesn't offer them. TrainingPeaks and many others can be linked in Garmin Connect, which then forwards your rides.

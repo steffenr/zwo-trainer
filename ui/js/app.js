@@ -2287,13 +2287,28 @@ function summaryStats(st, ridden) {
         </div>`;
 }
 
-/** Where the ride goes: Garmin (automatic, upload, or manual import), other platforms, the FIT file. */
-function summarySyncList({ garmin, autoGarmin, rideSvcs }) {
-  const garminState = autoGarmin ? html`<span class="spinner"></span> ${tHtml('uploading')}`
+/** Rides shorter than this (seconds) are not uploaded automatically; the summary asks first (#37). */
+const SHORT_RIDE_S = 15 * 60;
+
+/**
+ * Short ride with automatic uploads pending: "Short ride (8:42). Upload to Garmin Connect?" with
+ * Upload / Don't upload. Until answered, the destinations show their manual buttons.
+ */
+const summaryShortRide = (seconds, names) => html`<div class="short-ride" role="group" aria-labelledby="short-ride-q">
+          <p id="short-ride-q">${tHtml('shortRideQ', { time: fmtTime(seconds), names: names.join(', ') })}</p>
+          <button class="btn ghost sm" data-act="short-skip">${tHtml('dontUpload')}</button><button class="btn primary sm" data-act="short-up">${tHtml('upload')}</button>
+        </div>`;
+
+/**
+ * Where the ride goes: Garmin (automatic, upload, or manual import), other platforms, the FIT file.
+ * `hold`: automatic uploads wait for the short-ride question, so their rows show the manual buttons.
+ */
+function summarySyncList({ garmin, autoGarmin, rideSvcs, hold = false }) {
+  const garminState = autoGarmin && !hold ? html`<span class="spinner"></span> ${tHtml('uploading')}`
     : garmin.connected && syncMode('garmin') !== 'off' ? html`<button class="btn ghost sm" data-act="garmin-up">${tHtml('upload')}</button>`
       : html`<button class="btn ghost sm" data-act="garmin">${tHtml('importDots')}</button>`;
   const svcRow = (sv) => {
-    const auto = sv.connected && svcMode(sv) === 'auto';
+    const auto = sv.connected && svcMode(sv) === 'auto' && !hold;
     const act = auto ? html`<span class="spinner"></span> ${tHtml('uploading')}`
       : sv.connected ? html`<button class="btn ghost sm" data-act="svc-up" data-id="${sv.id}">${tHtml('upload')}</button>`
         : html`<button class="btn ghost sm" data-act="svc-man" data-id="${sv.id}">${tHtml('importDots')}</button>`;
@@ -3203,12 +3218,18 @@ class Ride {
 
   /**
    * The ride summary dialog: test result, stats, where the ride goes (Garmin, platforms, FIT file) and
-   * the next plan workout. Automatic uploads start right away and update their row when done.
+   * the next plan workout. Automatic uploads start right away and update their row when done; for a
+   * ride under SHORT_RIDE_S they wait until the rider answers the short-ride question.
    */
   async showSummary({ title, completed, st, fit, entry, testResult, endAnim }) {
     const [garmin, svcs] = fit ? await Promise.all([invoke('garmin_status').catch(() => ({})), refreshServices()]) : [{}, []];
     const autoGarmin = fit && garmin.connected && syncMode('garmin') === 'auto';
     const rideSvcs = svcs.filter((sv) => svcRoute(sv) && svcMode(sv) !== 'off');
+    // automatic destinations: Garmin upload, platforms in auto mode, or opening Garmin's import page
+    const autoSvcs = rideSvcs.filter((sv) => sv.connected && svcMode(sv) === 'auto');
+    const autoImport = fit && !garmin.connected && !!state.settings.garmin?.autoOpen;
+    const autoNames = [...(autoGarmin || autoImport ? ['Garmin Connect'] : []), ...autoSvcs.map((sv) => sv.name)];
+    const hold = autoNames.length > 0 && (entry.doneDuration ?? 0) < SHORT_RIDE_S;
     const plan = this.planId && planById(this.planId);
     const next = plan && planProgress(plan).next;
     const heading = tHtml(this.test ? 'ftpTestResult' : completed ? 'workoutComplete' : 'workoutSaved');
@@ -3218,7 +3239,8 @@ class Ride {
         <h2>${title}</h2>
         ${this.test && summaryTest(testResult)}
         ${summaryStats(st, this.ridden)}
-        ${fit && summarySyncList({ garmin, autoGarmin, rideSvcs })}
+        ${hold && summaryShortRide(entry.doneDuration ?? 0, autoNames)}
+        ${fit && summarySyncList({ garmin, autoGarmin, rideSvcs, hold })}
         ${plan && summaryNext(plan, next)}
         <div class="modal-actions">
           <button class="btn ${next ? 'ghost' : 'primary'}" data-act="home">${tHtml('done')}</button>
@@ -3244,7 +3266,15 @@ class Ride {
       }
     };
     const leave = () => { closeModal(); this.close(); };
+    const startAutoUploads = () => {
+      if (autoGarmin) doGarmin();
+      for (const sv of autoSvcs) doSvc(sv.id);
+      if (autoImport) garminImport(fit.path);
+    };
     bindActions(modal, {
+      // short-ride question: upload everywhere it would have gone automatically, or leave it manual
+      'short-up': (el) => { el.closest('.short-ride').remove(); startAutoUploads(); },
+      'short-skip': (el) => el.closest('.short-ride').remove(),
       apply: (el) => { applyFtp(state.tests[0]); mount(el.closest('.ftp-actions'), badge(tHtml('ftpUpdated', { w: state.tests[0].ftp }), 'ok')); },
       keep: (el) => mount(el.closest('.ftp-actions'), html`<span class="muted small">${tHtml('keptFtp')}</span>`),
       garmin: () => garminImport(fit.path),
@@ -3255,9 +3285,7 @@ class Ride {
       home: leave,
       next: () => { leave(); startRide(next.file, plan.id); },
     });
-    if (autoGarmin) doGarmin();
-    for (const sv of rideSvcs) if (sv.connected && svcMode(sv) === 'auto') doSvc(sv.id);
-    else if (fit && !garmin.connected && state.settings.garmin?.autoOpen) garminImport(fit.path);
+    if (!hold) startAutoUploads();
   }
 
   /** Leave the ride screen: expand from compact, release devices to idle, restore the normal views and pending updates. */
