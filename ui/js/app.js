@@ -1437,6 +1437,7 @@ async function openSettings(tab = 'rider') {
         <label class="check"><input type="checkbox" name="endChime" ${s.endChime !== false ? 'checked' : ''}> ${t('optEndChime')}</label>
         <label class="check"><input type="checkbox" name="autoPause" ${s.autoPause !== false ? 'checked' : ''}> ${t('optAutoPause')}</label>
         <label class="check"><input type="checkbox" name="coachHints" ${s.coachHints !== false ? 'checked' : ''}> ${t('optCoach')}</label>
+        <label class="check"><input type="checkbox" name="keyboardShortcuts" ${s.keyboardShortcuts !== false ? 'checked' : ''}> ${t('optKeys')}</label>
       </div>
       <h3>${t('workoutsFolder')}</h3>
       <div class="folder-row"><code>${esc(library.root)}</code><button class="btn ghost sm" data-a="dir">${t('changeDots')}</button><button class="btn ghost sm" data-a="rescan" title="${t('rescanTitle')}">${t('rescan')}</button></div>
@@ -1550,6 +1551,7 @@ async function openSettings(tab = 'rider') {
     s.endChime = f('endChime').checked;
     s.autoPause = f('autoPause').checked;
     s.coachHints = f('coachHints').checked;
+    s.keyboardShortcuts = f('keyboardShortcuts').checked;
     const z = [0, 1, 2, 3].map((i) => +f(`z${i}`).value);
     if (z.every((v, i) => v > 0 && (i === 0 || v > z[i - 1]))) s.zones = z; else toast(t('zonesMustIncrease'));
     const bests = {};
@@ -2308,8 +2310,8 @@ class Ride {
   }
 
   onKey(e) {
-    if (modal.open || e.target.matches('input')) return;
-    const map = { ' ': 'play', ArrowRight: 'next', ArrowLeft: 'prev', Escape: 'stop' };
+    if (modal.open || e.target.matches('input') || state.settings.keyboardShortcuts === false) return;
+    const map ={ ' ': 'play', ArrowRight: 'next', ArrowLeft: 'prev', Escape: 'stop' };
     if (map[e.key]) { e.preventDefault(); return this.control(map[e.key]); }
     if (e.key === '+' || e.key === '=') { e.preventDefault(); return this.shift(1); }
     if (e.key === '-' || e.key === '_') { e.preventDefault(); return this.shift(-1); }
