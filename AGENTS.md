@@ -63,6 +63,12 @@ scripts/setup-updater-key.sh  one-time: create the updater key in ~/.tauri, writ
 scripts/check-i18n.mjs      de/fr have exactly en's keys, plural shapes and placeholders; every t('key') in ui/ exists
 scripts/check-html.mjs      ui/js: no innerHTML/outerHTML write or insertAdjacentHTML outside mount() in html.js
 scripts/check-css.mjs       ui/css: layer order, every file imported once into a layer, balanced braces, nested selectors start with &, components/ never name a view
+scripts/shots/              every website screenshot (site/img) from the real ui/ in headless Chromium (see "Website" below)
+  run.mjs                   runner: server, fake clock, capture, WebP, skip unchanged, contact sheet, sync <img> sizes
+  shots.mjs                 the shot list: one entry per image pair (viewport, scale, rider tweaks, steps)
+  mock.js                   window.__TAURI__ stub: state, events, virtual trainer/strap/controller, seeded random
+  rider.mjs                 sample rider "Lena" (history, plan progress, tests) and the fixed clock time NOW
+  fixture/                  sample library: make.mjs (definitions → .zwo → Rust scan) → library.json, workouts.json
 site/                       static website (home, features, download) with dark/light screenshots in site/img; no build step
 .github/workflows/
   ci.yml                    push/PR: tests + clippy + UI syntax + i18n + CSS + markup checks (Linux), tests (macOS, Windows)
@@ -89,6 +95,8 @@ node --test scripts/compact-ride.test.mjs             # compact/full transition 
 node --test scripts/battery.test.mjs                   # battery state, lowest level, badge
 node --test scripts/html.test.mjs                      # html`` escaping, raw/Safe nesting, tHtml, mount
 node scripts/sync-version.mjs [x.y.z]                # print / set the app version
+npx -y -p playwright node scripts/shots/run.mjs [names…] [--list|--theme t|--out dir|--force]   # retake website screenshots
+node scripts/shots/fixture/make.mjs                  # rebuild the screenshot sample library (after parser/scan changes)
 ```
 
 ## Releases & platforms
@@ -198,7 +206,20 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 1. `cd src-tauri && cargo test`; all tests must pass, warning-free.
 2. **UI changes:** run the app (`cargo tauri dev`, or the browser mock below) and look at the changed screens in **both themes** and at **1400 px and full-screen width**. Screenshot before/after if you can.
 3. **Without hardware:** use `?sim=1` (or *Use simulator* in a device dialog). Controller buttons can be exercised from the console by emitting `button` events through the mock.
-4. **Browser mock (optional):** serve `ui/` with a small static server and inject a `window.__TAURI__` stub that answers the commands above (`app_state`, `scan_library` → JSON from a sample folder, …). Useful for Playwright screenshots; never ship it.
+4. **Browser mock (optional):** serve `ui/` with a small static server and inject a `window.__TAURI__` stub that answers the commands above (`app_state`, `scan_library` → JSON from a sample folder, …). Never ship it. `scripts/shots/` already is one (`mock.js` + `rider.mjs` + the fixture library); reuse it for any browser test or screenshot rather than starting a new mock.
+
+## Website (`site/`)
+
+- **Keep it in step with releases:** when a release changes what the site describes (features, requirements, settings, dialogs), update the copy in `index.html` / `features.html` / `download.html` and retake the affected screenshots in the same change. Wording follows the README.
+- **Screenshots:** every image exists as `<name>-dark.webp` and `<name>-light.webp`, shown with `class="sd"` / `class="sl"`. **All of them are scripted** in `scripts/shots/`; don't take site screenshots by hand.
+  - **Retake:** `npx -y -p playwright node scripts/shots/run.mjs` (all, ~15 s) or with shot names (`… ride compact`); `--list` shows them. Playwright comes via npx, not a repo dependency; run `npx -y playwright install chromium` once.
+  - **Reading the result (cheap):** one line per image. `unchanged` needs no look. `updated n % px in W×H at x,y` says how much and where. Only changed images are written, and all of them land on one contact sheet (path printed; `--sheet <file>` to choose): look at that single image, not at each file. `--out <dir>` writes elsewhere to compare before touching `site/img`.
+  - **Sizes:** the runner rewrites `width`/`height` of every `<img>` showing that image in `site/*.html`; never edit them by hand.
+  - **Deterministic:** the clock is fake and paused (`rider.mjs` `NOW`; time moves only through `s.tick()`), `Math.random` and the virtual rider are seeded, so an unchanged UI gives identical pixels and a second run says `no changes`. If a shot flips between runs, something in it runs on real time; find it rather than raising the noise threshold.
+  - **Data:** the rider (`rider.mjs`) and the library (`fixture/`, 2 plans, 2 collections, 45 workouts) are shared by all shots. The library JSON comes from the real Rust scan/parse (`library::tests::dump_fixture`, an ignored test), so after parser or scan changes rerun `node scripts/shots/fixture/make.mjs` and then the shots.
+  - **Devices and rides:** saved devices auto-connect to the mock's virtual trainer, strap and controller (no `?sim=1`); the virtual rider holds every ERG target, rides `free` watts (per shot) when ERG is off and keeps ~90 rpm. Ride shots fast-forward with `?speed=N`.
+  - **New shot:** add an entry to `shots.mjs` (`name`, `about`, `viewport`, `scale` 1 for 1600 × 1000 screens and 2 for dialogs/cards, optional `rider(p)`, `run(s)` returning the selector to capture), add the `<img class="sd">` / `<img class="sl">` pair to the page, run it, check the contact sheet. A command the mock doesn't know is reported as `unmocked: …`; add it to `R` in `mock.js`.
+- **Checking:** open the pages in both themes at desktop and phone width. Sections reveal on scroll (`.rv` → `.in`), so for full-page captures add `in` to every `.rv` first.
 
 ## Things that are easy to get wrong
 
