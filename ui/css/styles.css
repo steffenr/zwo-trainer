@@ -10,7 +10,7 @@
   --line-strong: #cfd3da;
   --text: #1f2328;
   --text-2: #555555;
-  --muted: #8a9099;
+  --muted: #646b75;        /* ≥ 4.5:1 on --surface and --surface-2 */
   --accent: #00a3c4;
   --accent-hover: #0090ad;
   --accent-ink: #ffffff;
@@ -222,7 +222,6 @@ dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(3px); }
 .seg-ctl { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 2px; }
 .seg-ctl button { all: unset; padding: 5px 12px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; transition: background .15s, color .15s, box-shadow .15s, outline-color .15s; }
 .seg-ctl button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); outline: 1px solid var(--line); }
-.about-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .folder-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; }
 .folder-row code { flex: 1; padding: 6px 8px; }
 .dev-list { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; min-height: 58px; }
@@ -406,11 +405,33 @@ input[type=text]:focus, input[type=password]:focus, select:focus { border-color:
 .link:hover { text-decoration: underline; }
 
 /* ---------- settings tabs & connections ---------- */
-dialog.settings { width: min(540px, calc(100vw - 32px)); }
+/* fixed size: header, tabs and footer stay put, only the pane scrolls (so the dialog never jumps between tabs) */
+dialog.settings { width: min(540px, calc(100vw - 32px)); height: min(720px, calc(100vh - 48px)); overflow: hidden; }
+dialog.settings .modal-body { height: 100%; display: flex; flex-direction: column; padding: 0; }
+dialog.settings .pv-head { padding: 22px 24px 0; align-items: center; }
+dialog.settings .tabs { margin: 12px 24px 0; }
+.set-panes { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 24px 24px; scrollbar-gutter: stable; }
+.set-foot { margin: 0; padding: 12px 24px; border-top: 1px solid var(--line); justify-content: space-between; flex-wrap: nowrap; }
+.set-status { display: inline-flex; align-items: center; min-width: 0; }
+.set-status .ok-text { display: inline-flex; align-items: center; gap: 5px; }
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 14px 0 6px; }
-.tabs button { all: unset; padding: 8px 12px; cursor: pointer; font-weight: 600; font-size: 14px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs button { all: unset; padding: 8px 12px; cursor: pointer; font-weight: 600; font-size: 14px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 6px 6px 0 0; }
+.tabs button:hover { color: var(--text); }
 .tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
-.tab-pane h3 { margin-top: 18px; }
+.tabs button:focus-visible, .seg-ctl button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tab-pane h3 { margin-top: 22px; }
+.tab-pane h3 + .form, .tab-pane h3 + .folder-row { margin-top: 10px; }
+.tab-pane .form { margin-bottom: 4px; }
+.form .hint { margin: -6px 0 2px; }
+.field-err { margin: -6px 0 2px; color: var(--danger); font-size: 12.5px; text-align: right; }
+.zone-form .field-err { margin: 2px 0 0; }
+input[aria-invalid="true"] { border-color: var(--danger); }
+input[aria-invalid="true"]:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent); }
+.z5-lim { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.dev-sum { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 10px; }
+.dev-sum p { margin: 0; min-width: 0; }
+.about-links { margin: 6px 0 0; color: var(--muted); }
+.sync-opt small, .svc-head small { font-size: 12.5px; }
 .svc { border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 14px; }
 .svc-head { display: flex; align-items: center; gap: 12px; }
 .svc-head > div { flex: 1; display: flex; flex-direction: column; }
@@ -504,10 +525,6 @@ dialog.settings { width: min(540px, calc(100vw - 32px)); }
 .ftp-result dt, .ftp-dl dt { color: var(--muted); }
 .ftp-result dd, .ftp-dl dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .ftp-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.bests-form { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 16px; margin: 10px 0 6px; }
-.bests-form label { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.bests-form span { display: flex; align-items: center; gap: 6px; color: var(--muted); }
-.bests-form input { width: 80px; text-align: right; padding: 6px 10px; }
 .wkg { font-size: 18px; color: var(--accent); font-weight: 650; margin-left: 10px; }
 .vo2 { text-align: right; }
 .vo2 b { font-size: 26px; font-family: var(--num); margin: 0 4px; }
@@ -517,7 +534,9 @@ dialog.settings { width: min(540px, calc(100vw - 32px)); }
 :root[data-theme="dark"] .btn.garmin { background: #f2f2f3; color: #000; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.garmin { background: #f2f2f3; color: #000; } }
 details.adv { margin-top: 12px; }
-details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; }
+details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; border-radius: 4px; }
+details.adv summary:hover { color: var(--text); }
+details.adv summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sync-mode { margin-top: 12px; }
 .sync.gok { color: var(--text); font-weight: 700; font-size: 13px; cursor: pointer; }
 

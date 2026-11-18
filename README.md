@@ -68,7 +68,7 @@ Once installed, zwoTrainer updates itself. A few seconds after launch (and every
 - **Never during a ride:** no check, card or install happens while you ride; an update found earlier appears when the ride ends.
 - **Signed:** every update file is signed with the project's update key, and the app refuses anything whose signature doesn't match. Updates fetched by the app itself normally don't bring back the unsigned-app warning.
 - **Each install type updates in kind:** the macOS app is replaced in place, Windows runs the same installer you used (`-setup.exe` or `.msi`) and closes the app while it installs, and Linux updates the `.AppImage`, `.deb` or `.rpm` (the packages ask for your password).
-- **Settings → App → About:** switch *Check for updates automatically* off, or press **Check now**. The setting belongs to this computer and isn't synced.
+- **Settings → App → Updates:** switch *Check for updates automatically* off, or press **Check now**. The setting belongs to this computer and isn't synced.
 
 ### Build from source
 
@@ -94,6 +94,8 @@ On the first Bluetooth search macOS asks for Bluetooth access. If you declined, 
 
 1. **Workouts folder.** zwoTrainer reads `~/Downloads/zwo` by default. Change it under **Settings → App → Workouts folder**. Sub-folders with a weekly schedule are plans, other sub-folders are collections, and loose `.zwo` files in the root are single workouts.
 2. **Your numbers.** Open **Settings → Rider** and enter FTP, max heart rate and weight. Weight is needed for W/kg, VO2max and virtual shifting.
+
+   Settings has four tabs: **Rider** (FTP, heart rate, weight, bests, zones), **Riding** (sounds, behaviour during a ride, virtual shifting), **Connections** (profile sync, Garmin, other platforms) and **App** (appearance, language, workouts folder, devices, updates). Every change is saved as soon as you make it; a number is saved when you leave the field, and a value outside its range shows an error under the field instead. **Done**, ✕, Esc or a click outside just close the dialog.
 3. **Devices.** Click the **Bluetooth** button in the top bar and connect your trainer, heart-rate strap and (optionally) a Zwift controller. They reconnect automatically next time.
 4. **Ride.** Pick a plan and press **Start plan**, or switch to **Workouts** and ride anything. The workout starts as soon as you pedal, or press **Space**.
 
@@ -192,11 +194,11 @@ Deleting always goes to the system Trash (the Recycle Bin on Windows), so it can
 - **Intensity** (− / + in the control bar or ↑ / ↓ for ±1 %, with Shift ±10 %) scales all targets of the workout.
 - **Free-ride and all-out segments** release ERG: you ride with your gears, or with virtual gears.
 
-**Coach line:** a single line below the Current segment values shows one short message at a time and stays empty otherwise. The workout's own text events come first. Then, in this order: pacing warnings (starting a long test effort too fast, or power fading more than 15 % below the ERG target for 5 seconds), cadence more than 5 rpm off its target for 5 seconds (amber up to 10 rpm, red beyond; it says "Back on target" once you're back for 3 seconds), and cues in hard segments (Z4 and up, all-out and max efforts: at the start, at halfway and in the last 30 seconds). Each message stays at least 4 seconds. The automatic hints can be switched off under Settings → App (*Coach hints*); the workout's own messages are always shown.
+**Coach line:** a single line below the Current segment values shows one short message at a time and stays empty otherwise. The workout's own text events come first. Then, in this order: pacing warnings (starting a long test effort too fast, or power fading more than 15 % below the ERG target for 5 seconds), cadence more than 5 rpm off its target for 5 seconds (amber up to 10 rpm, red beyond; it says "Back on target" once you're back for 3 seconds), and cues in hard segments (Z4 and up, all-out and max efforts: at the start, at halfway and in the last 30 seconds). Each message stays at least 4 seconds. The automatic hints can be switched off under Settings → Riding (*Coach hints*); the workout's own messages are always shown.
 
-**Auto-pause:** after 3 seconds without power or cadence the workout pauses, and it resumes as soon as you pedal again. You can switch this off under Settings → App.
+**Auto-pause:** after 3 seconds without power or cadence the workout pauses, and it resumes as soon as you pedal again. You can switch this off under Settings → Riding.
 
-**Sounds:** a countdown in the last 3 seconds before each change of target. Three rising notes mean the power goes up, three falling notes that it goes down, and the plain beep that it stays about the same (within 3 % FTP) or that the next segment has no fixed target. All-out and max efforts count as going up. When a workout is ridden to the end, a short chime plays (not after FTP tests, and not when you stop early). Each can be switched off under Settings → App (*Countdown beeps*, with the rising/falling notes below it, and *Chime*).
+**Sounds:** a countdown in the last 3 seconds before each change of target. Three rising notes mean the power goes up, three falling notes that it goes down, and the plain beep that it stays about the same (within 3 % FTP) or that the next segment has no fixed target. All-out and max efforts count as going up. When a workout is ridden to the end, a short chime plays (not after FTP tests, and not when you stop early). Each can be switched off under Settings → Riding → Sounds (*Countdown beeps*, with the rising/falling notes below it, and *Chime*).
 
 **Keyboard:**
 
@@ -208,7 +210,7 @@ Deleting always goes to the system Trash (the Recycle Bin on Windows), so it can
 | + / − | shift gear (virtual gears); during free-ride segments ↑ / ↓ shift too |
 | Esc | end workout |
 
-If you switch to another app during a ride (a video, a browser) and zwoTrainer might still have the keyboard focus, turn off **Keyboard shortcuts while riding** under Settings → App. The on-screen buttons and controllers keep working.
+If you switch to another app during a ride (a video, a browser) and zwoTrainer might still have the keyboard focus, turn off **Keyboard shortcuts while riding** under Settings → Riding. The on-screen buttons and controllers keep working.
 
 **Controller buttons** (Zwift Ride / Play / Click):
 
@@ -248,7 +250,7 @@ Every button press shows a short confirmation on screen. The display stays awake
 **Virtual shifting** gives you gears in free-ride segments and all-out efforts, even on a trainer without real shifting.
 
 - **How it works:** a virtual 24-speed drivetrain (ratio range and start gear configurable). Cadence × gear ratio gives a virtual speed, and road physics (rolling resistance and air drag, using your weight) turns that into the watts the trainer holds in ERG. Speed and distance in the FIT file follow the virtual speed.
-- **Choice per ride:** the Ready screen asks *Real gears* or *Virtual gears easy / medium / hard*. The default is set under Settings → App → Virtual shifting.
+- **Choice per ride:** the Ready screen asks *Real gears* or *Virtual gears easy / medium / hard*. The default is set under Settings → Riding → Virtual shifting (gear range and start gear under *Advanced*).
 - **Shifting:** with a Zwift or OpenBikeControl controller, the keyboard (`+` / `−`) or the on-screen − / + buttons.
 
 **Controllers:**
@@ -366,7 +368,7 @@ The limits can be changed per rider (Settings → Rider) and drive the colours, 
 | Ride files | `…/dev.steffenr.zwotrainer/activities/<rider>/*.fit` (plus `*.garmin.fit`) |
 | Workouts | your workouts folder; zwoTrainer only reads it, except *Move to Trash* |
 
-Nothing is sent anywhere except what you enable: uploads to the platforms you connect, and the cloud folder you choose for profile sync. The update check only downloads the release manifest from GitHub (switch it off under Settings → App).
+Nothing is sent anywhere except what you enable: uploads to the platforms you connect, and the cloud folder you choose for profile sync. The update check only downloads the release manifest from GitHub (switch it off under Settings → App → Updates).
 
 ---
 
