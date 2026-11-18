@@ -27,6 +27,21 @@ const PLAT = Object.defineProperties({ emojiKey: { mac: ' (⌃⌘Space)', win: '
 // ------------------------------------------------------------------ state
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+/**
+ * Write text only when it changed. The ride screen updates ~40 readouts 4× a second; most values are the
+ * same as last tick, and skipping the write avoids needless style/layout work. null/undefined → ''.
+ */
+const setText = (el, v) => {
+  if (!el) return;
+  const s = String(v ?? '');
+  if (el.textContent !== s) el.textContent = s;
+};
+/** Same for trusted markup we build ourselves (compares with the last markup written, not the DOM). */
+const setHtml = (el, markup) => {
+  if (!el) return;
+  const s = String(markup);
+  if (el._html !== s) { el.innerHTML = s; el._html = s; }
+};
 const params = new URLSearchParams(location.search);
 const SPEED = Math.max(1, Number(params.get('speed')) || 1); // dev: fast-forward time
 
@@ -2490,6 +2505,19 @@ class Ride {
 
   get targetW() { const f = this.targetFrac; return f === null ? null : Math.round(f * ftp()); }
 
+  /**
+   * Element by id for render(): looked up once and cached for the rest of the ride. A cached element that
+   * was replaced (build() again, a container re-rendered) is no longer connected and is looked up afresh.
+   */
+  q(id) {
+    let el = this.els?.get(id);
+    if (!el?.isConnected) {
+      el = document.getElementById(id);
+      (this.els ??= new Map()).set(id, el);
+    }
+    return el;
+  }
+
   render(force) {
     const segs = this.w.segments;
     const idx = Math.max(0, segmentAt(segs, Math.min(this.t, this.w.duration - 0.01)));
@@ -2517,10 +2545,10 @@ class Ride {
       if (now - this.vs.sentAt > 900 || force) { trainer.setTargetPower(this.vs.watts); this.vs.sentAt = now; }
     } else if (trainer.connected) { this.vs.watts = null; if (freeLike) trainer.setFreeRide(); else trainer.setTargetPower(tw); }
     this.vsSpeed = vsSpeed;
-    const gb = $('#gearbox');
+    const gb = this.q('gearbox');
     if (gb) {
       gb.hidden = !(freeLike && (this.vs.on || ctrls.connected));
-      $('#gear-lbl').innerHTML = `<b>${t('gearN', { n: this.gear + 1 })}</b><small>/${this.gears.length} · ${this.gears[this.gear].toFixed(2)}${vsActive ? ` · ${this.vs.watts} W` : ''}</small>`;
+      setHtml(this.q('gear-lbl'), `<b>${t('gearN', { n: this.gear + 1 })}</b><small>/${this.gears.length} · ${this.gears[this.gear].toFixed(2)}${vsActive ? ` · ${this.vs.watts} W` : ''}</small>`);
     }
 
     // beeps: last 3 s before a change of target
@@ -2530,129 +2558,132 @@ class Ride {
       if (!this.beeped.has(k)) { this.beeped.add(k); countdown(sec, state.settings.beepDirection !== false ? cueDir(s, n) : null); }
     }
 
-    const ergEl = $('#erg-state');
+    const ergEl = this.q('erg-state');
     if (ergEl && trainer.connected && trainer.canErg) {
-      ergEl.textContent = vsActive ? `${t('virtualGears')} · ${t(`diff.${this.vs.difficulty}`)}` : freeLike ? t('ergOffGears') : 'ERG';
+      setText(ergEl, vsActive ? `${t('virtualGears')} · ${t(`diff.${this.vs.difficulty}`)}` : freeLike ? t('ergOffGears') : 'ERG');
       ergEl.className = vsActive ? 'erg vs' : freeLike ? 'erg off' : 'erg on';
     }
 
     // LIVE panel
     const p = fresh('power'), c = fresh('cadence'), hr = fresh('hr'), v = fresh('speed');
     const gt = vsActive ? this.vs.watts : allOut ? null : tw;
-    $('#m-pow').textContent = p ?? '–';
+    setText(this.q('m-pow'), p ?? '–');
     // power bar: 0…1.5× target, coloured by the zone you're riding in (the target is on the gauge)
     const pRef = gt || F;
-    setBar($('#b-pow'), p != null ? p / (pRef * 1.5) : 0, { color: p != null ? zoneColor(p / F, bounds()) : null });
+    setBar(this.q('b-pow'), p != null ? p / (pRef * 1.5) : 0, { color: p != null ? zoneColor(p / F, bounds()) : null });
 
     // cadence vs target (Zwift: Cadence / CadenceLow+High): green on target, amber ±5–10, red beyond 10 rpm
     const cLo = s.cadenceLow ?? s.cadence, cHi = s.cadenceHigh ?? s.cadence;
-    $('#v-cad').textContent = c != null ? Math.round(c) : '–';
-    $('#t-cad').textContent = cLo != null ? `/ ${cLo === cHi ? cLo : `${cLo}–${cHi}`}` : '';
+    setText(this.q('v-cad'), c != null ? Math.round(c) : '–');
+    setText(this.q('t-cad'), cLo != null ? `/ ${cLo === cHi ? cLo : `${cLo}–${cHi}`}` : '');
     const dev = c != null && cLo != null ? (c < cLo ? cLo - c : c > cHi ? c - cHi : 0) : null;
     const cadState = dev == null ? '' : dev > 10 ? 'bad' : dev > 5 ? 'warn' : 'good';
     const live = this.running || !this.started;
-    $('#v-cad').classList.toggle('off-target', live && cadState === 'bad');
-    $('#t-cad').className = live ? cadState : '';
+    this.q('v-cad').classList.toggle('off-target', live && cadState === 'bad');
+    this.q('t-cad').className = live ? cadState : '';
     const CMIN = 40, CMAX = 130, cf = (x) => (x - CMIN) / (CMAX - CMIN);
-    setBar($('#b-cad'), c != null ? cf(c) : 0, {
+    setBar(this.q('b-cad'), c != null ? cf(c) : 0, {
       mark: cLo != null && cLo === cHi ? cf(cLo) : null,
       band: cLo != null && cLo !== cHi ? [cf(cLo), cf(cHi)] : null,
       color: cadState === 'bad' ? 'var(--danger)' : cadState === 'warn' ? 'var(--warn)' : cadState === 'good' ? 'var(--ok)' : null,
     });
 
     const spd = vsSpeed ?? v;
-    $('#v-spd').textContent = spd != null ? spd.toFixed(1) : '–';
-    setBar($('#b-spd'), spd != null ? spd / 60 : 0, { color: 'var(--ok)' });
-    $('#v-hr').textContent = hr ?? '–';
-    $('#t-hr').textContent = hr != null ? `${Math.round((hr / maxHr()) * 100)}%` : '';
-    setBar($('#b-hr'), hr != null ? hr / maxHr() : 0, { color: 'var(--hrline)' });
+    setText(this.q('v-spd'), spd != null ? spd.toFixed(1) : '–');
+    setBar(this.q('b-spd'), spd != null ? spd / 60 : 0, { color: 'var(--ok)' });
+    setText(this.q('v-hr'), hr ?? '–');
+    setText(this.q('t-hr'), hr != null ? `${Math.round((hr / maxHr()) * 100)}%` : '');
+    setBar(this.q('b-hr'), hr != null ? hr / maxHr() : 0, { color: 'var(--hrline)' });
 
-    $('#g-unit').textContent = this.showPct ? '% FTP' : t('watt');
-    $('#v-pow').textContent = p == null ? '–' : this.showPct ? `${Math.round((p / F) * 100)}%` : p;
-    $('#t-pow').textContent = gt == null ? t(s.type === 'maxeffort' ? 'gMax' : allOut ? 'gAllOut' : 'gFree') : this.showPct ? `${Math.round((gt / F) * 100)}%` : `${gt} W`;
+    setText(this.q('g-unit'), this.showPct ? '% FTP' : t('watt'));
+    setText(this.q('v-pow'), p == null ? '–' : this.showPct ? `${Math.round((p / F) * 100)}%` : p);
+    setText(this.q('t-pow'), gt == null ? t(s.type === 'maxeffort' ? 'gMax' : allOut ? 'gAllOut' : 'gFree') : this.showPct ? `${Math.round((gt / F) * 100)}%` : `${gt} W`);
     this.gauge.update({ target: gt, actual: p, ftp: F, bounds: bounds() });
     // on target: within ±5 % for 3 s -> soft glow in the zone colour around the gauge
     const onT = this.running && gt != null && p != null && Math.abs(p - gt) / gt <= 0.05;
     this.onSince = onT ? (this.onSince ?? performance.now()) : null;
-    const gEl = $('#gauge');
+    const gEl = this.q('gauge');
     if (gt != null) gEl.style.setProperty('--glow', zoneColor(gt / F, bounds()));
     gEl.classList.toggle('on-target', onT && performance.now() - this.onSince >= 3000);
 
     // CURRENT SEGMENT
     const color = zoneColor(tf, bounds());
     this.ring.update(Math.min(1, inSeg / s.duration), color);
-    if (s.p0 === null) { $('#s-target').classList.remove('range'); $('#s-target').textContent = s.type === 'maxeffort' ? t('bigMax') : t('bigFree'); $('#s-watts').textContent = vsActive ? t('virtualShiftingLc') : t('rideByFeel'); }
+    if (s.p0 === null) { this.q('s-target').classList.remove('range'); setText(this.q('s-target'), s.type === 'maxeffort' ? t('bigMax') : t('bigFree')); setText(this.q('s-watts'), vsActive ? t('virtualShiftingLc') : t('rideByFeel')); }
     else {
       const a = Math.round(s.p0 * 100 * this.mult()), b = Math.round(s.p1 * 100 * this.mult());
-      $('#s-target').textContent = allOut ? t('bigAllOut') : a === b ? `${a}%` : `${a}–${b}%`;
-      $('#s-target').classList.toggle('range', a !== b || allOut);
-      $('#s-watts').textContent = allOut ? t('aimW', { w: tw, how: vsActive ? t('howShift') : t('howGears') }) : `${tw} W`;
+      setText(this.q('s-target'), allOut ? t('bigAllOut') : a === b ? `${a}%` : `${a}–${b}%`);
+      this.q('s-target').classList.toggle('range', a !== b || allOut);
+      setText(this.q('s-watts'), allOut ? t('aimW', { w: tw, how: vsActive ? t('howShift') : t('howGears') }) : `${tw} W`);
     }
-    $('#s-target').style.color = zoneInk(tf, bounds());
-    $('#s-tw').textContent = gt != null ? `${gt} W` : allOut ? t('allOut') : t('free');
-    $('#s-tw').style.color = gt != null ? zoneInk(gt / F, bounds()) : '';
+    this.q('s-target').style.color = zoneInk(tf, bounds());
+    setText(this.q('s-tw'), gt != null ? `${gt} W` : allOut ? t('allOut') : t('free'));
+    this.q('s-tw').style.color = gt != null ? zoneInk(gt / F, bounds()) : '';
     // live pacing in long all-out test efforts: running average, projected FTP, "too fast" warning
     const pacing = this.test && allOut && s.measure && s.duration >= 300;
-    $('#s-tw-k').textContent = pacing ? (s.duration >= 480 ? t('estFtp') : t('effortAvg')) : t('targetPower');
-    $('#s-watts').classList.remove('warn-text');
+    setText(this.q('s-tw-k'), pacing ? (s.duration >= 480 ? t('estFtp') : t('effortAvg')) : t('targetPower'));
+    this.q('s-watts').classList.remove('warn-text');
     let paceFast = false;
     if (pacing) {
       const acc = this.effAcc?.[s.measure];
       const avg = acc && acc.n >= 5 ? Math.round(acc.sum / acc.n) : null;
       const factor = s.duration >= 1140 ? 0.95 : s.duration >= 480 ? 0.9 : null;
       const fast = !!(avg && tw && acc.n >= 60 && avg > tw * 1.1);
-      $('#s-target').textContent = avg ? `${avg} W` : t('bigAllOut');
-      $('#s-target').classList.toggle('range', !avg);
-      if (avg) $('#s-target').style.color = zoneInk(avg / F, bounds());
-      $('#s-watts').textContent = !avg ? t('aimW', { w: tw ?? '–', how: vsActive ? t('howShift') : t('howGears') }) : fast ? t('tooFastShort') : tw ? t('avgAim', { w: tw }) : t('effortAverage');
-      $('#s-watts').classList.toggle('warn-text', fast);
+      setText(this.q('s-target'), avg ? `${avg} W` : t('bigAllOut'));
+      this.q('s-target').classList.toggle('range', !avg);
+      if (avg) this.q('s-target').style.color = zoneInk(avg / F, bounds());
+      setText(this.q('s-watts'), !avg ? t('aimW', { w: tw ?? '–', how: vsActive ? t('howShift') : t('howGears') }) : fast ? t('tooFastShort') : tw ? t('avgAim', { w: tw }) : t('effortAverage'));
+      this.q('s-watts').classList.toggle('warn-text', fast);
       paceFast = fast;
       const proj = avg && factor && acc.n >= 30 ? Math.round(avg * factor) : null;
-      $('#s-tw').textContent = factor ? (proj ? `${proj} W` : '–') : (avg ? `${avg} W` : '–');
-      $('#s-tw').style.color = '';
+      setText(this.q('s-tw'), factor ? (proj ? `${proj} W` : '–') : (avg ? `${avg} W` : '–'));
+      this.q('s-tw').style.color = '';
     }
-    $('#s-cad').textContent = cLo != null ? `${cLo === cHi ? cLo : `${cLo}–${cHi}`} rpm` : '–';
-    $('#s-cad').classList.toggle('range', cLo != null && cLo !== cHi);
-    $('#s-dur').textContent = fmtTime(s.duration);
-    $('#s-bar').style.width = `${Math.min(100, (inSeg / s.duration) * 100)}%`;
-    $('#s-bar').style.background = color;
-    $('#s-rem').textContent = fmtTime(Math.ceil(rem));
+    setText(this.q('s-cad'), cLo != null ? `${cLo === cHi ? cLo : `${cLo}–${cHi}`} rpm` : '–');
+    this.q('s-cad').classList.toggle('range', cLo != null && cLo !== cHi);
+    setText(this.q('s-dur'), fmtTime(s.duration));
+    this.q('s-bar').style.width = `${Math.min(100, (inSeg / s.duration) * 100)}%`;
+    this.q('s-bar').style.background = color;
+    setText(this.q('s-rem'), fmtTime(Math.ceil(rem)));
     $('.panel.seg').classList.toggle('closing', rem <= 5 && !!n);
 
     if (segChanged || force) {
-      $('#seg-kind').textContent = segKind(s);
+      setText(this.q('seg-kind'), segKind(s));
       $('.panel.seg').style.setProperty('--zc', color);
       // NEXT SEGMENT
-      const card = $('#next-card');
+      // One description of the next segment, rendered into both cards: the full view (#next-card) and
+      // the compact panel (#cmp-next), whose optional lines (.cp-opt) drop out on small windows and which
+      // has a slot for the "in 0:42" countdown (#cmp-next-in, filled every tick below).
+      const card = this.q('next-card'), cn = this.q('cmp-next');
+      let zc = 'var(--line-strong)', title = '', body;
       if (n) {
         const m = this.mult();
         const nf = n.p0 === null ? null : ((n.p0 + n.p1) / 2) * m;
         const pa = n.p0 === null ? null : Math.round(n.p0 * 100 * m), pb = n.p0 === null ? null : Math.round(n.p1 * 100 * m);
         const wa = n.p0 === null ? null : Math.round(n.p0 * F * m), wb = n.p0 === null ? null : Math.round(n.p1 * F * m);
-        const big = n.p0 === null ? (n.type === 'maxeffort' ? t('maxEffort') : t('freeRide')) : n.erg === false ? t('allOut') : pa === pb ? `${pa}%` : `${pa}% → ${pb}%`;
-        const watts = n.p0 === null ? t('rideByFeel') : wa === wb ? `${wa} W` : `${wa} → ${wb} W`;
+        const big = n.p0 === null ? tHtml(n.type === 'maxeffort' ? 'maxEffort' : 'freeRide') : n.erg === false ? tHtml('allOut') : pa === pb ? `${pa}%` : `${pa}% → ${pb}%`;
+        const watts = n.p0 === null ? tHtml('rideByFeel') : wa === wb ? `${wa} W` : `${wa} → ${wb} W`;
         const nLo = n.cadenceLow ?? n.cadence, nHi = n.cadenceHigh ?? n.cadence;
-        card.style.setProperty('--zc', zoneColor(nf, bounds()));
-        card.title = nf == null ? t('freeRide') : zoneOf(nf, bounds()).name;
-        const cn = $('#cmp-next');
-        cn.style.setProperty('--zc', zoneColor(nf, bounds()));
-        cn.innerHTML = `<div class="nc-txt"><b>${big}</b><span class="nc-v">${watts}</span><span class="nc-v cp-opt">${fmtTime(n.duration)} min</span><span class="nc-v cp-opt" id="cmp-next-in"></span></div>`;
-        card.innerHTML = `<div class="nc-txt"><b>${big}</b><span class="nc-v">${watts}</span><span class="nc-v">${fmtTime(n.duration)} min</span>${nLo != null ? `<span class="nc-v nc-rpm">${nLo === nHi ? nLo : `${nLo}–${nHi}`} rpm</span>` : ''}</div>`;
+        const rpm = nLo == null ? null : `${nLo === nHi ? nLo : `${nLo}–${nHi}`} rpm`;
+        zc = zoneColor(nf, bounds());
+        title = nf == null ? t('freeRide') : zoneOf(nf, bounds()).name;
+        body = (compact) => html`<div class="nc-txt"><b>${big}</b><span class="nc-v">${watts}</span><span class="nc-v${compact ? ' cp-opt' : ''}">${fmtTime(n.duration)} min</span>${compact
+          ? html`<span class="nc-v cp-opt" id="cmp-next-in"></span>`
+          : rpm && html`<span class="nc-v nc-rpm">${rpm}</span>`}</div>`;
       } else {
-        card.style.setProperty('--zc', 'var(--line-strong)');
-        card.title = '';
-        $('#cmp-next').style.setProperty('--zc', 'var(--line-strong)');
-        $('#cmp-next').innerHTML = this.cooling
-          ? `<div class="nc-txt"><b>${t('testDone')}</b></div>`
-          : `<div class="nc-txt"><b>${t('finishStrong')}</b><span class="nc-v muted cp-opt">${t('noMoreChanges')}</span></div>`;
-        card.innerHTML = this.cooling
-          ? `<div class="nc-txt"><b>${t('testDone')}</b><span class="nc-v muted">${t('pressStopResult')}</span></div>`
-          : `<div class="nc-txt"><b>${t('finishStrong')}</b><span class="nc-v muted">${t('noMoreChanges')}</span></div>`;
+        // last segment: "Finish strong", or after a failed ramp test the result hint
+        const note = (compact) => (this.cooling ? (compact ? null : tHtml('pressStopResult')) : tHtml('noMoreChanges'));
+        body = (compact) => html`<div class="nc-txt"><b>${tHtml(this.cooling ? 'testDone' : 'finishStrong')}</b>${note(compact) && html`<span class="nc-v muted${compact ? ' cp-opt' : ''}">${note(compact)}</span>`}</div>`;
       }
-      $('#int-val').textContent = `${this.intensity}%`;
-      $('#int-val').classList.toggle('changed', this.intensity !== 100);
+      card.style.setProperty('--zc', zc);
+      cn.style.setProperty('--zc', zc);
+      card.title = title;
+      mount(card, body(false));
+      mount(cn, body(true));
+      setText(this.q('int-val'), `${this.intensity}%`);
+      this.q('int-val').classList.toggle('changed', this.intensity !== 100);
       this.diagram.highlight(idx);
-      $('#btn-play').classList.toggle('is-running', this.running);
+      this.q('btn-play').classList.toggle('is-running', this.running);
       // segment change: zone-coloured sweep over Current segment, Next card slides up
       if (segChanged && this.animReady && motionOK()) { restartAnim($('.panel.seg'), 'seg-in'); restartAnim(card, 'nx-in'); }
     }
@@ -2660,37 +2691,37 @@ class Ride {
 
     this.coach(s, { segChanged, inSeg, rem, allOut, freeLike, gt, p, c, cLo, cHi, dev, cadState, paceFast });
 
-    $('#d-el').textContent = fmtTime(this.t);
-    $('#d-rem').textContent = fmtTime(Math.max(0, Math.ceil(this.w.duration - this.t)));
+    setText(this.q('d-el'), fmtTime(this.t));
+    setText(this.q('d-rem'), fmtTime(Math.max(0, Math.ceil(this.w.duration - this.t))));
 
     // Both presentations share the same samples and Ride. No DOM is rebuilt on resize.
     // compact panels: same values as the full view (actual target, never a test-estimated FTP)
     const cmpSub = gt != null ? `${gt} W` : t(allOut ? 'gAllOut' : 'gFree');
     this.cGauge.update({ target: gt, actual: p, ftp: F, bounds: bounds() });
-    $('#cmp-pow').textContent = p ?? '–';
-    $('#cmp-pow-sub').textContent = cmpSub;
+    setText(this.q('cmp-pow'), p ?? '–');
+    setText(this.q('cmp-pow-sub'), cmpSub);
     this.cRing.update(Math.min(1, inSeg / s.duration), color);
-    $('#cmp-seg').textContent = fmtTime(Math.max(0, Math.ceil(rem)));
-    $('#cmp-seg-sub').textContent = cmpSub;
-    $('#cmp-tgt').textContent = $('#s-target').textContent;
-    $('#cmp-tgt').style.color = $('#s-target').style.color;
-    $('#cmp-bar').style.width = $('#s-bar').style.width;
-    $('#cmp-bar').style.background = color;
-    $('#cmp-hr').textContent = hr ?? '–';
-    $('#cmp-cad').textContent = c != null ? Math.round(c) : '–';
-    $('#cmp-cad').classList.toggle('off-target', live && cadState === 'bad');
-    $$('.cmp-wleft').forEach((el) => { el.textContent = $('#d-rem').textContent; });
-    $('#cmp-gears').hidden = !freeLike;
-    $('#cmp-gear').textContent = t('gearN', { n: this.gear + 1 });
-    const nIn = $('#cmp-next-in');
-    if (nIn) nIn.textContent = `${t('compactIn')} ${fmtTime(Math.max(0, Math.ceil(rem)))}`;
+    setText(this.q('cmp-seg'), fmtTime(Math.max(0, Math.ceil(rem))));
+    setText(this.q('cmp-seg-sub'), cmpSub);
+    setText(this.q('cmp-tgt'), this.q('s-target').textContent);
+    this.q('cmp-tgt').style.color = this.q('s-target').style.color;
+    this.q('cmp-bar').style.width = this.q('s-bar').style.width;
+    this.q('cmp-bar').style.background = color;
+    setText(this.q('cmp-hr'), hr ?? '–');
+    setText(this.q('cmp-cad'), c != null ? Math.round(c) : '–');
+    this.q('cmp-cad').classList.toggle('off-target', live && cadState === 'bad');
+    $$('.cmp-wleft').forEach((el) => { setText(el, this.q('d-rem').textContent); });
+    this.q('cmp-gears').hidden = !freeLike;
+    setText(this.q('cmp-gear'), t('gearN', { n: this.gear + 1 }));
+    const nIn = this.q('cmp-next-in');
+    if (nIn) setText(nIn, `${t('compactIn')} ${fmtTime(Math.max(0, Math.ceil(rem)))}`);
     const status = this.autoPaused ? t('compactAutoPaused') : this.running ? t('running') : this.started ? t('paused') : t('ready');
-    if ($('#cmp-status').textContent !== status) $('#cmp-status').textContent = status;
+    if (this.q('cmp-status').textContent !== status) setText(this.q('cmp-status'), status);
     const connection = trainer.connected ? trainer.mode === 'sim' ? t('simulator') : t('connectedCap') : t('noTrainer');
     const statusDetail = this.autoPaused ? t('autoPaused') : status;
-    $('#cmp-state').title = `${statusDetail} · ${connection}`;
-    $('#cmp-state').setAttribute('aria-label', `${statusDetail} · ${connection}`);
-    $('#cmp-dot').classList.toggle('on', trainer.connected);
+    this.q('cmp-state').title = `${statusDetail} · ${connection}`;
+    this.q('cmp-state').setAttribute('aria-label', `${statusDetail} · ${connection}`);
+    this.q('cmp-dot').classList.toggle('on', trainer.connected);
     $$('#ride [data-c="play"]').forEach((el) => {
       el.classList.toggle('is-running', this.running);
       const label = this.running ? t('btnPause') : t('btnPlay');
