@@ -174,6 +174,7 @@ export const en = {
   collections: 'Collections',
   searchWorkouts: 'Search workouts…',
   filterIntensity: 'Filter by training intensity',
+  filterLength: 'Filter by length',
   sortShortest: 'Shortest',
   sortLongest: 'Longest',
   sortHardest: 'Hardest (TSS)',

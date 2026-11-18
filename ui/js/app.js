@@ -8,6 +8,11 @@ import { DEFAULT_SHIFTING, gearTable, virtualSpeed, targetWatts } from './vshift
 import { PROTOCOLS, protocolById, isTestWorkout, evaluateGeneric, classifyTest, prepareTestWorkout, vo2max } from './tests.js';
 import { t, LOCALES, setLocale, systemLocale, coerceLocale, fmtLocale, translateDom } from './i18n/index.js';
 import { loadSounds, countdown, endChime } from './sound.js';
+import { html, raw, tHtml, mount, esc } from './html.js';
+import { IC } from './components/icons.js';
+import { badge, wdTag, zoneTag } from './components/indicators.js';
+import { dialogHead, closeBtn } from './components/dialog.js';
+import { segCtl, segRow, selectSeg, menuBtn } from './components/buttons.js';
 
 // Platform wording: zwoTrainer runs on macOS, Windows and Linux; only labels differ.
 const OS = (() => {
@@ -22,7 +27,6 @@ const PLAT = Object.defineProperties({ emojiKey: { mac: ' (⌃⌘Space)', win: '
 // ------------------------------------------------------------------ state
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const params = new URLSearchParams(location.search);
 const SPEED = Math.max(1, Number(params.get('speed')) || 1); // dev: fast-forward time
 
@@ -247,14 +251,13 @@ async function checkUpdate(quiet = false) {
   } finally { updBusy = false; }
 }
 
-const updIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>';
 
 function showUpdateCard() {
   if (!updFound || ride) return;
   const u = updFound;
   let card = $('#update-card');
   if (!card) { card = document.createElement('div'); card.id = 'update-card'; card.className = 'update-card'; card.setAttribute('role', 'status'); document.body.append(card); }
-  card.innerHTML = `<div class="uc-head"><span class="uc-ico">${updIcon}</span><div><b>${t('updAvailable', { v: esc(u.version) })}</b><small class="muted">${t('updYouHave', { v: esc(u.current) })}</small></div></div>
+  card.innerHTML = `<div class="uc-head"><span class="uc-ico">${IC.download}</span><div><b>${t('updAvailable', { v: esc(u.version) })}</b><small class="muted">${t('updYouHave', { v: esc(u.current) })}</small></div></div>
     <div class="uc-actions"><button class="btn ghost sm" data-u="notes">${t('updWhatsNew')}</button><span class="grow"></span><button class="btn ghost sm" data-u="later">${t('updLater')}</button><button class="btn primary sm" data-u="install">${t('updInstall')}</button></div>`;
   card.hidden = false;
   if (motionOK()) restartAnim(card, 'in');
@@ -275,7 +278,7 @@ async function installUpdate() {
   const card = $('#update-card');
   if (ride || !card) return;
   const ask = OS === 'linux' ? ` ${t('updPassword')}` : '';
-  card.innerHTML = `<div class="uc-head"><span class="uc-ico">${updIcon}</span><div><b id="uc-status">${t('updDownloading', { v: esc(updFound.version) })}</b><small class="muted">${t('updRestarts')}${ask}</small></div></div>
+  card.innerHTML = `<div class="uc-head"><span class="uc-ico">${IC.download}</span><div><b id="uc-status">${t('updDownloading', { v: esc(updFound.version) })}</b><small class="muted">${t('updRestarts')}${ask}</small></div></div>
     <div class="pbar uc-bar"><i class="d" id="uc-bar" style="width:0%"></i></div>`;
   card.onclick = null;
   try {
@@ -560,7 +563,7 @@ function profileEditor(p) {
   const previewProfile = () => ({ ...p, avatar: { color: cur.color, emoji: cur.emoji }, name: $('[name=pname]', modal)?.value || p.name });
   const preview = () => avatar(previewProfile(), 'xl');
   openModal(`
-    <div class="pv-head"><h2>${t('editRider')}</h2><button class="icon-btn" data-a="close" aria-label="${t('close')}">✕</button></div>
+    ${dialogHead(tHtml('editRider'))}
     <div class="pe">
       <div class="pe-preview" id="pe-preview">${preview()}</div>
       <div class="pe-fields">
@@ -601,7 +604,7 @@ function profileEditor(p) {
 function profileMenu() {
   if (ride) return toast(t('finishToSwitch'));
   openModal(`
-    <div class="pv-head"><h2>${t('riders')}</h2><button class="icon-btn" data-a="close" aria-label="${t('close')}">✕</button></div>
+    ${dialogHead(tHtml('riders'))}
     <div class="profile-list">
       ${profiles.map((p) => `
         <div class="profile-row ${p.id === state.id ? 'on' : ''}" data-id="${esc(p.id)}">
@@ -704,7 +707,7 @@ function progressBar(pp, id) {
 }
 
 function weekDay(w) {
-  return w.week ? `<span class="wd">${t('weekDayShort', { w: w.week, d: w.day })}</span>` : '';
+  return w.week ? wdTag(tHtml('weekDayShort', { w: w.week, d: w.day })) : '';
 }
 
 function renderHome() {
@@ -762,7 +765,7 @@ function renderHome() {
       const pp = planProgress(p);
       const isActive = state.activePlan === p.id;
       return `<a class="plan-card card ${isActive ? 'active' : ''}" href="#/plan/${encodeURIComponent(p.id)}">
-        <div class="pc-top"><h3>${esc(p.name)}</h3>${isActive ? `<span class="badge">${t('badgeActive')}</span>` : pp.finished ? `<span class="badge ok">${t('badgeDone')}</span>` : ''}</div>
+        <div class="pc-top"><h3>${esc(p.name)}</h3>${isActive ? badge(tHtml('badgeActive')) : pp.finished ? badge(tHtml('badgeDone'), 'ok') : ''}</div>
         <div class="meta">${planMeta(p)}</div>
         ${p.description ? `<p class="pc-desc">${esc(markdownSummary(p.description, 110))}</p>` : ''}
         ${pp.started ? progressBar(pp, p.id) : ''}
@@ -774,7 +777,6 @@ function renderHome() {
   bindActions(v);
 }
 
-const zoneTag = (z) => (z ? `<span class="ztag" style="--zc:${ZONES[z - 1].color}" title="${t('trainingIntensity', { zone: `${ZONES[z - 1].short} ${ZONES[z - 1].name}` })}">${ZONES[z - 1].short}</span>` : '');
 
 function workoutRow(w, { status, isNext, locked, free, showFolder, note, favTools } = {}) {
   const icon = status === 'done' ? `<span class="st done${justDone === w.file && !document.body.classList.contains('riding') ? ' just-done' : ''}" title="${t('stDone')}">✓</span>`
@@ -787,7 +789,7 @@ function workoutRow(w, { status, isNext, locked, free, showFolder, note, favTool
   const sub = [note, folder, wd ? t('weekDayShort', { w: w.week, d: w.day }) : '', lastRiddenText(w.file)].filter(Boolean).join(' · ');
   return `<div class="wrow ${isNext ? 'is-next' : ''} ${status || ''}" data-act="preview" data-file="${esc(w.file)}" tabindex="0">
     ${icon}
-    <div class="wtitle">${!showFolder && wd ? `<span class="wd">${t('dayShort', { d: w.day })}</span>` : ''}<div class="wt"><span>${esc(w.title)}</span>${sub && (showFolder || note || lastRidden.has(w.file)) ? `<small>${esc(showFolder || note ? sub : lastRiddenText(w.file))}</small>` : ''}</div></div>
+    <div class="wtitle">${!showFolder && wd ? wdTag(tHtml('dayShort', { d: w.day })) : ''}<div class="wt"><span>${esc(w.title)}</span>${sub && (showFolder || note || lastRidden.has(w.file)) ? `<small>${esc(showFolder || note ? sub : lastRiddenText(w.file))}</small>` : ''}</div></div>
     <div class="wprof">${miniProfile(w.profile, bounds(), { width: 200, height: 28 })}</div>
     <div class="wdur">${fmtDur(w.duration)}</div>
     <div class="wtss">${zoneTag(w.zone)}<span title="${t('tssTitle')}">${w.tss ?? '–'}<small> TSS</small></span></div>
@@ -833,7 +835,7 @@ function renderPlan(id) {
         <h1>${esc(plan.name)}</h1>
         <div class="meta">${t('planMetaTotal', { meta: planMeta(plan) })} · <code>${esc(plan.id)}</code></div>
       </div>
-      <div class="plan-actions">${actions}${menuBtn(`${pp.started ? `<button data-act="reset-plan" data-plan="${esc(plan.id)}">${t('resetProgressMenu')}</button>` : ''}<button data-act="reveal" data-rel="${esc(plan.id)}">${t('showIn', { app: PLAT.files })}</button><button data-act="set-kind" data-kind="collection" data-rel="${esc(plan.id)}">${t('showAsCollectionLong')}</button><hr><button class="danger-text" data-act="trash-folder" data-rel="${esc(plan.id)}">${t('trashPlanFolder', { trash: PLAT.trash })}</button>`, t('planActions'))}</div>
+      <div class="plan-actions">${actions}${menuBtn(`${pp.started ? `<button data-act="reset-plan" data-plan="${esc(plan.id)}">${t('resetProgressMenu')}</button>` : ''}<button data-act="reveal" data-rel="${esc(plan.id)}">${t('showIn', { app: PLAT.files })}</button><button data-act="set-kind" data-kind="collection" data-rel="${esc(plan.id)}">${t('showAsCollectionLong')}</button><hr><button class="danger-text" data-act="trash-folder" data-rel="${esc(plan.id)}">${t('trashPlanFolder', { trash: PLAT.trash })}</button>`, tHtml('planActions'))}</div>
       ${pp.started ? `<div class="plan-prog">${progressBar(pp, plan.id)}<span class="muted">${t('doneSkippedToGo', { done: pp.done, skipped: pp.skipped, left: pp.total - pp.done - pp.skipped })}</span></div>` : ''}
     </section>
     ${descriptionBlock(plan.description)}
@@ -892,7 +894,7 @@ function renderWorkouts() {
         <div class="wk-head" id="wk-head"></div>
         <div class="wk-tools">
           <input type="search" id="wk-q" placeholder="${t('searchWorkouts')}" value="${esc(wf.q)}" autocomplete="off">
-          <div class="seg-ctl" id="wk-dur">${DUR_FILTERS.map(([k, l]) => `<button data-dur="${k}" class="${wf.dur === k ? 'on' : ''}">${t(l)}</button>`).join('')}</div>
+          ${segCtl('wk-dur', DUR_FILTERS.map(([k, l]) => [k, tHtml(l)]), wf.dur, { label: tHtml('filterLength') })}
           <div class="zone-filter" id="wk-zones" title="${t('filterIntensity')}">${ZONES.map((z, i) => `<button data-z="${i + 1}" class="${wf.zones.has(i + 1) ? 'on' : ''}" style="--zc:${z.color}" title="${z.short} ${z.name}"><i></i>${z.short}<span>${z.name}</span></button>`).join('')}</div>
           <select id="wk-sort">${[['name', 'name'], ['short', 'sortShortest'], ['long', 'sortLongest'], ['tss', 'sortHardest'], ['zone', 'intensity'], ['recent', 'recentlyRidden']].map(([k, l]) => `<option value="${k}" ${wf.sort === k ? 'selected' : ''}>${t(l)}</option>`).join('')}</select>
         </div>
@@ -905,9 +907,9 @@ function renderWorkouts() {
     const f = wf.folder;
     const plan = !f.startsWith('@') && f ? planById(f) : null;
     $('#wk-head').innerHTML = plan
-      ? `<h2>${esc(plan.name)}</h2><span class="badge muted">${isPlan(plan) ? t('plan') : t('collection')}</span><span class="grow"></span>${isPlan(plan) ? `<a class="btn ghost sm" href="#/plan/${encodeURIComponent(plan.id)}" data-act="open-plan">${t('openPlan')}</a>` : ''}${menuBtn(`<button data-act="reveal" data-rel="${esc(plan.id)}">${t('showIn', { app: PLAT.files })}</button>${isPlan(plan) ? `<button data-act="set-kind" data-kind="collection" data-rel="${esc(plan.id)}">${t('showAsCollection')}</button>` : `<button data-act="set-kind" data-kind="plan" data-rel="${esc(plan.id)}">${t('useAsPlan')}</button>`}<hr><button class="danger-text" data-act="trash-folder" data-rel="${esc(plan.id)}">${t('trashFolder', { trash: PLAT.trash })}</button>`, t('folderActions'))}${plan.description ? `<div class="wk-desc">${descriptionBlock(plan.description)}</div>` : ''}`
+      ? `<h2>${esc(plan.name)}</h2>${badge(tHtml(isPlan(plan) ? 'plan' : 'collection'), 'muted')}<span class="grow"></span>${isPlan(plan) ? `<a class="btn ghost sm" href="#/plan/${encodeURIComponent(plan.id)}" data-act="open-plan">${t('openPlan')}</a>` : ''}${menuBtn(`<button data-act="reveal" data-rel="${esc(plan.id)}">${t('showIn', { app: PLAT.files })}</button>${isPlan(plan) ? `<button data-act="set-kind" data-kind="collection" data-rel="${esc(plan.id)}">${t('showAsCollection')}</button>` : `<button data-act="set-kind" data-kind="plan" data-rel="${esc(plan.id)}">${t('useAsPlan')}</button>`}<hr><button class="danger-text" data-act="trash-folder" data-rel="${esc(plan.id)}">${t('trashFolder', { trash: PLAT.trash })}</button>`, tHtml('folderActions'))}${plan.description ? `<div class="wk-desc">${descriptionBlock(plan.description)}</div>` : ''}`
       : f === '@fav' ? `<h2>${t('favorites')}</h2><span class="muted small">${t('favHint')}</span>`
-        : f === '' ? `<h2>${t('allWorkouts')}</h2><span class="grow"></span>${menuBtn(`<button data-act="reveal" data-rel="">${t('showLibraryIn', { app: PLAT.files })}</button>`, t('libraryActions'))}` : '';
+        : f === '' ? `<h2>${t('allWorkouts')}</h2><span class="grow"></span>${menuBtn(`<button data-act="reveal" data-rel="">${t('showLibraryIn', { app: PLAT.files })}</button>`, tHtml('libraryActions'))}` : '';
     bindActions($('#wk-head'));
   };
   const draw = (animate) => {
@@ -927,7 +929,8 @@ function renderWorkouts() {
     draw(true);
   };
   $('#wk-q').oninput = (e) => { wf.q = e.target.value; wf.limit = 80; draw(); };
-  $('#wk-dur').onclick = (e) => { const b = e.target.closest('[data-dur]'); if (!b) return; wf.dur = b.dataset.dur; $$('#wk-dur button').forEach((x) => x.classList.toggle('on', x === b)); wf.limit = 80; draw(true); };
+  $('#wk-dur').onclick = (e) => { const b = e.target.closest('[data-v]'); if (!b) return; wf.dur = b.dataset.v; selectSeg(e.currentTarget, b); wf.limit = 80; draw(true); };
+  $('#wk-dur').onkeydown = rovingKey;
   $('#wk-sort').onchange = (e) => { wf.sort = e.target.value; draw(true); };
   $('#wk-zones').onclick = (e) => {
     const b = e.target.closest('[data-z]');
@@ -990,7 +993,7 @@ function renderTests() {
           const shown = isRamp ? { segments: w.segments.filter((x) => !x.ramp || x.p0 * F <= rampTop) } : w;
           const dur = isRamp ? `~${Math.round(shown.segments.reduce((a, x) => a + x.duration, 0) / 60)} min` : fmtDur(w.duration);
           return `<article class="test-card card">
-            <div class="pc-top"><h3>${esc(p.name)}</h3><span class="badge muted">${esc(p.level)}</span></div>
+            <div class="pc-top"><h3>${esc(p.name)}</h3>${badge(p.level, 'muted')}</div>
             <div class="meta">${dur}</div>
             ${miniProfile(profileOf(shown), bounds(), { width: 320, height: 44 })}
             <p class="test-about">${esc(p.about)}</p>
@@ -1008,9 +1011,9 @@ function renderTests() {
         ${tests.map((x, i) => `<div class="hrow trow">
           <div class="hdate">${new Date(x.at).toLocaleDateString(fmtLocale(), { day: 'numeric', month: 'short', year: 'numeric' })}</div>
           <div class="htitle"><b>${esc(testName(x))}</b><small class="muted">${esc([...(x.details || []).filter((d) => d[1]).map((d) => `${d[0]} ${d[1]}`), x.vo2 ? `VO2max ~${x.vo2} ml/kg/min` : ''].filter(Boolean).join(' · '))}</small></div>
-          <div class="hstat">${x.ftp ? `<b>${x.ftp} W</b>` : x.incomplete ? `<span class="badge warn">${t('notCompleted')}</span>` : '<b>–</b>'}</div>
+          <div class="hstat">${x.ftp ? `<b>${x.ftp} W</b>` : x.incomplete ? badge(tHtml('notCompleted'), 'warn') : '<b>–</b>'}</div>
           <div class="hstat">${x.ftp && x.prevFtp ? `${x.ftp >= x.prevFtp ? '+' : ''}${Math.round(((x.ftp - x.prevFtp) / x.prevFtp) * 100)} %` : ''}</div>
-          <div class="hact">${x.accepted ? `<span class="badge ok">${t('applied')}</span>` : x.ftp ? `<button class="btn ghost sm" data-act="apply-ftp" data-i="${i}">${t('useW', { w: x.ftp })}</button>` : ''}</div>
+          <div class="hact">${x.accepted ? badge(tHtml('applied'), 'ok') : x.ftp ? `<button class="btn ghost sm" data-act="apply-ftp" data-i="${i}">${t('useW', { w: x.ftp })}</button>` : ''}</div>
         </div>`).join('')}</div>` : `<p class="muted">${t('testResultsHere')}</p>`}
     </section>`;
   v.onclick = async (e) => {
@@ -1057,7 +1060,7 @@ function historyMenu(h, i) {
   const items = svcCache.filter((sv) => svcRoute(sv) && !(h.services?.[sv.id] && !h.services[sv.id].error)).map((sv) => svcRoute(sv) === 'api'
     ? `<button data-act="h-svc" data-i="${i}" data-id="${sv.id}">${t('uploadTo', { name: esc(sv.name) })}</button>`
     : `<button data-act="h-svc-man" data-i="${i}" data-id="${sv.id}">${t('importTo', { name: esc(sv.name) })}</button>`).join('');
-  return items ? menuBtn(items, t('sendOther')) : '';
+  return items ? menuBtn(items, tHtml('sendOther')) : '';
 }
 
 function renderHistory() {
@@ -1171,7 +1174,6 @@ function refreshView() {
 }
 
 /** A quiet "⋯" button whose items (regular data-act buttons) open in a popover. */
-const menuBtn = (items, label = t('moreActions')) => `<span class="menu-wrap"><button class="more" data-act="menu" title="${label}" aria-label="${label}">⋯</button><template>${items}</template></span>`;
 
 function openMenu(anchor) {
   $('#popover')?.remove();
@@ -1361,7 +1363,7 @@ async function openPreview(file) {
     <div class="pv-head">
       <div><div class="eyebrow">${plan ? esc(plan.name) : t('workout')}${info?.week && showWeekDay(info) ? ` · ${t('weekDayLong', { w: info.week, d: info.day })}` : ''}</div><h2>${esc(info?.title || workout.name)}</h2>
       <div class="meta">${fmtDur(workout.duration)} · TSS ~${estimateTss(workout.segments)} · ${t('nSegments', { n: workout.segments.length })}${workout.author ? ` · ${esc(workout.author)}` : ''}${lr ? ` · <b class="lr">${esc(lr)}</b>` : ''}</div></div>
-      <div class="pv-tools">${starBtn(file)}<button class="more" data-act="more" data-file="${esc(file)}" title="${t('more')}" aria-label="${t('moreActions')}">⋯</button><button class="icon-btn" data-a="close" aria-label="${t('close')}">✕</button></div>
+      <div class="pv-tools">${starBtn(file)}<button class="more" data-act="more" data-file="${esc(file)}" title="${t('more')}" aria-label="${t('moreActions')}">⋯</button>${closeBtn()}</div>
     </div>
     <div class="pv-diagram"></div>
     <div class="seg-info muted">${t('tapSegment', { ftp: ftp() })}</div>
@@ -1423,16 +1425,8 @@ function syncMode(svc) {
   return (state.settings[svc] || {}).mode || 'auto';
 }
 const MODES = [['off', 'off'], ['manual', 'manual'], ['auto', 'automatic']];
-const modeSelect = (name, cur) => segRow(`mode-${name}`, t('upload'), MODES.map(([k, l]) => [k, t(l)]), cur, 'sync-mode');
+const modeSelect = (name, cur) => segRow(`mode-${name}`, tHtml('upload'), MODES.map(([k, l]) => [k, tHtml(l)]), cur, 'sync-mode');
 
-/** A labelled segmented control: a radio group of buttons (one tab stop, arrow keys move, see rovingKey). */
-function segRow(id, label, items, cur, cls = '') {
-  const sel = items.some(([v]) => v === cur) ? cur : items[0][0];
-  return `<div class="frow ${cls}"><span id="${id}-l">${label}</span><span class="seg-ctl" id="${id}" role="radiogroup" aria-labelledby="${id}-l">${items.map(([v, text, extra = '']) => `<button type="button" role="radio" data-v="${v}" aria-checked="${v === cur}" tabindex="${v === sel ? 0 : -1}" class="${v === cur ? 'on' : ''}" ${extra}>${text}</button>`).join('')}</span></div>`;
-}
-function selectSeg(ctl, b) {
-  $$('[role=radio]', ctl).forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', on); x.tabIndex = on ? 0 : -1; });
-}
 /** Arrow keys / Home / End inside tab lists and segmented controls (selection follows focus). */
 function rovingKey(e) {
   const el = e.target.closest?.('[role=tab], .seg-ctl [role=radio]');
@@ -1447,8 +1441,6 @@ function rovingKey(e) {
 }
 modal.addEventListener('keydown', rovingKey);
 
-const ICON_X = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
-const ICON_CHECK = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
 const fmtNum = (n) => n.toLocaleString(fmtLocale());
 
 /** Language of the UI right now: the rider's choice, else the system language. */
@@ -1474,7 +1466,7 @@ async function openSettings(tab = 'rider') {
     if (sv.connected) body = modeSelect(`svc-${sv.id}`, mode);
     else if (sv.kind === 'apikey') body = `<div class="cred"><input type="password" name="key-${sv.id}" placeholder="${t('apiKeyPlaceholder', { name: esc(sv.name) })}" aria-label="${t('apiKeyPlaceholder', { name: esc(sv.name) })}" autocomplete="off"><button class="btn primary sm" data-a="svc-key" data-id="${sv.id}">${t('connect')}</button></div>
       <p class="muted small">${svcHint(sv)} <a href="#" class="link" data-a="svc-getkey">${t('openIntervalsSettings')}</a></p>`;
-    else if (sv.manualUrl) body = `${segRow(`mode-svc-${sv.id}`, t('afterRide'), [['off', t('off')], ['manual', t('showImportButton')]], mode, 'sync-mode')}<p class="muted small">${svcHint(sv)}</p>`;
+    else if (sv.manualUrl) body = `${segRow(`mode-svc-${sv.id}`, tHtml('afterRide'), [['off', tHtml('off')], ['manual', tHtml('showImportButton')]], mode, 'sync-mode')}<p class="muted small">${svcHint(sv)}</p>`;
     return `<div class="svc svc-ext ${sv.connected ? 'on' : ''}"><div class="svc-head"><span class="svc-logo ext">${SVC_LOGO[sv.id] || sv.name[0]}</span><div><b>${esc(sv.name)}</b><small class="muted">${status}</small></div>${action}</div>${body}</div>`;
   };
   const sp = syncOn() ? syncCfg.provider : 'off';
@@ -1485,7 +1477,7 @@ async function openSettings(tab = 'rider') {
   const TABS = [['rider', 'tabRider'], ['riding', 'tabRiding'], ['sync', 'tabConnections'], ['app', 'tabApp']];
   const devs = s.devices || {};
   openModal(`
-    <div class="pv-head"><h2>${t('settings')} <small class="muted">· ${esc(state.name)}</small></h2><button class="icon-btn" data-a="close" aria-label="${t('close')}">${ICON_X}</button></div>
+    ${dialogHead(html`${tHtml('settings')} <small class="muted">· ${state.name}</small>`)}
     <div class="tabs" id="set-tabs" role="tablist" aria-label="${t('settings')}">${TABS.map(([k, l]) => `<button role="tab" id="tab-${k}" aria-controls="pane-${k}" aria-selected="${tab === k}" tabindex="${tab === k ? 0 : -1}" data-tab="${k}" class="${tab === k ? 'on' : ''}">${t(l)}</button>`).join('')}</div>
     <div class="set-panes">
 
@@ -1520,9 +1512,9 @@ async function openSettings(tab = 'rider') {
       </div>
       <h3>${t('virtualShifting')} <small class="muted">${t('virtualShiftingHint')}</small></h3>
       <div class="form">
-        ${segRow('vs-mode', t('vsDefault'), [['ask', t('vsAsk')], ['gears', t('realGears')], ['virtual', t('virtualGears')]], sh.mode)}
+        ${segRow('vs-mode', tHtml('vsDefault'), [['ask', tHtml('vsAsk')], ['gears', tHtml('realGears')], ['virtual', tHtml('virtualGears')]], sh.mode)}
         <p class="muted small hint" id="vs-mode-hint">${t(`vsHint.${sh.mode}`)}</p>
-        ${segRow('vs-diff', t('difficulty'), ['easy', 'medium', 'hard'].map((k) => [k, t(`diff.${k}`)]), sh.difficulty)}
+        ${segRow('vs-diff', tHtml('difficulty'), ['easy', 'medium', 'hard'].map((k) => [k, tHtml(`diff.${k}`)]), sh.difficulty)}
         <p class="muted small hint">${t('difficultyHint')}</p>
       </div>
       <details class="adv">
@@ -1565,8 +1557,8 @@ async function openSettings(tab = 'rider') {
 
     <div class="tab-pane" role="tabpanel" id="pane-app" aria-labelledby="tab-app" data-pane="app" ${tab === 'app' ? '' : 'hidden'}>
       <div class="form">
-        ${segRow('theme-ctl', t('appearance'), ['system', 'light', 'dark'].map((th) => [th, t(THEME_LABEL[th])]), s.theme || 'system')}
-        ${segRow('lang-ctl', t('language'), LOCALES.map((l) => [l.value, l.nativeLabel, `lang="${l.value}"`]), uiLang())}
+        ${segRow('theme-ctl', tHtml('appearance'), ['system', 'light', 'dark'].map((th) => [th, tHtml(THEME_LABEL[th])]), s.theme || 'system')}
+        ${segRow('lang-ctl', tHtml('language'), LOCALES.map((l) => [l.value, l.nativeLabel, `lang="${l.value}"`]), uiLang())}
       </div>
       <h3>${t('workoutsFolder')}</h3>
       <div class="folder-row"><code>${esc(library.root)}</code><button class="btn ghost sm" data-a="dir">${t('changeDots')}</button><button class="btn ghost sm" data-a="rescan" title="${t('rescanTitle')}">${t('rescan')}</button></div>
@@ -1587,7 +1579,7 @@ async function openSettings(tab = 'rider') {
   const save = async () => {
     settingsDirty = true;
     await api.saveState();
-    status.innerHTML = `<span class="ok-text">${ICON_CHECK} ${t('savedOk')}</span>`;
+    status.innerHTML = `<span class="ok-text">${IC.check} ${t('savedOk')}</span>`;
     clearTimeout(statusTimer);
     statusTimer = setTimeout(() => (status.textContent = t('autoSaved')), 1800);
   };
@@ -1656,7 +1648,7 @@ async function openSettings(tab = 'rider') {
   f('beeps').addEventListener('change', (e) => { f('beepDirection').disabled = !e.target.checked; });
   f('garminAuto').onchange = (e) => { s.garmin = { ...(s.garmin || {}), autoOpen: e.target.checked }; save(); };
   const updAuto = f('updAuto');
-  if (updAuto) updAuto.onchange = () => invoke('update_prefs', { auto: updAuto.checked }).then((p) => { updPrefs = p; status.innerHTML = `<span class="ok-text">${ICON_CHECK} ${t('savedOk')}</span>`; }).catch((err) => toast(String(err)));
+  if (updAuto) updAuto.onchange = () => invoke('update_prefs', { auto: updAuto.checked }).then((p) => { updPrefs = p; status.innerHTML = `<span class="ok-text">${IC.check} ${t('savedOk')}</span>`; }).catch((err) => toast(String(err)));
 
   // ---- segmented controls (radio groups) save at once
   const SEGS = {
@@ -2001,25 +1993,6 @@ async function startRide(file, planId) {
   ride = new Ride(workout, file, planId);
 }
 
-/** Ride-screen icons (24×24, stroke = currentColor). */
-const svgI = (d, extra = '') => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"${extra}>${d}</svg>`;
-const IC = {
-  pulse: svgI('<path d="M3 12h4l2.5-6 5 12 2.5-6h4"/>', ' style="opacity:.6"'),
-  bolt: svgI('<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>'),
-  cad: svgI('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2"/><path d="M12 10V3.5M13.7 13l4.6 4.6"/>'),
-  speed: svgI('<path d="M3.5 17a9 9 0 1 1 17 0"/><path d="m12 14 4.5-4.5"/>'),
-  heart: svgI('<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/>'),
-  target: svgI('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>'),
-  watch: svgI('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M10 2h4M19 6l-1.5 1.5"/>'),
-  flag: svgI('<path d="M5 21V4M5 4h12l-2.5 4L17 12H5"/>'),
-  layers: svgI('<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>'),
-  dial: svgI('<path d="M4.5 18a9 9 0 1 1 15 0"/><path d="m12 14 3-4"/>'),
-  bars: svgI('<path d="M5 20v-8M12 20V5M19 20v-5"/>'),
-  chat: svgI('<path d="M4 5h16v11H10l-5 4v-4H4z"/>'),
-  flame: svgI('<path d="M12 3c.8 3.6 5 5.4 5 10a5 5 0 0 1-10 0c0-2.4 1.3-3.9 2.4-5 .3 1.9 1.2 2.9 2.4 3-.6-2.9-.4-5.4.2-8z"/>'),
-  plug: svgI('<path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5"/>'),
-  expand: svgI('<path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5M3 3l6 6M21 3l-6 6M21 21l-6-6M3 21l6-6"/>'),
-};
 /** Plausibility note for a test result that differs a lot (> 15 %) from the current FTP. */
 function ftpCheck(next, cur, source) {
   if (!next || !cur) return '';
@@ -2122,7 +2095,7 @@ class Ride {
     const cmpWl = `<span class="cmp-wl"><small>${t('compactWorkoutLeft')}</small><b class="cmp-wleft">0:00</b></span>`;
     // the ride title lives in the regular top bar (in place of the mode switch)
     const rt = $('#ride-title');
-    rt.innerHTML = `${this.test ? `<span class="badge test">${t('ftpTest')}</span>` : ''}${plan ? `<span class="badge">${esc(plan.name)}${this.info?.week ? ` · ${t('weekDayCompact', { w: this.info.week, d: this.info.day })}` : ''}</span>` : this.test ? '' : `<span class="badge muted">${t('workout')}</span>`}
+    rt.innerHTML = `${this.test ? badge(tHtml('ftpTest'), 'test') : ''}${plan ? badge(html`${plan.name}${this.info?.week ? html` · ${tHtml('weekDayCompact', { w: this.info.week, d: this.info.day })}` : ''}`) : this.test ? '' : badge(tHtml('workout'), 'muted')}
       <h1 title="${esc(this.info?.title || this.w.name)}">${esc(this.info?.title || this.w.name)}</h1><span class="erg" id="erg-state"></span>`;
     rt.hidden = false;
     $('#btn-compact').hidden = false;
@@ -2224,7 +2197,7 @@ class Ride {
         <div class="compact-foot">${cmpCtl}${cmpWl}</div>
       </section>
       <div class="ready" id="ready"><div><b>${t('ready')}</b><span>${t('readyText')}${trainer.connected ? ` ${t('readyPedal')}` : ''}.</span></div>
-        ${this.hasFree ? `<div class="vs-ask"><span class="k">${t('freeRideSegments')}</span><span class="seg-ctl" id="vs-choice">${[['gears', 'realGears'], ['easy', 'vgEasy'], ['medium', 'diff.medium'], ['hard', 'diff.hard']].map(([k, l]) => `<button data-vs="${k}" class="${(k === 'gears' ? !this.vs.on : this.vs.on && this.vs.difficulty === k) ? 'on' : ''}">${t(l)}</button>`).join('')}</span></div>` : ''}</div>`;
+        ${this.hasFree ? `<div class="vs-ask"><span class="k" id="vs-choice-l">${t('freeRideSegments')}</span>${segCtl('vs-choice', [['gears', 'realGears'], ['easy', 'vgEasy'], ['medium', 'diff.medium'], ['hard', 'diff.hard']].map(([k, l]) => [k, tHtml(l)]), this.vs.on ? this.vs.difficulty : 'gears', { labelledBy: 'vs-choice-l' })}</div>` : ''}</div>`;
 
     this.gauge = new Gauge($('.gauge-mount', r));
     this.ring = new ProgressRing($('.ring-mount', r));
@@ -2249,11 +2222,14 @@ class Ride {
         this.tipTimer = setTimeout(() => (tip.hidden = true), 6000);
       },
     });
+    // arrow keys move inside the free-ride choice and must not also skip segments (ride shortcuts)
+    const vsc = $('#vs-choice', r);
+    if (vsc) vsc.onkeydown = (e) => { rovingKey(e); if (e.defaultPrevented) e.stopPropagation(); };
     r.onclick = (e) => {
       const menu = e.target.closest('[data-act="menu"]');
       if (menu) return openMenu(menu);
-      const vsb = e.target.closest('[data-vs]');
-      if (vsb) return this.chooseShifting(vsb.dataset.vs);
+      const vsb = e.target.closest('#vs-choice [data-v]');
+      if (vsb) return this.chooseShifting(vsb.dataset.v);
       const sb = e.target.closest('[data-shift]');
       if (sb) return this.shift(+sb.dataset.shift);
       const o = e.target.closest('[data-ov]');
@@ -2282,7 +2258,8 @@ class Ride {
     if (this.vs.on) this.vs.difficulty = v;
     state.settings.shifting = { ...shifting(), mode: this.vs.on ? 'virtual' : 'gears', difficulty: this.vs.on ? v : shifting().difficulty };
     api.saveState();
-    $$('#vs-choice button').forEach((b) => b.classList.toggle('on', b.dataset.vs === v));
+    const ctl = $('#vs-choice');
+    if (ctl) selectSeg(ctl, $(`[data-v="${v}"]`, ctl));
     this.render(true);
   }
 
@@ -2964,7 +2941,7 @@ class Ride {
       const a = b.dataset.a;
       if (a === 'apply' || a === 'keep') {
         const box = b.closest('.ftp-actions');
-        if (a === 'apply') { applyFtp(state.tests[0]); box.innerHTML = `<span class="badge ok">${t('ftpUpdated', { w: state.tests[0].ftp })}</span>`; }
+        if (a === 'apply') { applyFtp(state.tests[0]); mount(box, badge(tHtml('ftpUpdated', { w: state.tests[0].ftp }), 'ok')); }
         else box.innerHTML = `<span class="muted small">${t('keptFtp')}</span>`;
         return;
       }

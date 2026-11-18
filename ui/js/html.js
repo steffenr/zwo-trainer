@@ -8,6 +8,8 @@
 //                                 miniProfile() SVG. Never for text from files, devices or the rider.
 //   mount(el, fragment)           el.innerHTML = fragment; plain strings are shown as text.
 //
+// Booleans: `false` renders nothing (handy for `${cond && html`…`}`), so an attribute that needs the
+// word "false" must say so: aria-checked="${String(on)}".
 // Limits: always quote attribute values (title="${x}"); values in style="" and href="" are escaped but
 // not validated, so keep safeColor() / encodeURIComponent() there. Plain t() stays unescaped because it
 // also feeds toast(), confirmDialog() and textContent, which are plain text.

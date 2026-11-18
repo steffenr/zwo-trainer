@@ -32,6 +32,8 @@ ui/                         frontend — static files served by Tauri (frontendD
   js/vshift.js              virtual drivetrain + flat-road physics (virtual shifting)
   js/sound.js               countdown beep, rising/falling countdown notes and end chime (Web Audio)
   js/html.js                html`` tagged template (auto-escaping), raw(), tHtml(), mount(), esc()
+  js/components/            markup helpers, one file per CSS component family (same names as css/components/):
+                            icons (IC), buttons (segCtl, segRow, selectSeg, menuBtn), indicators (badge, wdTag, zoneTag), dialog (dialogHead, closeBtn)
   js/battery.js             battery badge for the devices popover: state thresholds (ok ≥ 40, low 16–39, critical ≤ 15), lowest level, icon HTML
   sounds/                   power-up.mp3, power-down.mp3 (3 notes ~1 s apart), workout-done.mp3 (all CC0)
   js/ble.js                 device objects (Trainer, HeartRate, Controllers), simulator, Tauri event binding

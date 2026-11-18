@@ -173,6 +173,7 @@ export const fr = {
   collections: 'Collections',
   searchWorkouts: 'Rechercher des séances…',
   filterIntensity: 'Filtrer par intensité d’entraînement',
+  filterLength: 'Filtrer par durée',
   sortShortest: 'Plus courtes',
   sortLongest: 'Plus longues',
   sortHardest: 'Plus dures (TSS)',

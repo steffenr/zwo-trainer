@@ -22,6 +22,14 @@ test('html: numbers, null, undefined and false', () => {
   assert.equal(s(html`${0}|${12.5}|${null}|${undefined}|${false}|${true}`), '0|12.5||||true');
 });
 
+test('segCtl: aria-checked says "false" for unselected items', async () => {
+  const { segCtl } = await import('../ui/js/components/buttons.js');
+  const out = s(segCtl('x', [['a', 'A'], ['b', '<B>']], 'a', { label: 'L' }));
+  assert.ok(out.includes('data-v="a" aria-checked="true" tabindex="0"'), out);
+  assert.ok(out.includes('data-v="b" aria-checked="false" tabindex="-1"'), out);
+  assert.ok(out.includes('&lt;B&gt;') && out.includes('aria-label="L"'), out);
+});
+
 test('html: nested fragments stay markup, arrays are joined', () => {
   const li = (x) => html`<li>${x}</li>`;
   assert.equal(s(html`<ul>${['a', '<b>'].map(li)}</ul>`), '<ul><li>a</li><li>&lt;b&gt;</li></ul>');
