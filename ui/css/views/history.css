@@ -1,0 +1,5 @@
+/* Ride history: the table itself is the .hlist component (components/list.css); here only what is
+   specific to this screen. */
+
+/* uploaded to a service: "Garmin ✓", "Intervals.icu ✓" */
+.sync.gok { color: var(--text); font-weight: 700; font-size: var(--fs-sm); cursor: pointer; }

@@ -1,0 +1,66 @@
+/* FTP Tests page (FTP hero, test cards) and the test result in the ride summary. */
+
+.ftp-hero { display: grid; grid-template-columns: 1fr auto; gap: 18px 24px; align-items: center; }
+.ftp-val {
+  font-size: 22px; color: var(--muted); margin: 4px 0;
+  & b { font-size: 56px; font-family: var(--num); color: var(--text); letter-spacing: -0.02em; }
+}
+.ftp-side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.spark {
+  width: 260px; height: 56px;
+  & polyline { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+  & circle { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+}
+.bests {
+  display: flex; gap: 18px;
+  & b { display: block; font-family: var(--num); font-size: var(--fs-lg); font-variant-numeric: tabular-nums; }
+}
+.zone-strip { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+.zchip {
+  display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--text-2); background: var(--surface-2);
+  border-radius: var(--r-sm); padding: 4px 9px; font-variant-numeric: tabular-nums;
+  & i { width: 9px; height: 9px; border-radius: var(--r-2xs); }
+}
+
+.test-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.test-card {
+  display: flex; flex-direction: column; gap: 10px;
+  & .mini { height: 44px; margin-top: 4px; }
+  & .btn { align-self: flex-start; }
+}
+.test-about { color: var(--text-2); font-size: var(--fs-md); margin: 0; flex: 1; }
+.test-method { font-size: var(--fs-sm); font-weight: 600; color: var(--accent); }
+.badge.test { background: var(--z4-ink); color: #000; }
+/* test history: an .hlist with its own columns */
+.trow { grid-template-columns: 130px 1fr 90px 80px 140px; }
+
+/* ---------- result ---------- */
+.ftp-result {
+  border: 1px solid var(--accent); background: var(--accent-soft); border-radius: var(--radius); padding: 16px; margin: 16px 0;
+  & > div:first-child { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  & b { font-size: 40px; font-family: var(--num); }
+  & small.up { color: var(--ok); font-weight: 600; }
+  & small.down { color: var(--warn); font-weight: 600; }
+  &.incomplete { border-color: var(--warn); background: var(--warn-soft); }
+}
+.ftp-check {
+  margin: 4px 0 12px; padding: 10px 12px; border-radius: var(--r-md); background: var(--warn-soft);
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); font-size: var(--fs-md);
+  & b { font-size: inherit; font-family: inherit; }
+}
+.ftp-result.incomplete {
+  & .k { color: var(--warn); }
+  & p { margin: 8px 0 0; }
+  & p b { font-size: inherit; font-family: inherit; white-space: nowrap; }
+}
+.ftp-result dl, .ftp-dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; margin: 12px 0; font-size: var(--fs-md); }
+.ftp-result dt, .ftp-dl dt { color: var(--muted); }
+.ftp-result dd, .ftp-dl dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ftp-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.wkg { font-size: 18px; color: var(--accent); font-weight: 650; margin-left: 10px; }
+.vo2 {
+  text-align: right;
+  & b { font-size: 26px; font-family: var(--num); margin: 0 4px; }
+  & .k, & small { display: block; }
+}
+.ftp-result dd small { display: block; font-weight: 400; }

@@ -54,10 +54,12 @@ Every release on the GitHub **Releases** page has installers for all platforms. 
 
 | Platform | File | First launch |
 |---|---|---|
-| macOS 11+ (Apple silicon) | `zwoTrainer_<version>_aarch64.dmg` | Right-click the app → **Open** (or System Settings → Privacy & Security → **Open Anyway**), then allow Bluetooth access. |
-| macOS 11+ (Intel) | `zwoTrainer_<version>_x64.dmg` | as above |
+| macOS 13+ (Apple silicon) | `zwoTrainer_<version>_aarch64.dmg` | Right-click the app → **Open** (or System Settings → Privacy & Security → **Open Anyway**), then allow Bluetooth access. |
+| macOS 13+ (Intel) | `zwoTrainer_<version>_x64.dmg` | as above |
 | Windows 10/11 (x64) | `zwoTrainer_<version>_x64-setup.exe` (or `.msi`) | SmartScreen: **More info → Run anyway**. Turn Bluetooth on in Settings; no pairing needed. |
 | Linux (x64) | `.deb`, `.rpm` or `.AppImage` | Needs BlueZ (`bluetoothd`) running; the `.deb`/`.rpm` pull it in. |
+
+The window is drawn by the system's web engine, and the interface uses modern CSS (cascade layers and nesting). Keep it current: on macOS install the Safari updates (Safari 17 or newer), on Windows WebView2 updates itself, and on Linux use a current WebKitGTK (2.42 or newer, as in current Ubuntu, Debian and Fedora releases). With an older engine the screens appear unstyled.
 
 zwoTrainer is developed and used on macOS; the Windows and Linux builds use the same code and are compile-checked and tested in CI on every push, but get less real-world riding.
 
@@ -73,7 +75,7 @@ Once installed, zwoTrainer updates itself. A few seconds after launch (and every
 ### Build from source
 
 **Requirements:** Rust 1.90+ (`rustup`) plus the platform's Tauri prerequisites:
-- **macOS 11+:** the Xcode command-line tools (`xcode-select --install`).
+- **macOS 13+:** the Xcode command-line tools (`xcode-select --install`).
 - **Windows 10/11:** Microsoft C++ Build Tools and WebView2 (preinstalled on Windows 11).
 - **Linux (Debian/Ubuntu):** `sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libdbus-1-dev pkg-config`.
 
@@ -286,6 +288,7 @@ Settings → Connections → **More platforms**.
 | **COROS** | **Manual import** into the Training Hub | Turn on *Show import button*. After a ride, zwoTrainer saves it as a **ZIP** (Training Hub only accepts ZIPs), shows it in Finder and opens the Training Hub; there choose *Activity List → Import Data*. |
 
 - **After a ride:** the summary lists Garmin, Intervals.icu and COROS with *Upload* or *Import…*; automatic uploads start by themselves.
+- **Short rides:** a ride shorter than 15 minutes (a test spin, a stopped workout) is not uploaded automatically. The summary asks first: *Upload* sends it everywhere it would have gone automatically, *Don’t upload* leaves it on your computer (you can still use the *Upload* buttons later, also from the ride history).
 - **In the ride history:** a ✓ marks where a ride went, and the row's **⋯** menu sends older rides to the others.
 
 Other platforms (Wahoo, TrainingPeaks, Suunto) only accept uploads from approved partner apps, so zwoTrainer doesn't offer them. TrainingPeaks and many others can be linked in Garmin Connect, which then forwards your rides.

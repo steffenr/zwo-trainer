@@ -1,0 +1,94 @@
+/* Design tokens: light (pure white) by default, dark (pure black) when the OS asks for it
+   unless the rider forced light, or when the rider forced dark.
+   Zone colours: Zwift / WhatsOnZwift palette. Accent: cyan. */
+
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f5f6f8;
+  --surface-3: #eceef2;
+  --line: #e5e7eb;
+  --line-strong: #cfd3da;
+  --text: #1f2328;
+  --text-2: #555555;
+  --muted: #646b75;        /* ≥ 4.5:1 on --surface and --surface-2 */
+  --accent: #00a3c4;
+  --accent-hover: #0090ad;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(0, 163, 196, .10);
+  --ok: #2e9e4f;
+  --ok-soft: rgba(46, 158, 79, .12);
+  --warn: #b7791f;
+  --warn-soft: rgba(183, 121, 31, .12);
+  --danger: #e0352b;
+  --pos: #1f2328;          /* position line in the diagram */
+  --done: #00a3c4;         /* completed bar */
+  --trace: #1f2328;        /* actual power trace */
+  --ftp: #1f2328;          /* FTP marker */
+  --track: #eceef2;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 1px 3px rgba(16, 24, 40, .06);
+  --shadow-lg: 0 24px 60px rgba(16, 24, 40, .18);
+  --backdrop: rgba(15, 18, 24, .35);
+  /* zone text colours (readable on the background) */
+  --z1-ink: #6b6b6b;
+  --z2-ink: #1f74e0;
+  --z3-ink: #2f9a3a;
+  --z4-ink: #b88a00;
+  --z5-ink: #e4501f;
+  --cad: #8b3dff;
+  --hrline: #e0004d;
+  --star: #e0a800;         /* favourite star */
+  /* Garmin brand button and tile: dark on light, light on dark */
+  --garmin-bg: #1d1d1f;
+  --garmin-ink: #ffffff;
+
+  /* radius scale */
+  --r-2xs: 3px;            /* swatches, bars */
+  --r-tag: 6px;            /* badges, tags, code */
+  --r-sm: 8px;             /* small buttons, menu items, list items */
+  --r-md: 10px;            /* buttons, inputs, segmented control */
+  --r-lg: 12px;            /* popovers, inset boxes, rows, toast */
+  --radius: 14px;          /* cards, panels */
+  --r-xl: 18px;            /* dialogs */
+  --r-pill: 999px;
+  /* type scale (UI text; big readouts keep their own sizes) */
+  --fs-2xs: 11px;          /* uppercase labels, tags, axis labels */
+  --fs-xs: 12px;           /* fine print, code */
+  --fs-sm: 13px;           /* secondary text, small buttons */
+  --fs-md: 14px;           /* controls, meta, lists */
+  --fs-base: 15px;         /* body */
+  --fs-lg: 17px;           /* emphasis */
+
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI Variable Text", "Segoe UI", Roboto, "Noto Sans", Cantarell, sans-serif;
+  --num: "SF Pro Rounded", ui-rounded, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  color-scheme: light;
+}
+
+/* dark: follows the OS unless the rider forced light … */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #000000; --surface: #0b0b0c; --surface-2: #141416; --surface-3: #1c1c1f;
+    --line: #232326; --line-strong: #34343a;
+    --text: #f2f2f3; --text-2: #cccccc; --muted: #85858d;
+    --accent: #1cc4e6; --accent-hover: #44d2ee; --accent-ink: #001318; --accent-soft: rgba(28, 196, 230, .14);
+    --ok: #4cd07a; --ok-soft: rgba(76, 208, 122, .14); --warn: #f2c14e; --warn-soft: rgba(242, 193, 78, .12); --danger: #ff5a4f;
+    --pos: #ffffff; --done: #1cc4e6; --trace: #ffffff; --ftp: #ffffff; --track: #1c1c1f;
+    --shadow: none; --shadow-lg: 0 30px 80px rgba(0, 0, 0, .8); --backdrop: rgba(0, 0, 0, .7);
+    --z1-ink: #a6a6a6; --z2-ink: #5aa4ff; --z3-ink: #6fd06f; --z4-ink: #ffcc3f; --z5-ink: #ff7a52; --cad: #b98bff; --hrline: #ff4d7d;
+    --garmin-bg: #f2f2f3; --garmin-ink: #000000;
+    color-scheme: dark;
+  }
+}
+/* … or the rider forced dark (keep in sync with the block above) */
+:root[data-theme="dark"] {
+  --bg: #000000; --surface: #0b0b0c; --surface-2: #141416; --surface-3: #1c1c1f;
+  --line: #232326; --line-strong: #34343a;
+  --text: #f2f2f3; --text-2: #cccccc; --muted: #85858d;
+  --accent: #1cc4e6; --accent-hover: #44d2ee; --accent-ink: #001318; --accent-soft: rgba(28, 196, 230, .14);
+  --ok: #4cd07a; --ok-soft: rgba(76, 208, 122, .14); --warn: #f2c14e; --warn-soft: rgba(242, 193, 78, .12); --danger: #ff5a4f;
+  --pos: #ffffff; --done: #1cc4e6; --trace: #ffffff; --ftp: #ffffff; --track: #1c1c1f;
+  --shadow: none; --shadow-lg: 0 30px 80px rgba(0, 0, 0, .8); --backdrop: rgba(0, 0, 0, .7);
+  --z1-ink: #a6a6a6; --z2-ink: #5aa4ff; --z3-ink: #6fd06f; --z4-ink: #ffcc3f; --z5-ink: #ff7a52; --cad: #b98bff; --hrline: #ff4d7d;
+  --garmin-bg: #f2f2f3; --garmin-ink: #000000;
+  color-scheme: dark;
+}

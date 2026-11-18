@@ -9,6 +9,8 @@ export class CompactView {
     this.pending = Promise.resolve();
   }
 
+  /** Switch compact on or off. Calls are queued, so a fast double click can't interleave two resizes;
+   * resolves true when the requested view is shown (false: the native resize failed, nothing changed). */
   set(active) {
     this.pending = this.pending.then(async () => {
       if (this.active === active) return true;

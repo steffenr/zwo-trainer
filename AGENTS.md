@@ -17,7 +17,12 @@ A desktop app (Tauri 2) for riding Zwift `.zwo` workouts on a Bluetooth smart tr
 ```
 ui/                         frontend — static files served by Tauri (frontendDist = ../ui)
   index.html                shell: top bar, #view, #ride, <dialog id="modal">, #toast
-  css/styles.css            ALL styles; theme tokens on :root (light) + dark overrides
+  css/styles.css            entry only: @layer order (tokens, base, components, views, utilities) + @imports
+  css/tokens.css            theme tokens on :root (light) + dark overrides (OS dark and forced dark)
+  css/base.css              elements, native form controls, text helpers (.muted, .k, .ic …), shared @keyframes
+  css/components/           reusable pieces, one family per file: buttons, card, indicators (badge, tags, progress, spinner), dialog, popover, notice (toast, update card), list (history-style table, sync list, service logo), forms, avatar, charts, markdown
+  css/views/                one file per screen/dialog: topbar, home, library, history, tests, dialogs, settings, ride, compact
+  css/utilities.css         [hidden], forced text colours, global "Reduce motion"
   js/app.js                 app controller: boot, routing, modes, riders, settings, sync, Ride class
   js/compact.js             serialized compact/full ride presentation transitions (same Ride, native resize first) and `compactMode()` size tiers
   js/render.js              zones, colours, mini profiles, Diagram (workout chart), Gauge, ProgressRing
@@ -26,6 +31,9 @@ ui/                         frontend — static files served by Tauri (frontendD
   js/tests.js               FTP test protocols, evaluation, VO2max, test-workout detection
   js/vshift.js              virtual drivetrain + flat-road physics (virtual shifting)
   js/sound.js               countdown beep, rising/falling countdown notes and end chime (Web Audio)
+  js/html.js                html`` tagged template (auto-escaping), raw(), tHtml(), mount(), esc()
+  js/components/            markup helpers, one file per CSS component family (same names as css/components/):
+                            icons (IC), buttons (segCtl, segRow, selectSeg, menuBtn), indicators (badge, wdTag, zoneTag), dialog (dialogHead, closeBtn)
   js/battery.js             battery badge for the devices popover: state thresholds (ok ≥ 40, low 16–39, critical ≤ 15), lowest level, icon HTML
   sounds/                   power-up.mp3, power-down.mp3 (3 notes ~1 s apart), workout-done.mp3 (all CC0)
   js/ble.js                 device objects (Trainer, HeartRate, Controllers), simulator, Tauri event binding
@@ -53,9 +61,11 @@ scripts/sync-version.mjs    print / set the version (Cargo.toml + Cargo.lock; ta
 scripts/updater-manifest.mjs  write latest.json (version, notes, per-platform url + signature) from the signed release files
 scripts/setup-updater-key.sh  one-time: create the updater key in ~/.tauri, write the pubkey, set the GitHub secrets
 scripts/check-i18n.mjs      de/fr have exactly en's keys, plural shapes and placeholders; every t('key') in ui/ exists
+scripts/check-html.mjs      ui/js: no innerHTML/outerHTML write or insertAdjacentHTML outside mount() in html.js
+scripts/check-css.mjs       ui/css: layer order, every file imported once into a layer, balanced braces, nested selectors start with &, components/ never name a view
 site/                       static website (home, features, download) with dark/light screenshots in site/img; no build step
 .github/workflows/
-  ci.yml                    push/PR: tests + clippy + UI syntax + i18n check (Linux), tests (macOS, Windows)
+  ci.yml                    push/PR: tests + clippy + UI syntax + i18n + CSS + markup checks (Linux), tests (macOS, Windows)
   release.yml               manual: bump patch/minor/major, commit, tag vX, push (needs RELEASE_PAT)
   build-app.yml             tag v*: build macOS arm64/x64, Windows, Linux → one GitHub release (+ latest.json for updates)
   pages.yml                 site/ change on develop, successful release build, manual: deploy site/ to GitHub Pages
@@ -73,8 +83,11 @@ cd src-tauri && cargo clippy --all-targets           # keep warning-free
 ZWO_TEST_DIR=~/Downloads/zwo cargo test scan_real_library -- --nocapture   # parse a real library
 node --check ui/js/app.js                            # quick syntax check for edited JS modules
 node scripts/check-i18n.mjs                          # translations complete and consistent (en / de / fr)
+node scripts/check-css.mjs                           # every CSS file imported into a layer, braces, & nesting
+node scripts/check-html.mjs                          # markup reaches the DOM only through mount()
 node --test scripts/compact-ride.test.mjs             # compact/full transition lifecycle
 node --test scripts/battery.test.mjs                   # battery state, lowest level, badge
+node --test scripts/html.test.mjs                      # html`` escaping, raw/Safe nesting, tHtml, mount
 node scripts/sync-version.mjs [x.y.z]                # print / set the app version
 ```
 
@@ -116,7 +129,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
   - The UI mutates `state` (the active profile) and calls `api.saveState()` → `save_profile`.
   - Rust-side changes (create/edit/switch/delete profile, sync) return a fresh `app_state` summary, which the UI applies with `applyAppState()`.
 - **The ZWO parser exists twice:** `zwo.rs` is authoritative (library scan, workout loading) and `ui/js/zwo.js` is a mirror used by the mock/dev server and some client helpers. If you change parsing, TSS or zone classification, change **both** and keep their outputs identical.
-- **Ride loop:** the `Ride` class in `app.js` ticks every 250 ms. It computes the target, sends ERG (deduplicated in JS and Rust), records 1 Hz samples, runs auto-pause, the countdown (`countdown()` in sound.js; `cueDir()` picks up / down / same with a 3 % FTP dead band) and controller actions. `coach()` fills the coach line in the Current segment panel (priority: .zwo text events > pacing > cadence > hard-segment cues; hysteresis and the 4 s minimum use wall-clock time in `this.cz`; `settings.coachHints` switches the automatic hints off). `finish()` → `save_activity` (FIT) → history → Garmin upload.
+- **Ride loop:** the `Ride` class in `app.js` ticks every 250 ms. It computes the target, sends ERG (deduplicated in JS and Rust), records 1 Hz samples, runs auto-pause, the countdown (`countdown()` in sound.js; `cueDir()` picks up / down / same with a 3 % FTP dead band) and controller actions. `coach()` fills the coach line in the Current segment panel (priority: .zwo text events > pacing > cadence > hard-segment cues; hysteresis and the 4 s minimum use wall-clock time in `this.cz`; `settings.coachHints` switches the automatic hints off). `finish()` → `save_activity` (FIT) → history → Garmin upload. `render()` runs every tick, so it never queries the DOM directly: `this.q(id)`, `this.qs(selector)` and `this.qsa(selector)` cache elements (and look up again when one was replaced), `setText()` / `setHtml(el, fragment)` write only changed values (setHtml must be the only writer of its element), and the next-segment card is described once and mounted into the full and the compact view.
 
 ## Data model (state.json v2)
 
@@ -159,13 +172,13 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 - **Tests:** every parser, encoder, protocol decoder and merge rule has unit tests next to the code (`#[cfg(test)] mod tests`). Add one for every bug fix.
 
 **JavaScript**
-- Plain ES modules, no build step, no dependencies. `$` / `$$` helpers, template strings, and `esc()` for **every** interpolated user or file value (XSS: workout names come from files).
-- **Views** are functions that render `#view` (`renderHome`, `renderPlan`, `renderWorkouts`, `renderTests`, `renderHistory`); `route()` picks one from the hash and `mode()`.
-- **Actions** use `data-act` attributes, handled by `bindActions(root)`. Menus use `menuBtn(items)` / `openMenu()` (a `<template>` holding `data-act` buttons).
-- **Modals:** `openModal(html, cls)`, `confirmDialog`, `choiceDialog`, `promptDialog`; `toast()` for feedback.
+- Plain ES modules, no build step, no dependencies. `$` / `$$` helpers. Markup is built with the `html` tagged template from `js/html.js`, which escapes **every** interpolated value (XSS: workout names come from files); `raw()` only for markup we generated (icons, `renderMarkdown()`, SVG profiles), `tHtml()` for translations inside element content, `tText()` for translations in attributes (title, aria-label, placeholder — never `tHtml` there), `mount(el, fragment)` to set `innerHTML`. Booleans render nothing; write `${n > 0 && …}`, not `${n && …}`. There are no plain-string markup builders left: `scripts/check-html.mjs` fails on any `innerHTML` / `outerHTML` write outside `mount()` (empty an element with `replaceChildren()`).
+- **Views** are functions that render `#view` (`renderHome`, `renderPlan`, `renderWorkouts`, `renderTests`, `renderHistory`) from small row/card builders (`workoutRow`, `planCard`, `testCard`, `historyRow`, …); `route()` picks one from the hash and `mode()`.
+- **Actions:** every clickable element has `data-act="name"` (arguments in other `data-*`). `bindActions(root, handlers)` delegates clicks: a handler from `handlers` (dialog- or screen-specific) wins, else the shared `VIEW_ACTIONS` map (`close` included). Dialogs call `bindActions(modal, {...})` after `openModal`; the ride screen dispatches `data-act` to `Ride.control()`. Don't reintroduce `data-a` / `data-c` or per-button `onclick`. Menus use `menuBtn(items)` / `openMenu()` (a `<template>` holding `data-act` buttons).
+- **Modals:** `openModal(fragment, cls)` (an `html` fragment; a plain string would show as text), `confirmDialog`, `choiceDialog`, `promptDialog`; `toast()` for feedback. Big dialogs are split: `openSettings` = one markup function per tab (`settingsRiderTab` …) + `bindSettingsFields` + `settingsActions`; the ride summary = `Ride.saveFit` / `recordTest` / `showSummary` with `summaryTest`, `summaryStats`, `summarySyncList`, `summaryNext`.
 - **Languages (English, German, French):** every user-visible string goes through `t('key', vars)` from `js/i18n/index.js` and lives in `en.js`, `de.js` **and** `fr.js` (run `node scripts/check-i18n.mjs`). Mirrors wozTools' `src/i18n/`, as plain modules instead of a React hook.
   - Keys are camelCase (`p.ramp.name`, `mac.files`, `tm.*` for test-workout messages); counts use `{ one, other }` with `vars.n` (Intl.PluralRules, so French 0 is singular).
-  - Values may contain our own markup (`<b>`, `<code>`, `&amp;`) for `innerHTML`. Strings for `confirmDialog`, `choiceDialog`, `toast()` and `textContent` are escaped/plain, so their values must be plain text. Pass file and rider values through `esc()` before they go into `vars` of an HTML string.
+  - Values may contain our own markup (`<b>`, `<code>`, `&amp;`) for `innerHTML`. Strings for `confirmDialog`, `choiceDialog`, `toast()` and `textContent` are escaped/plain, so their values must be plain text. In markup use `tHtml('key', vars)`, which escapes the vars (pass an `html` fragment for markup such as `<b>`); with plain `t()` in a legacy HTML string, pass file and rider values through `esc()` first. Never make `t()` itself escape: it also feeds plain-text APIs.
   - Never name a local variable `t` (it shadows the translator); use `el`, `x`, `th`, `ts`…
   - The language is per rider (`settings.language`, copied to new riders like the theme); without it the system language is used, falling back to English. `applyLanguage()` sets it and fills `data-i18n` / `data-i18n-title` / `data-i18n-aria` in index.html; switching in Settings → App redraws the app at once (the ride screen picks it up with the next ride). Dates and times use `fmtLocale()`.
   - Zone names (`ZONES[i].name` in render.js) and test protocol texts (`PROTOCOLS[i].name/about/…` in tests.js) are getters, so they always follow the current language. Test results already saved keep the detail labels of the language they were ridden in; built-in test names are re-translated via `testName()`.
@@ -175,6 +188,10 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 - **Dev URL parameters:** `?sim=1` starts simulated devices, `?speed=N` fast-forwards time (recordings stay 1 Hz), `?profile=…` skips "Who's riding?".
 
 **CSS / UI:** follow [DESIGN.md](DESIGN.md). Only token colours (`var(--…)`), no hard-coded colours except zone and brand colours. Every change must work in **light and dark**, from 900 px up to full screen (the optional Compact ride view supports 320 × 200).
+- **Where a rule goes (cascade layers):** reusable pieces in `css/components/`, screen-specific rules in `css/views/`; a later layer always wins, so a view overrides a component without raising specificity. A component file never names a view (no `.ride .btn` in `buttons.css`); put that in the view. New files need an `@import … layer(…)` line in `styles.css`. No unlayered CSS (it would beat every layer) and no `<style>` blocks.
+- **Nesting:** native CSS nesting, always with `&` (`& .child`, `&.mod`, `&:hover`), declarations before nested rules, and never nest under a selector list whose parts differ in specificity (`&` becomes `:is(…)`, which takes the highest one). Keep nesting shallow (≤ 3 levels).
+- **Order still matters inside a file** where media blocks adjust earlier rules (ride.css: short-window and ≥ 1401 px blocks stay below the rules they change).
+- **Engines:** layers and nesting need Safari 17+, current WebView2 and WebKitGTK ≥ 2.42. macOS 13 is the minimum (`minimumSystemVersion`, an owner decision; Safari 17 would also run on macOS 12). The OS minimum alone doesn't guarantee that (a macOS release ships with an older Safari until it is updated), so `checkEngine()` in app.js shows an "update your system" notice when the `--css-ok` marker from `base.css` is missing. Keep that marker and the check when touching base.css or boot.
 
 ## Testing changes
 

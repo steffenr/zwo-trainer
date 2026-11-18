@@ -1,0 +1,25 @@
+/* Small status pieces: progress bar, badge, week/day tag, zone tag, spinner and loading lines. */
+
+.pbar {
+  height: 6px; background: var(--track); border-radius: var(--r-pill); overflow: hidden; display: flex; margin-top: 12px;
+  & i { display: block; height: 100%; }
+  & .d { background: var(--accent); }
+  & .s { background: var(--line-strong); }
+  &.glide i { transition: width .6s cubic-bezier(.2, .8, .2, 1); }
+}
+
+.badge {
+  font-size: var(--fs-2xs); font-weight: 700; background: var(--accent); color: var(--accent-ink); padding: 2px 8px; border-radius: var(--r-tag); white-space: nowrap;
+  &.ok { background: var(--ok-soft); color: var(--ok); }
+  &.warn { background: var(--warn-soft); color: var(--warn); }
+  &.muted { background: var(--surface-3); color: var(--muted); }
+}
+/* week/day tag (W3 D2) */
+.wd { font-size: var(--fs-2xs); font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 2px 7px; border-radius: var(--r-tag); letter-spacing: .03em; text-transform: none; }
+/* zone tag "Z1–Z5"; --zc is the zone colour, text on a zone fill is black */
+.ztag { display: inline-grid; place-items: center; min-width: 26px; height: 18px; padding: 0 5px; border-radius: var(--r-tag); font-size: var(--fs-2xs); font-weight: 650; color: #000; background: var(--zc); }
+
+.spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading { padding: 40px; text-align: center; color: var(--muted); }
+.scanning { display: flex; align-items: center; gap: 10px; color: var(--muted); padding: 14px 4px; }

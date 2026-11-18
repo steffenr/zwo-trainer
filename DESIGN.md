@@ -1,6 +1,24 @@
 # DESIGN.md — zwoTrainer design system
 
-The visual and interaction rules for zwoTrainer. Everything lives in `ui/css/styles.css` (tokens on `:root`) and a few constants in `ui/js/render.js` / `ui/js/app.js`. Any new screen or component must follow this document; if you introduce a new pattern, document it here.
+The visual and interaction rules for zwoTrainer. The styles live in `ui/css/` (tokens on `:root` in `tokens.css`, see [CSS structure](#css-structure)) plus a few constants in `ui/js/render.js` / `ui/js/app.js`. Any new screen or component must follow this document; if you introduce a new pattern, document it here.
+
+## CSS structure
+
+Plain CSS, no build step. `styles.css` declares the cascade layers and imports the files. A later layer always wins, whatever the specificity:
+
+| Layer | Files | Holds |
+|---|---|---|
+| `tokens` | `tokens.css` | colour, font, radius and type-scale tokens; dark overrides |
+| `base` | `base.css` | elements, native inputs and their focus/invalid states, text helpers (`.muted`, `.small`, `.eyebrow`, `.meta`, `.k`, `.ic`), shared keyframes |
+| `components` | `components/*.css`, one family per file | `buttons` (button, icon button, link, segmented control, tabs, star/⋯) · `card` (card, hero, card header row, section head, back link) · `indicators` (progress bar, badge, week/day tag, zone tag, spinner) · `dialog` · `popover` (+ ⋯ menus) · `notice` (toast, update card) · `list` (history-style table, sync list, service logo) · `forms` · `avatar` · `charts` (chart, mini profile, zone bar, gauge, ring) · `markdown` |
+| `views` | `views/*.css` | one file per screen or dialog: top bar, home, plan + workouts lists, history, FTP tests, dialogs, settings, ride, compact ride |
+| `utilities` | `utilities.css` | `[hidden]`, forced text colours, the global "Reduce motion" switch |
+
+- **Component or view?** If it appears on more than one screen, it is a component. A component file never refers to a view (`check-css.mjs` fails on `body.riding`, `.ride`, `dialog.settings` … in `components/`); a view adapts a component in its own file (e.g. `.ride-title .badge` lives in `views/ride.css`). Screen-only pieces stay in their view even when they look generic (zone limits and folder row in `settings.css`, overlay toggles in `ride.css`).
+- **Markup helpers mirror the CSS:** `ui/js/components/<family>.js` renders what `css/components/<family>.css` styles (e.g. `badge()` in `indicators.js`, `dialogHead()` in `dialog.js`, `segCtl()` in `buttons.js`). Use the helper instead of writing the markup again; they build with `html```, so text is escaped. New component: add both files.
+- **No atomic-design folders:** at this size atoms and molecules are a few lines each; two levels (components, views) plus families per file are easier to find and to decide.
+- **Nesting** groups a component's parts, states and modifiers in one block (`.btn { &:hover {…} &.primary {…} }`), and its motion next to it (`@media (prefers-reduced-motion: no-preference)`). Always write `&`.
+- **Motion:** single-use `@keyframes` sit next to their component; shared ones (`mo-fade`, `mo-fade-out`, `mo-settle`, `mo-pop-in`) are in `base.css`.
 
 ## Principles
 
@@ -55,7 +73,7 @@ Always use tokens (`var(--…)`), never raw hex in components. Dark values apply
 ### Brand and third-party colours
 
 - The accent cyan is zwoTrainer's brand colour.
-- Third-party colours appear only on that service's own control: Garmin `#1d1d1f`.
+- Third-party colours appear only on that service's own control: Garmin `#1d1d1f` (button and logo tile flip to light in dark mode via `--garmin-bg` / `--garmin-ink`). The favourite star uses `--star`.
 - Avatar colours (user choice): `#338cff #59bf59 #ff6639 #b47cff #00a3c4 #e0a800 #ff4d8d #7f7f7f` or any custom colour.
 
 ## Typography
@@ -73,12 +91,12 @@ Always use tokens (`var(--…)`), never raw hex in components. Dark values apply
 | `h1` | 26 px, 650 |
 | `h2` | 19 px |
 | `h3` | 15 px |
-| meta | 13.5 px, muted |
-| `.small` | 13 px |
-| `.k` labels | 11 px, uppercase, `letter-spacing: .08em`, 600, muted |
-| `.eyebrow` | 11.5 px, uppercase, `.09em` |
+| meta | 14 px (`--fs-md`), muted |
+| `.small` | 13 px (`--fs-sm`) |
+| `.k` labels | 11 px (`--fs-2xs`), uppercase, `letter-spacing: .08em`, 600, muted |
+| `.eyebrow` | 11 px (`--fs-2xs`), uppercase, `.09em` |
 
-Headings use `letter-spacing: -0.01em`.
+UI text uses the type tokens only: `--fs-2xs` 11 · `--fs-xs` 12 · `--fs-sm` 13 · `--fs-md` 14 · `--fs-base` 15 · `--fs-lg` 17. Headings (`h1` 26, `h2` 19) and big readouts keep their own sizes. No half-pixel sizes. Headings use `letter-spacing: -0.01em`.
 
 **Ride readouts:** base sizes at 1400 px width, scaling linearly with `vw` above that, capped at 1.6× (full screen). Use the pattern `clamp(BASEpx, BASE/14 vw, 1.6·BASEpx)`:
 
@@ -100,7 +118,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 | Spacing (multiples of 2) | 4 · 6 · 8 · 10 · 12 · 14 · 16 · 20 · 24 · 32 px |
 | Page | `.view` max-width 1120 px, padding 24 px |
 | Sections | `.section` margin-top 32 px |
-| Radius | dialogs 18 px · cards/panels 14 px (`--radius`) · popovers 12 px · buttons 10 px · small buttons 8 px · tags 5–6 px · pills 999 px · avatars and round buttons 50 % |
+| Radius (tokens) | `--r-xl` 18 dialogs · `--radius` 14 cards/panels · `--r-lg` 12 popovers, inset boxes, rows, toast · `--r-md` 10 buttons, inputs · `--r-sm` 8 small buttons, menu items · `--r-tag` 6 badges, tags, code · `--r-2xs` 3 swatches · `--r-pill` · 50 % avatars and round buttons. Nested corners: inner = outer − padding (`calc(var(--r-md) - 3px)` in the segmented control). |
 | Elevation | `--shadow` is a subtle 1 px shadow on cards (none in dark) · `--shadow-lg` for dialogs, popovers and toasts · dark mode relies on borders, not shadows |
 
 **Z-index layers:**
@@ -219,7 +237,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 | **Platform card** `.svc.svc-ext` | compact service card under the "MORE PLATFORMS" group label: neutral letter tile (`.svc-logo.ext`, no brand colours) · name and status ("Connected as …", "Not connected", "Manual import") · one action. Body: API-key field, upload-mode control, or "After a ride: Off / Show import button", plus a one-line hint. Connected cards get an ok-tinted border. |
 | **Sync list** `.sync-list` | ride summary: a bordered list with one 44 px row per destination (`.sl-row`: 26 px logo · name · state/action on the right). Garmin first, then Intervals.icu / COROS when enabled, then "Ride file · Save .fit". States: *Upload*, *Import…*, spinner "Uploading…", "Uploaded ✓" (link), "Failed · Retry". |
 | **Service card** `.svc` | bordered block in Settings → Connections: 34 px logo tile · name and status · action button, then the options and a short muted explanation. |
-| **Inputs** | `--surface`, 1 px `--line-strong`, radius 9, padding 8 × 10, 14 px. Labels sit above in `--text-2` 13 px. |
+| **Inputs** | `--surface`, 1 px `--line-strong`, radius 10, padding 8 × 12, 14 px; focus: `--accent` border + 3 px `--accent-soft` ring; invalid: `--danger` border. One style everywhere (`base.css`), views only set width. Labels sit above in `--text-2` 13 px. |
 
 ## Icons
 
@@ -262,6 +280,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 ## Checklist for UI changes
 
 - [ ] Only tokens and zone colours; no new raw colours.
+- [ ] New CSS in the right layer and file (component vs. view, see [CSS structure](#css-structure)).
 - [ ] Checked in light **and** dark.
 - [ ] Checked at 1400 px, at full screen (2560 px) and at the minimum window (900 × 640).
 - [ ] Top bar unchanged; secondary and destructive actions in "⋯" menus.

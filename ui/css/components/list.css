@@ -1,0 +1,37 @@
+/* Bordered lists: the table-like list (ride history, test history), the compact sync list (ride
+   summary, settings) and the service logo tile used in both. */
+
+/* table list: header row + rows on a shared grid; the view sets its columns (.trow on FTP Tests) */
+.hlist { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.hrow {
+  display: grid; grid-template-columns: 110px 1fr 80px 80px 80px 260px; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line);
+  &:first-child { border-top: none; }
+}
+.hhead { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; background: var(--surface-2); }
+.hdate, .htitle { display: flex; flex-direction: column; min-width: 0; }
+.hdate small { color: var(--muted); }
+.htitle b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hstat { text-align: right; font-variant-numeric: tabular-nums; }
+.hact {
+  display: flex; gap: 6px; justify-content: flex-end; align-items: center;
+  & .menu-wrap .more { width: 28px; height: 28px; }
+}
+
+/* sync list: one 44 px row per destination (logo · name · state/action) */
+.sync-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-lg); margin-bottom: 14px; overflow: hidden; }
+.sl-row {
+  display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 10px; padding: 8px 12px; min-height: 44px;
+  & + .sl-row { border-top: 1px solid var(--line); }
+  &.sl-file { grid-template-columns: 1fr auto; }
+}
+.sl-name { font-weight: 600; font-size: var(--fs-md); }
+.sl-state { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); }
+
+/* service logo tile */
+.svc-logo {
+  width: 34px; height: 34px; border-radius: var(--r-md); display: grid; place-items: center; color: #fff; font: 800 var(--fs-lg) var(--font); flex: none;
+  &.sm { width: 26px; height: 26px; border-radius: var(--r-sm); font-size: var(--fs-2xs); }
+  &.garmin { background: var(--garmin-bg); color: var(--garmin-ink); outline: 1px solid var(--line-strong); }
+  &.sync { background: var(--accent); color: #fff; }
+  &.ext { background: var(--surface-3); color: var(--text); font-size: var(--fs-sm); font-weight: 800; letter-spacing: -.02em; outline: 1px solid var(--line-strong); }
+}

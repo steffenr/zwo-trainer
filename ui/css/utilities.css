@@ -1,0 +1,10 @@
+/* Last word: state helpers that must win over every component and view. */
+
+[hidden] { display: none !important; }
+.warn-text { color: var(--danger) !important; }
+.danger-text { color: var(--danger) !important; }
+
+/* the system's "Reduce motion": no animations or transitions anywhere */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
+}

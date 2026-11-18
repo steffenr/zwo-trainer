@@ -1,0 +1,24 @@
+/* Transient and persistent notices: toast (bottom centre) and the update card (bottom right). */
+
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: var(--r-lg); z-index: 100; box-shadow: var(--shadow-lg); font-weight: 550; }
+
+.update-card {
+  position: fixed; right: 24px; bottom: 24px; z-index: 90; width: 340px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 14px;
+  & .uc-head { display: flex; gap: 10px; align-items: flex-start; }
+  & .uc-head b { display: block; font-size: var(--fs-md); }
+  & .uc-head small { font-size: var(--fs-sm); }
+  & .uc-ico { flex: none; width: 30px; height: 30px; border-radius: var(--r-sm); display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+  & .uc-actions { display: flex; gap: 6px; align-items: center; margin-top: 12px; }
+  & .uc-actions .grow { flex: 1; }
+  & .uc-bar { margin-top: 12px; }
+  & .uc-bar i { transition: width .2s; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .toast.in { animation: mo-toast-in .22s cubic-bezier(.2, .8, .2, 1); }
+  .update-card.in { animation: mo-pop-in .2s cubic-bezier(.2, .8, .2, 1); }
+  .toast.out { animation: mo-toast-out .18s ease-in forwards; }
+}
+@keyframes mo-toast-in { from { opacity: 0; transform: translate(-50%, 14px); } }
+@keyframes mo-toast-out { to { opacity: 0; transform: translate(-50%, 10px); } }

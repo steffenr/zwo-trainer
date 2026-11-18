@@ -1,0 +1,87 @@
+/* Settings dialog (tabs: Rider · Riding · Connections · App) and the connection cards in it. */
+
+/* fixed size: header, tabs and footer stay put, only the pane scrolls (so the dialog never jumps between tabs) */
+dialog.settings {
+  width: min(540px, calc(100vw - 32px)); height: min(720px, calc(100vh - 48px)); overflow: hidden;
+  & .modal-body { height: 100%; display: flex; flex-direction: column; padding: 0; }
+  & .pv-head { padding: 22px 24px 0; align-items: center; }
+  & .tabs { margin: 12px 24px 0; }
+}
+.set-panes { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 24px 24px; scrollbar-gutter: stable; }
+.set-foot { margin: 0; padding: 12px 24px; border-top: 1px solid var(--line); justify-content: space-between; flex-wrap: nowrap; }
+.set-status {
+  display: inline-flex; align-items: center; min-width: 0;
+  & .ok-text { display: inline-flex; align-items: center; gap: 5px; }
+}
+.tab-pane {
+  & h3 { margin-top: 22px; }
+  & h3 + .form, & h3 + .folder-row { margin-top: 10px; }
+  & .form { margin-bottom: 4px; }
+}
+.z5-lim { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.dev-sum {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 10px;
+  & p { margin: 0; min-width: 0; }
+}
+.about-links { margin: 6px 0 0; color: var(--muted); }
+
+/* Rider → FTP zone limits */
+.zone-form {
+  display: flex; flex-direction: column; gap: 8px; margin: 12px 0 16px;
+  & .field-err { margin: 2px 0 0; }
+}
+.zf {
+  display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 10px;
+  & i { width: 14px; height: 14px; border-radius: var(--r-2xs); }
+  & input { width: 70px; text-align: right; padding: 6px 10px; }
+  & span:last-child { color: var(--muted); display: flex; align-items: center; gap: 6px; }
+}
+/* App → workouts folder / Garmin folder */
+.folder-row {
+  display: flex; align-items: center; gap: 8px; margin: 10px 0 4px;
+  & code { flex: 1; padding: 6px 8px; }
+}
+
+/* ---------- connections: Garmin, Intervals.icu, COROS, profile sync ---------- */
+.sync-opt small, .svc-head small { font-size: var(--fs-sm); }
+.svc {
+  border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px; margin-top: 14px;
+  & .check { margin-top: 12px; }
+  & p { margin: 10px 0 0; }
+}
+.svc-head {
+  display: flex; align-items: center; gap: 12px;
+  & > div { flex: 1; display: flex; flex-direction: column; }
+}
+.svc-group { margin: 22px 0 -4px; font-size: var(--fs-xs); font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.svc-ext {
+  padding: 12px 14px; margin-top: 10px;
+  & > p, & > .cred, & > .sync-mode { margin: 10px 0 0; }
+  &.on { border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+}
+.steps {
+  margin: 12px 0; padding-left: 20px; color: var(--text-2);
+  & li { margin: 4px 0; }
+}
+/* API key + Connect */
+.cred {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px;
+  & input { width: 100%; min-width: 0; }
+}
+.svc-ext .cred { grid-template-columns: minmax(0, 1fr) auto; }
+.sync-mode { margin-top: 12px; }
+
+/* profile sync: provider choice */
+.sync-opts { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 8px; }
+.sync-opt {
+  display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: var(--r-md); border: 1px solid var(--line); cursor: pointer;
+  &:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  &.na { opacity: .55; cursor: default; }
+  & input { margin-top: 3px; accent-color: var(--accent); }
+  & span { display: flex; flex-direction: column; min-width: 0; }
+  & small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tab-pane:not([hidden]) { animation: mo-fade .18s ease-out; }
+}
