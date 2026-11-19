@@ -10,10 +10,10 @@
 <body>
   <header class="topbar" data-tauri-drag-region>
     <a class="brand" href="#/"><img src="icon.svg" alt="" width="26" height="26"><span>zwo<b>Trainer</b></span></a>
-    <div class="seg-ctl mode-switch" id="mode-switch" role="tablist" data-i18n-aria="mode" aria-label="Mode">
-      <button data-mode="plans" role="tab" data-i18n="plans">Plans</button>
-      <button data-mode="workouts" role="tab" data-i18n="modeWorkouts">Workouts</button>
-      <button data-mode="tests" role="tab" data-i18n="modeTests">FTP Tests</button>
+    <div class="seg-ctl mode-switch" id="mode-switch" role="group" data-i18n-aria="mode" aria-label="Mode">
+      <button data-mode="plans" aria-pressed="false" data-i18n="plans">Plans</button>
+      <button data-mode="workouts" aria-pressed="false" data-i18n="modeWorkouts">Workouts</button>
+      <button data-mode="tests" aria-pressed="false" data-i18n="modeTests">FTP Tests</button>
     </div>
     <div class="ride-title" id="ride-title" data-tauri-drag-region hidden></div>
     <div class="topbar-right" data-tauri-drag-region>

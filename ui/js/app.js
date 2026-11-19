@@ -410,7 +410,8 @@ function renderProfileChip() {
 
 function renderModeSwitch() {
   const m = mode();
-  $$('#mode-switch button').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
+  // toggle buttons in a labelled group (not tabs: there is no tab panel, each click switches the whole view)
+  $$('#mode-switch button').forEach((b) => { const on = b.dataset.mode === m; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
 }
 
 async function setMode(m) {
