@@ -3,7 +3,7 @@
 //   (renderHome / renderPlan / renderWorkouts / renderTests / renderHistory) · actions (bindActions,
 //   ⋯ menus) · dialogs (preview, workouts folder, devices) · other platforms and uploads.
 // Elsewhere: shared state, DOM helpers, dialogs and toasts in ./core.js; the ride screen and summary in
-// ./ride/ride.js; Settings in ./settings.js; profile sync in ./sync.js; in-app updates in ./updates.js.
+// ./ride/ride.js; Settings in ./views/settings.js; profile sync in ./sync.js; in-app updates in ./updates.js.
 // Markup: html`` from ./html.js (auto-escaping) and the helpers in ./components/ for shared pieces;
 // markup reaches the DOM only through mount() (scripts/check-html.mjs). Rust is reached only through
 // invoke() / listen() (ble.js).
@@ -27,11 +27,11 @@ import {
   modal, openModal, closeModal, confirmDialog, toast, rovingKey,
 } from './core.js';
 import { startRide, startTest } from './ride/ride.js';
-import { openSettings } from './settings.js';
+import { openSettings } from './views/settings.js';
 import { setSyncCfg, syncOn, scheduleSync, runSync } from './sync.js';
 import { initUpdates } from './updates.js';
 
-// Used by ride/ride.js, settings.js and sync.js (which import from this module in turn; see the note there).
+// Used by ride/ride.js, views/settings.js and sync.js (which import from this module in turn; see the note there).
 export {
   api, route, bindActions, openMenu, pointerFocused, weekDay, segmentText, markEntry, applyFtp,
   syncMode, svcMode, svcRoute, SVC_LOGO, refreshServices, uploadToService, manualImport,

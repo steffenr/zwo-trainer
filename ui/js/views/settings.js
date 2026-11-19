@@ -6,23 +6,23 @@
 // Import cycle with app.js (app.js opens Settings; this module calls app-level helpers such as route(),
 // applyTheme() and the sync / service functions). Safe because nothing from app.js is used while this
 // module is evaluated, only inside functions that run after boot.
-import { ZONES } from './render.js';
-import { invoke } from './ble.js';
-import { t, LOCALES, systemLocale, coerceLocale, fmtLocale } from './i18n/index.js';
-import { html, raw, tHtml, tText, mount } from './html.js';
-import { IC } from './components/icons.js';
-import { dialogHead } from './components/dialog.js';
-import { segRow, selectSeg } from './components/buttons.js';
+import { ZONES } from '../render.js';
+import { invoke } from '../ble.js';
+import { t, LOCALES, systemLocale, coerceLocale, fmtLocale } from '../i18n/index.js';
+import { html, raw, tHtml, tText, mount } from '../html.js';
+import { IC } from '../components/icons.js';
+import { dialogHead } from '../components/dialog.js';
+import { segRow, selectSeg } from '../components/buttons.js';
 import {
   PLAT, $, $$, library, state, setState, ride, trainer, shifting, ftp, maxHr, weight,
   modal, onDialogEnd, openModal, closeModal, confirmDialog, toast,
-} from './core.js';
+} from '../core.js';
 import {
   api, route, bindActions, openExternal, applyTheme, applyLanguage, renderProfileChip, THEME_LABEL, devicesMenu,
   pickDir, loadLibrary, refreshServices, svcCache, setSvcCache, svcMode, syncMode, SVC_LOGO,
-} from './app.js';
-import { syncOn, syncCfg, setSyncCfg, agoText, syncLabel, runSync } from './sync.js';
-import { updPrefs, setUpdPrefs, checkUpdate } from './updates.js';
+} from '../app.js';
+import { syncOn, syncCfg, setSyncCfg, agoText, syncLabel, runSync } from '../sync.js';
+import { updPrefs, setUpdPrefs, checkUpdate } from '../updates.js';
 
 export { openSettings };
 
