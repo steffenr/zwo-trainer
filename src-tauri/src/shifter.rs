@@ -135,18 +135,26 @@ pub fn proto_varints(b: &[u8]) -> Vec<(u32, u64)> {
     while i < b.len() {
         let Some(key) = varint(&mut i) else { break };
         let (field, wire) = ((key >> 3) as u32, key & 7);
-        match wire {
+        // lengths come from the device: checked, so a huge one can't wrap `i` back to the start
+        let skip = match wire {
             0 => match varint(&mut i) {
-                Some(v) => out.push((field, v)),
+                Some(v) => {
+                    out.push((field, v));
+                    continue;
+                }
                 None => break,
             },
-            1 => i += 8,
-            2 => match varint(&mut i) {
-                Some(len) => i += len as usize,
+            1 => 8,
+            2 => match varint(&mut i).and_then(|len| usize::try_from(len).ok()) {
+                Some(len) => len,
                 None => break,
             },
-            5 => i += 4,
+            5 => 4,
             _ => break,
+        };
+        match i.checked_add(skip) {
+            Some(next) => i = next,
+            None => break,
         }
     }
     out
@@ -504,5 +512,29 @@ mod tests {
     fn non_button() {
         assert_eq!(decode(&[0x19, 0x08, 0x64]), None);
         assert_eq!(decode(&[]), None);
+    }
+
+    #[test]
+    fn malformed_messages_terminate() {
+        // length-delimited field whose length wraps the index back to 0 (used to spin forever)
+        let mut wrap = vec![0x0a, 0xF5];
+        wrap.extend([0xFF; 8]);
+        wrap.push(0x01);
+        assert_eq!(proto_varints(&wrap), vec![]);
+        let mut msg = vec![0x23];
+        msg.extend(&wrap);
+        assert_eq!(decode(&msg), None);
+        // maximal length, then a valid field that must not be read
+        let mut max = vec![0x0a];
+        max.extend([0xFF; 9]);
+        max.extend([0x01, 0x08, 0x00]);
+        assert_eq!(proto_varints(&max), vec![]);
+        // truncated inputs: varint without end, fixed64 / fixed32 / bytes past the end
+        assert_eq!(proto_varints(&[0x08, 0x80]), vec![]);
+        assert_eq!(proto_varints(&[0x08, 0x01, 0x09, 0x01]), vec![(1, 1)]);
+        assert_eq!(proto_varints(&[0x0d, 0x01, 0x10, 0x02]), vec![]);
+        assert_eq!(proto_varints(&[0x0a, 0x05, 0x01]), vec![]);
+        // over-long varint (more than 64 bits)
+        assert_eq!(proto_varints(&[0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01]), vec![]);
     }
 }
