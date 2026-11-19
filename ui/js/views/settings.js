@@ -18,9 +18,10 @@ import {
   confirmDialog, toast,
 } from '../core.js';
 import {
-  api, route, applyTheme, applyLanguage, renderProfileChip, THEME_LABEL, devicesMenu, pickDir, loadLibrary,
+  api, route, applyTheme, applyLanguage, renderProfileChip, THEME_LABEL, pickDir, loadLibrary,
 } from '../app.js';
 import { openExternal, bindActions } from '../actions.js';
+import { devicesMenu } from '../devices.js';
 import { svcMode, SVC_LOGO, syncMode, refreshServices, setSvcCache, svcCache } from '../connections.js';
 import { syncOn, syncCfg, setSyncCfg, agoText, syncLabel, runSync } from '../sync.js';
 import { updPrefs, setUpdPrefs, checkUpdate } from '../updates.js';
