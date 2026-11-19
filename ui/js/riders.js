@@ -63,7 +63,10 @@ function whoIsRiding() {
       const b = e.target.closest('[data-id]');
       if (!b) return;
       closeModal();
-      if (b.dataset.id !== state.id) applyAppState(await invoke('switch_profile', { id: b.dataset.id }));
+      // start-up waits for this: a failed switch must not leave the app without a view
+      try {
+        if (b.dataset.id !== state.id) applyAppState(await invoke('switch_profile', { id: b.dataset.id }));
+      } catch (err) { toast(String(err)); }
       resolve();
     };
   });
