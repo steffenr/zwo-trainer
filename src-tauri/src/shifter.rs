@@ -296,16 +296,26 @@ impl Controllers {
         let name = ty.as_ref().map(|(t, l)| device_name(Some(*t), if l.is_empty() { "Zwift controller" } else { l })).unwrap_or_else(|| "Zwift controller".into());
 
         tokio::time::timeout(Duration::from_secs(15), periph.connect()).await.map_err(|_| "Connection timed out")?.map_err(|e| e.to_string())?;
+        // don't keep the link open when the setup fails
+        let res = self.setup(periph.clone(), id, name).await;
+        if res.is_err() {
+            let _ = periph.disconnect().await;
+        }
+        res
+    }
+
+    /// Everything after the link is up. On `Err` the caller closes the link.
+    async fn setup(self: &Arc<Self>, periph: Peripheral, id: &str, name: String) -> Result<Value, String> {
         periph.discover_services().await.map_err(|e| e.to_string())?;
         let services: Vec<Uuid> = periph.services().iter().map(|s| s.uuid).collect();
         if protocol(&services, false) == Some(Protocol::Obc) {
-            // don't keep the link open when the setup fails
-            let res = self.connect_obc(periph.clone(), id).await;
-            if res.is_err() {
-                let _ = periph.disconnect().await;
-            }
-            return res;
+            return self.connect_obc(periph, id).await;
         }
+        self.connect_zwift(periph, id, name).await
+    }
+
+    /// Zwift Ride / Click / Play: subscribe, RideOn handshake, emit newly pressed buttons.
+    async fn connect_zwift(self: &Arc<Self>, periph: Peripheral, id: &str, name: String) -> Result<Value, String> {
         let chars = periph.characteristics();
         let ch = |u: Uuid| chars.iter().find(|c| c.uuid == u).cloned();
         let async_c: Characteristic = ch(ASYNC).ok_or("Not a Zwift controller (service missing)")?;
@@ -333,7 +343,6 @@ impl Controllers {
                 }
             }
             if !ok {
-                let _ = periph.disconnect().await;
                 return Err(format!("Handshake failed: {last} (sync RX properties {:?})", rx.properties));
             }
         }
