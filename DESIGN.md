@@ -46,13 +46,14 @@ Always use tokens (`var(--…)`), never raw hex in components. Dark values apply
 | `--text` | `#1f2328` | `#f2f2f3` | primary text |
 | `--text-2` | `#555555` | `#cccccc` | secondary text |
 | `--muted` | `#646b75` | `#85858d` | labels, meta, placeholders, hints (≥ 4.5:1 on `--surface` and `--surface-2`) |
-| `--accent` | `#00a3c4` | `#1cc4e6` | primary buttons, links, selection, progress |
+| `--accent` | `#007690` | `#1cc4e6` | primary buttons, links, accent text, selection, progress, focus ring. Light: white on it 5.26:1, on `--surface` 5.26, `--surface-2` 4.86, `--accent-soft` 4.57. Dark: `--accent-ink` on it 9.12:1, on `--surface` 9.45 |
+| `--accent-hover` | `#00657b` | `#44d2ee` | hover of accent fills (light: white on it 6.67:1) |
 | `--accent-soft` | 10 % accent | 14 % accent | selected backgrounds |
 | `--ok` / `--ok-soft` | `#2e9e4f` | `#4cd07a` | connected, success, ERG on |
 | `--warn` / `--warn-soft` | `#b7791f` | `#f2c14e` | connecting, ERG off, changed intensity |
 | `--danger` | `#e0352b` | `#ff5a4f` | destructive text and buttons |
 | `--pos`, `--trace`, `--ftp` | text colour | white | chart position line, power trace, FTP line |
-| `--done` | accent | accent | completed part of the workout |
+| `--done` | `#00a3c4` (brand cyan) | accent | completed part of the workout; graphic only, never text |
 | `--cad` / `--hrline` | `#8b3dff` / `#e0004d` | `#b98bff` / `#ff4d7d` | cadence and heart-rate traces |
 
 ### Zone colours (fixed; identical in both themes)
@@ -72,7 +73,7 @@ Always use tokens (`var(--…)`), never raw hex in components. Dark values apply
 
 ### Brand and third-party colours
 
-- The accent cyan is zwoTrainer's brand colour.
+- The cyan is zwoTrainer's brand colour. The light theme uses a deeper teal-cyan for `--accent` (`#007690`) so text and white labels on it reach 4.5:1; the bright brand cyan `#00a3c4` stays for non-text graphics (`--done`) and the dark theme's `#1cc4e6`. Don't lighten the light accent again: white on `#00a3c4` is only 2.98:1.
 - Third-party colours appear only on that service's own control: Garmin `#1d1d1f` (button and logo tile flip to light in dark mode via `--garmin-bg` / `--garmin-ink`). The favourite star uses `--star`.
 - Avatar colours (user choice): `#338cff #59bf59 #ff6639 #b47cff #00a3c4 #e0a800 #ff4d8d #7f7f7f` or any custom colour.
 
@@ -273,7 +274,8 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
   - Icon-only buttons need a `title` and an `aria-label`.
   - Status is never shown by colour alone: dots are paired with text in the devices menu and tooltips.
   - Contrast is ≥ 4.5:1 for text (use the zone *ink* tokens for coloured text).
-  - Everything should be reachable by keyboard, and rows are focusable (`tabindex="0"`, Enter opens). Controls styled with `all: unset` need their own `:focus-visible` outline (2 px `--accent`, offset 2).
+  - Everything should be reachable by keyboard, and rows are focusable (`tabindex="0"`, Enter opens). Keyboard focus is one shared rule in `utilities.css` (`:focus-visible` on buttons, links, `[tabindex]`, `summary`, `[role=…]` → 2 px `--accent` outline, offset 2; inset −2 inside popovers), so `all: unset` controls get it too. It sits in the last layer on purpose; don't remove focus outlines in a view (`outline: none` there has no effect).
+  - Popover menus (`popoverOpen()` in app.js): opening focuses the first item, ↑/↓/Home/End move, Esc or Tab closes and returns focus to the anchor, the anchor carries `aria-haspopup` / `aria-expanded`. While a popover is open the ride shortcuts are off, so Esc never stops the workout.
   - Every input has an accessible name: a `<label>`, or an `aria-label` when the visible text isn't a label (zone limits, the two gear-range fields).
   - Text is at least 12 px.
 

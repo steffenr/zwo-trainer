@@ -29,6 +29,12 @@ const num = (v, d = null) => {
   return Number.isFinite(n) ? n : d;
 };
 
+// Same limits as zwo.rs: one element ≤ a day, IntervalsT ≤ 1000 repeats, a workout ≤ 48 h.
+const MAX_ELEMENT_SECS = 86400;
+const MAX_REPS = 1000;
+const MAX_WORKOUT_SECS = 2 * 86400;
+const secs = (v) => Math.min(MAX_ELEMENT_SECS, Math.max(0, Math.round(num(v, 0))));
+
 // Some third-party files store power in watts-ish or percent; Zwift uses fractions.
 const frac = (v) => {
   const n = num(v);
@@ -70,8 +76,9 @@ export function parseZwo(xml) {
   const push = (seg, texts) => {
     seg.start = t;
     seg.texts = texts.filter((x) => x.t < seg.duration);
-    segments.push(seg);
     t += seg.duration;
+    if (t > MAX_WORKOUT_SECS) throw new Error('Workout is longer than 48 hours');
+    segments.push(seg);
   };
 
   while ((m = elRe.exec(workoutBody))) {
@@ -88,7 +95,7 @@ export function parseZwo(xml) {
       continue;
     }
 
-    const dur = Math.round(num(a.duration, 0));
+    const dur = secs(a.duration);
     block += 1;
 
     switch (tag) {
@@ -110,9 +117,9 @@ export function parseZwo(xml) {
         break;
       }
       case 'intervalst': {
-        const reps = Math.max(1, Math.round(num(a.repeat, 1)));
-        const onD = Math.round(num(a.onduration, 0));
-        const offD = Math.round(num(a.offduration, 0));
+        const reps = Math.min(MAX_REPS, Math.max(1, Math.round(num(a.repeat, 1))));
+        const onD = secs(a.onduration);
+        const offD = secs(a.offduration);
         const onP = frac(a.onpower ?? a.poweronhigh ?? a.poweronlow);
         const offP = frac(a.offpower ?? a.poweroffhigh ?? a.powerofflow);
         const onCad = cadenceOf(a);

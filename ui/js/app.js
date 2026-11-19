@@ -592,9 +592,7 @@ function devicesMenu(anchor) {
   const r = anchor.getBoundingClientRect();
   pop.style.top = `${r.bottom + 8}px`;
   pop.style.left = `${Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r.right - pop.offsetWidth))}px`;
-  const close = () => { pop.remove(); document.removeEventListener('click', outside, true); };
-  const outside = (e) => { if (!pop.contains(e.target) && !anchor.contains(e.target)) close(); };
-  setTimeout(() => document.addEventListener('click', outside, true));
+  const close = popoverOpen(pop, anchor);
   pop.onclick = (e) => {
     // retry keeps the popover open, so the rows show "Connecting…" and then the result
     if (e.target.closest('[data-retry]')) return connectSaved(retryable());
@@ -1312,8 +1310,46 @@ function refreshView() {
   window.scrollTo(0, y);
 }
 
-/** A quiet "⋯" button whose items (regular data-act buttons) open in a popover. */
+/** Shared behaviour of every popover (#popover): the first item gets focus, ↑/↓/Home/End move between
+ *  items, Esc or Tab closes it and returns focus to the anchor, a click outside closes it, and the anchor
+ *  carries aria-haspopup / aria-expanded. Keys are caught on document in the capture phase, so the
+ *  ride's shortcuts (Esc = stop) never see them; Ride.onKey also ignores keys while a popover is open.
+ *  Removing the popover in any other way (opening another one) also cleans up. Returns close(refocus). */
+function popoverOpen(pop, anchor) {
+  const items = () => [...pop.querySelectorAll('button:not([disabled]), a[href]')];
+  anchor?.setAttribute('aria-haspopup', 'true');
+  anchor?.setAttribute('aria-expanded', 'true');
+  let closed = false;
+  const close = (refocus = false) => {
+    if (closed) return;
+    closed = true;
+    obs.disconnect();
+    pop.remove();
+    document.removeEventListener('click', outside, true);
+    document.removeEventListener('keydown', key, true);
+    anchor?.setAttribute('aria-expanded', 'false');
+    if (refocus && anchor?.isConnected) anchor.focus();
+  };
+  const outside = (e) => { if (!pop.contains(e.target) && !anchor?.contains(e.target)) close(); };
+  const key = (e) => {
+    if (!pop.isConnected) return close();
+    if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); return close(true); }
+    const list = items();
+    const i = list.indexOf(document.activeElement);
+    const to = { ArrowDown: i + 1, ArrowUp: i < 0 ? -1 : i - 1, Home: 0, End: -1 }[e.key];
+    if (to == null || !list.length) return;
+    e.preventDefault(); e.stopPropagation();
+    list[(to + list.length) % list.length].focus();
+  };
+  const obs = new MutationObserver(() => { if (!pop.isConnected) close(); });
+  obs.observe(document.body, { childList: true });
+  setTimeout(() => { if (!closed) document.addEventListener('click', outside, true); });
+  document.addEventListener('keydown', key, true);
+  items()[0]?.focus({ preventScroll: true });
+  return close;
+}
 
+/** A quiet "⋯" button whose items (regular data-act buttons) open in a popover. */
 function openMenu(anchor) {
   $('#popover')?.remove();
   const tpl = anchor.parentElement.querySelector('template');
@@ -1325,9 +1361,7 @@ function openMenu(anchor) {
   document.body.appendChild(pop);
   pop.style.top = `${Math.min(r.bottom + 6, window.innerHeight - pop.offsetHeight - 8)}px`;
   pop.style.left = `${Math.max(8, r.right - pop.offsetWidth)}px`;
-  const close = () => { pop.remove(); document.removeEventListener('click', outside, true); };
-  const outside = (e) => { if (!pop.contains(e.target)) close(); };
-  setTimeout(() => document.addEventListener('click', outside, true));
+  const close = popoverOpen(pop, anchor);
   bindActions(pop);
   pop.addEventListener('click', (e) => { if (e.target.closest('[data-act]')) setTimeout(close); });
 }
@@ -1347,9 +1381,7 @@ function moreMenu(anchor, file) {
   document.body.appendChild(pop);
   pop.style.top = `${Math.min(r.bottom + 6, window.innerHeight - pop.offsetHeight - 8)}px`;
   pop.style.left = `${Math.max(8, r.right - pop.offsetWidth)}px`;
-  const close = () => { pop.remove(); document.removeEventListener('click', outside, true); };
-  const outside = (e) => { if (!pop.contains(e.target)) close(); };
-  setTimeout(() => document.addEventListener('click', outside, true));
+  const close = popoverOpen(pop, anchor);
   // every item closes the menu first, then acts on this workout
   const act = (fn) => async () => { close(); await fn(); };
   bindActions(pop, {
@@ -2513,6 +2545,7 @@ class Ride {
     const vsc = $('#vs-choice', r);
     if (vsc) vsc.onkeydown = (e) => { rovingKey(e); if (e.defaultPrevented) e.stopPropagation(); };
     r.onclick = (e) => {
+      if (this.ending) return;
       const menu = e.target.closest('[data-act="menu"]');
       if (menu) return openMenu(menu);
       const vsb = e.target.closest('#vs-choice [data-v]');
@@ -2559,6 +2592,7 @@ class Ride {
 
   /** Controller button actions (see BUTTON_ACTIONS). */
   button(a) {
+    if (this.ending) return; // the ride is being saved: no second finish, no new ERG target
     switch (a) {
       case 'gear+': case 'gear-': {
         const d = a === 'gear+' ? 1 : -1;
@@ -2648,6 +2682,7 @@ class Ride {
   /** Jump to a time in the workout. Callers go through go(), which applies the FTP-test rules (no skipping inside a measured effort). */
   seek(to) {
     this.t = Math.max(0, Math.min(this.w.duration - 0.01, to));
+    this.lastSec = Math.floor(this.t) - 1; // record from where the jump lands, never the skipped seconds
     this.beeped.clear();
     this.render(true);
   }
@@ -2677,6 +2712,7 @@ class Ride {
 
   /** Start, pause or resume. auto = true when auto-pause triggered it (resumes by pedalling). */
   toggle(auto = false) {
+    if (this.ending) return;
     if (!this.started) { this.started = true; this.startedAt = new Date(); $('#ready')?.remove(); }
     this.running = !this.running;
     this.autoPaused = !this.running && auto;
@@ -2707,7 +2743,8 @@ class Ride {
 
   /** Keyboard shortcuts while riding (space, arrows, +/−); ignored in dialogs, inputs, or when switched off in Settings. */
   onKey(e) {
-    if (modal.open || e.target.matches('input') || state.settings.keyboardShortcuts === false) return;
+    // an open popover menu owns the keyboard (Esc closes it, never stops the ride)
+    if (this.ending || modal.open || $('#popover') || e.target.matches('input') || state.settings.keyboardShortcuts === false) return;
     // Space / Enter on a focused radio (free-ride choice) selects it instead of play/pause. Plain buttons
     // keep the shortcut: after clicking "next", Space should still pause, not skip again.
     if ((e.key === ' ' || e.key === 'Enter') && e.target.closest?.('[role=radio], [role=tab]')) return;
@@ -2739,12 +2776,17 @@ class Ride {
       this.ridden += dt;
       const sec = Math.floor(this.t);
       if (sec !== this.lastSec) {
-        // dev fast-forward (SPEED > 1): fill skipped seconds so recordings stay 1 Hz
-        const from = SPEED > 1 && sec > this.lastSec ? this.lastSec + 1 : sec;
+        // Fill every second since the last sample so recordings stay 1 Hz: a late tick (the webview
+        // throttles timers in a hidden or minimised window, or dev fast-forward with ?speed) must not
+        // leave gaps in the FIT file or make test efforts look short. seek() moves lastSec to the
+        // second before the new position, so a jump never records fake seconds in between.
+        const from = sec > this.lastSec ? this.lastSec + 1 : sec;
         this.lastSec = sec;
+        // wall time per sample: one second apart, ending at now (real time; fast-forward spaces them 1 s)
+        const nowWall = SPEED > 1 ? this.startedAt.getTime() + (this.samples.length + sec - from) * 1000 : Date.now();
         for (let ts = from; ts <= sec; ts++) {
           const i = Math.max(0, segmentAt(this.w.segments, Math.min(ts, this.w.duration - 0.01)));
-          const wall = SPEED > 1 ? (this.startedAt.getTime() + this.samples.length * 1000) : Date.now();
+          const wall = nowWall - (sec - ts) * 1000;
           this.samples.push({ t: ts, p: fresh('power'), c: fresh('cadence'), hr: fresh('hr'), v: this.vsSpeed ?? fresh('speed'), tp: this.targetW, seg: i, measure: this.w.segments[i]?.measure, wall });
           const tag = this.w.segments[i]?.measure;
           if (tag) { const acc = ((this.effAcc ||= {})[tag] ||= { sum: 0, n: 0 }); acc.sum += this.samples[this.samples.length - 1].p || 0; acc.n++; }
@@ -2841,7 +2883,8 @@ class Ride {
     // trainer control
     const allOut = s.erg === false;
     const freeLike = tw === null || allOut;
-    const vsActive = freeLike && this.vs.on && trainer.connected && trainer.canErg;
+    // once the ride ends, finish() has released ERG; nothing may send a target again
+    const vsActive = freeLike && this.vs.on && trainer.connected && trainer.canErg && !this.ending;
     let vsSpeed = null;
     if (vsActive) {
       const cad = fresh('cadence');
@@ -2851,7 +2894,7 @@ class Ride {
       this.vs.watts = this.vs.watts == null ? raw : Math.round(this.vs.watts * 0.5 + raw * 0.5);
       const now = performance.now();
       if (now - this.vs.sentAt > 900 || force) { trainer.setTargetPower(this.vs.watts); this.vs.sentAt = now; }
-    } else if (trainer.connected) { this.vs.watts = null; if (freeLike) trainer.setFreeRide(); else trainer.setTargetPower(tw); }
+    } else if (trainer.connected && !this.ending) { this.vs.watts = null; if (freeLike) trainer.setFreeRide(); else trainer.setTargetPower(tw); }
     this.vsSpeed = vsSpeed;
     const gb = this.q('gearbox');
     if (gb) {
@@ -3110,6 +3153,7 @@ class Ride {
 
   /** Stop button / Esc: expand from compact and pause; a ride that never started just closes, otherwise the rider decides how to end it. */
   async stop() {
+    if (this.ending) return;
     if (!await this.compact.set(false)) return;
     const wasRunning = this.running;
     if (wasRunning) this.toggle();
@@ -3153,9 +3197,14 @@ class Ride {
 
   /** End of the ride: save the FIT file, add to history and plan, evaluate FTP tests, show the summary, upload to Garmin and services. */
   async finish(completed) {
+    // Runs once: a controller ▶ on the last segment or a key during the save would otherwise
+    // save a second FIT file and history entry. Every ride input checks `ending`.
+    if (this.ending) return;
+    this.ending = true;
     $('#btn-compact').hidden = true;
     clearInterval(this.loop);
     this.running = false;
+    trainer.setFreeRide(); // don't leave the trainer holding the last ERG target while the summary is open
     // Saving/results must still proceed if the OS rejects a window resize.
     await this.compact.set(false);
     // ridden to the end: the ring closes and turns into a check, then the summary rises
@@ -3292,6 +3341,8 @@ class Ride {
   async close() {
     if (!await this.compact.set(false)) return;
     clearInterval(this.loop);
+    this.ending = true;
+    trainer.setFreeRide(); // release ERG (also on Discard, which skips finish())
     this.cObs?.disconnect();
     invoke('keep_awake', { on: false }).catch(() => {});
     this.wakeLock?.release().catch(() => {});

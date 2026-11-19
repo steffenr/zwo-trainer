@@ -5,7 +5,8 @@ name: Release
 # bump (patch/minor/major). It:
 #   1. reads the current version from src-tauri/Cargo.toml (the single source of truth)
 #   2. bumps it and writes Cargo.toml + Cargo.lock (scripts/sync-version.mjs)
-#   3. commits "chore(release): X", creates an annotated tag vX and pushes both
+#   3. commits "chore(release): X", creates an annotated tag vX and pushes both in one
+#      atomic push (the branch and the tag land together, or neither does)
 # The tag push then triggers build-app.yml, which builds every platform and publishes the
 # GitHub release with generated notes.
 #
@@ -30,9 +31,16 @@ on:
 permissions:
   contents: write
 
+# One release at a time: a second run waits instead of racing for the same version.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Bump version and tag
+    # Releases are cut from develop only.
+    if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -87,6 +95,7 @@ jobs:
           git commit -m "chore(release): ${NEXT}"
           git tag -a "$TAG" -m "Release ${NEXT}"
           REMOTE="https://x-access-token:${GIT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git push "$REMOTE" "HEAD:refs/heads/${BRANCH}"
-          git push "$REMOTE" "$TAG"
+          # Atomic: if either ref is rejected, neither is updated, so a failed push can't leave
+          # the version bump on the branch without its tag.
+          git push --atomic "$REMOTE" "HEAD:refs/heads/${BRANCH}" "refs/tags/${TAG}"
           echo "Pushed ${BRANCH} and tag ${TAG}; build-app.yml will publish the release."

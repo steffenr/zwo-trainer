@@ -78,6 +78,12 @@ pub fn now_iso() -> String {
     iso_from_unix(unix_now())
 }
 
+/// The shape `new_id` produces (`p_` + hex). Ids from outside (sync file names) must match it:
+/// they become folder names under `activities/` and must never be `..` or a conflict copy.
+pub fn is_profile_id(id: &str) -> bool {
+    id.strip_prefix("p_").is_some_and(|h| (1..=40).contains(&h.len()) && h.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
 fn new_id() -> String {
     let n = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     format!("p_{:x}", n ^ ((std::process::id() as u128) << 64))
@@ -123,14 +129,25 @@ impl Store {
         self.dir.join("activities").join(profile)
     }
 
-    /// Load (and migrate) the whole document. Always returns a valid v2 doc with ≥1 profile.
-    fn load(&self) -> Value {
-        let raw = std::fs::read_to_string(self.state_path())
-            .ok()
-            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-            .filter(Value::is_object)
-            .unwrap_or_else(|| json!({}));
+    /// Load (and migrate) the whole document: a valid v2 doc with ≥1 profile. A damaged state.json
+    /// is moved aside first (`read_json_object`); if that isn't possible this fails, so no write
+    /// can replace the rider's data with a fresh profile.
+    fn load(&self) -> Result<Value, String> {
+        let (doc, created) = Self::build(read_json_object(&self.state_path())?);
+        if created {
+            // persist new ids right away so every later read sees the same profile
+            let _ = self.save(&doc);
+        }
+        Ok(doc)
+    }
 
+    /// For read-only callers: on a load error show a fresh, unsaved document (writes still fail).
+    fn load_or_fresh(&self) -> Value {
+        self.load().unwrap_or_else(|_| Self::build(json!({})).0)
+    }
+
+    /// Normalise a raw document into v2; `true` when ids were created and should be saved.
+    fn build(raw: Value) -> (Value, bool) {
         let mut created = false;
         let mut doc = if raw.get("profiles").is_some_and(Value::is_object) {
             raw
@@ -165,11 +182,7 @@ impl Store {
             doc["activeProfile"] = json!(first);
         }
         doc["version"] = json!(2);
-        if created {
-            // persist new ids right away so every later read sees the same profile
-            let _ = self.save(&doc);
-        }
-        doc
+        (doc, created)
     }
 
     fn save(&self, doc: &Value) -> Result<(), String> {
@@ -179,7 +192,7 @@ impl Store {
     /// Run a read-modify-write on the document under the store lock.
     pub(crate) fn update<T>(&self, f: impl FnOnce(&mut Value) -> Result<T, String>) -> Result<T, String> {
         let _g = self.lock.lock().unwrap();
-        let mut doc = self.load();
+        let mut doc = self.load()?;
         let out = f(&mut doc)?;
         self.save(&doc)?;
         Ok(out)
@@ -188,7 +201,7 @@ impl Store {
     /// What the UI needs on boot or after switching: the active profile + the profile list.
     pub fn app_state(&self) -> Value {
         let _g = self.lock.lock().unwrap();
-        Self::summary(&self.load())
+        Self::summary(&self.load_or_fresh())
     }
 
     pub(crate) fn summary(doc: &Value) -> Value {
@@ -205,7 +218,7 @@ impl Store {
 
     pub fn active_profile(&self) -> Value {
         let _g = self.lock.lock().unwrap();
-        let doc = self.load();
+        let doc = self.load_or_fresh();
         let a = doc["activeProfile"].as_str().unwrap_or_default().to_string();
         doc["profiles"][a].clone()
     }
@@ -295,7 +308,9 @@ impl Store {
             }
             Ok(())
         });
-        let _ = std::fs::remove_dir_all(self.activities_dir(id));
+        if is_profile_id(id) {
+            let _ = std::fs::remove_dir_all(self.activities_dir(id));
+        }
         Ok(out)
     }
 
@@ -325,24 +340,21 @@ impl Store {
 
     // ---------------------------------------------------------------- secrets
 
-    fn load_secrets(&self) -> Value {
-        let mut v = std::fs::read_to_string(self.secrets_path())
-            .ok()
-            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-            .filter(Value::is_object)
-            .unwrap_or_else(|| json!({}));
+    /// Like `load`: a damaged secrets.json is moved aside, never silently overwritten.
+    fn load_secrets(&self) -> Result<Value, String> {
+        let mut v = read_json_object(&self.secrets_path())?;
         merge_defaults(&mut v, &json!({ "profiles": {} }));
-        v
+        Ok(v)
     }
 
     pub fn secret(&self, profile: &str, service: &str) -> Value {
         let _g = self.lock.lock().unwrap();
-        self.load_secrets()["profiles"][profile][service].clone()
+        self.load_secrets().map(|s| s["profiles"][profile][service].clone()).unwrap_or(Value::Null)
     }
 
     pub fn update_secrets<T>(&self, f: impl FnOnce(&mut Value) -> Result<T, String>) -> Result<T, String> {
         let _g = self.lock.lock().unwrap();
-        let mut s = self.load_secrets();
+        let mut s = self.load_secrets()?;
         let out = f(&mut s)?;
         write_json(&self.secrets_path(), &s, true)?;
         Ok(out)
@@ -383,15 +395,51 @@ pub(crate) fn write_json(path: &Path, v: &Value, private: bool) -> Result<(), St
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
     let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, serde_json::to_vec_pretty(v).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    let bytes = serde_json::to_vec_pretty(v).map_err(|e| e.to_string())?;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
     #[cfg(unix)]
     if private {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
+        // owner-only from the start, not chmod'ed after the secrets are already on disk
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
     }
     #[cfg(not(unix))]
     let _ = private;
+    let write = |opts: &std::fs::OpenOptions| -> std::io::Result<()> {
+        use std::io::Write;
+        let mut f = opts.open(&tmp)?;
+        #[cfg(unix)]
+        if private {
+            // an old tmp file may still carry other permissions
+            use std::os::unix::fs::PermissionsExt;
+            f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        }
+        f.write_all(&bytes)?;
+        // on disk before the rename, so a power cut leaves the old or the new file, never a truncated one
+        f.sync_all()
+    };
+    write(&opts).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
+}
+
+/// Read a file holding a JSON object. Missing → `{}`. Present but unreadable as a JSON object →
+/// renamed to `<name>.corrupt-<unix time>` so it is kept for recovery, then `{}`. Fails when the
+/// file can't be read or moved aside: callers then refuse to write instead of replacing it.
+fn read_json_object(path: &Path) -> Result<Value, String> {
+    let bytes = match std::fs::read(path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(json!({})),
+        Err(e) => return Err(format!("Couldn't read {}: {e}", path.display())),
+    };
+    if let Some(v) = serde_json::from_slice::<Value>(&bytes).ok().filter(Value::is_object) {
+        return Ok(v);
+    }
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("state.json");
+    let aside = path.with_file_name(format!("{name}.corrupt-{}", unix_now()));
+    std::fs::rename(path, &aside)
+        .map(|_| json!({}))
+        .map_err(|e| format!("{} is damaged and couldn't be moved aside: {e}", path.display()))
 }
 
 pub fn expand(p: &str) -> PathBuf {
@@ -470,6 +518,56 @@ mod tests {
         assert_eq!(a["profiles"].as_array().unwrap().len(), 1);
         assert!(s.secret(&anna, "garmin").is_null());
         assert!(s.delete_profile(&first).is_err());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn corrupt_copies(dir: &Path, name: &str) -> Vec<String> {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(|e| e.ok()?.file_name().into_string().ok())
+            .filter(|n| n.starts_with(&format!("{name}.corrupt-")))
+            .collect()
+    }
+
+    #[test]
+    fn damaged_state_is_kept_not_overwritten() {
+        let dir = tmp("corrupt");
+        std::fs::create_dir_all(&dir).unwrap();
+        // a file cut off mid-write
+        let broken = r#"{"version":2,"activeProfile":"p_1","profiles":{"p_1":{"name":"Lena","hist"#;
+        std::fs::write(dir.join("state.json"), broken).unwrap();
+        let s = Store::new(&dir);
+        assert_eq!(s.app_state()["profiles"].as_array().unwrap().len(), 1);
+        let aside = corrupt_copies(&dir, "state.json");
+        assert_eq!(aside.len(), 1, "the damaged file is moved aside");
+        assert_eq!(std::fs::read_to_string(dir.join(&aside[0])).unwrap(), broken);
+        // the fresh document is valid JSON again
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("state.json")).unwrap()).unwrap();
+        assert!(v["profiles"].is_object());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn damaged_secrets_are_kept() {
+        let dir = tmp("corrupt-secrets");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("secrets.json"), "{\"profiles\":{\"p_1\":").unwrap();
+        let s = Store::new(&dir);
+        assert!(s.secret("p_1", "garmin").is_null());
+        s.set_secret("p_1", "garmin", json!({ "ok": true })).unwrap();
+        assert_eq!(corrupt_copies(&dir, "secrets.json").len(), 1);
+        assert_eq!(s.secret("p_1", "garmin")["ok"], true);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn unreadable_state_refuses_writes() {
+        let dir = tmp("unreadable");
+        // a directory where the file should be: exists, but can't be read or parsed as a file
+        std::fs::create_dir_all(dir.join("state.json").join("x")).unwrap();
+        let s = Store::new(&dir);
+        assert!(s.load().is_err());
+        assert!(s.save_profile(s.active_profile()).is_err(), "no write may replace unreadable data");
         let _ = std::fs::remove_dir_all(dir);
     }
 

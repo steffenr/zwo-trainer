@@ -209,6 +209,45 @@ fn safe_name(s: &str) -> String {
     n.trim_matches('_').chars().take(60).collect()
 }
 
+/// First of `base`, `base-2`, `base-3`… for which no `dir/<stem><suffix>` exists yet.
+fn free_stem(dir: &Path, base: &str, suffixes: &[&str]) -> String {
+    let taken = |stem: &str| suffixes.iter().any(|x| dir.join(format!("{stem}{x}")).exists());
+    if !taken(base) {
+        return base.to_string();
+    }
+    (2..).map(|n| format!("{base}-{n}")).find(|s| !taken(s)).unwrap_or_default()
+}
+
+/// Where `garmin_import` puts its copy: the same name again when that file already is this
+/// ride (imported twice), otherwise the first free `-2`, `-3`… name; never another ride's file.
+fn garmin_copy_path(folder: &Path, name: &str, bytes: &[u8]) -> PathBuf {
+    let base = name.strip_suffix(".fit").unwrap_or(name);
+    let same_or_free = |p: &PathBuf| !p.exists() || std::fs::read(p).is_ok_and(|b| b == bytes);
+    std::iter::once(base.to_string())
+        .chain((2..).map(|n| format!("{base}-{n}")))
+        .map(|s| folder.join(format!("{s}.fit")))
+        .find(same_or_free)
+        .unwrap_or_else(|| folder.join(name))
+}
+
+/// Write a file completely or not at all: tmp file, fsync, rename (like `state::write_json`).
+fn write_bytes(path: &Path, bytes: &[u8]) -> Res<()> {
+    use std::io::Write;
+    let name = path.file_name().and_then(|n| n.to_str()).ok_or("Invalid file name")?;
+    // dot-prefixed, so FIT sync and folder listings never pick up a half-written file
+    let tmp = path.with_file_name(format!(".{name}.tmp"));
+    let res = (|| -> std::io::Result<()> {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+        std::fs::rename(&tmp, path)
+    })();
+    res.map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("{}: {e}", path.display())
+    })
+}
+
 /// Encode a finished ride as FIT and store it with the profile: a generic file
 /// (export) plus a Garmin-flavoured copy for Garmin Connect. Returns { path, garminPath, summary }.
 #[tauri::command]
@@ -219,11 +258,13 @@ async fn save_activity(app: State<'_, App>, ride: fit::Ride) -> Res<Value> {
     let dir = app.store.activities_dir(&profile);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let start = state::iso_from_unix(ride.samples[0].wall / 1000);
-    let stem = format!("{}_{}", start[..16].replace([':', 'T'], "-"), safe_name(&ride.name));
+    let base = format!("{}_{}", start[..16].replace([':', 'T'], "-"), safe_name(&ride.name));
+    // two rides started in the same minute must not share (and overwrite) one file
+    let stem = free_stem(&dir, &base, &[".fit", ".garmin.fit"]);
     let path = dir.join(format!("{stem}.fit"));
     let gpath = dir.join(format!("{stem}.garmin.fit"));
-    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
-    std::fs::write(&gpath, garmin).map_err(|e| e.to_string())?;
+    write_bytes(&path, &bytes)?;
+    write_bytes(&gpath, &garmin)?;
     Ok(json!({ "path": path.display().to_string(), "garminPath": gpath.display().to_string(), "summary": summary }))
 }
 
@@ -262,8 +303,11 @@ fn garmin_import(handle: tauri::AppHandle, app: State<'_, App>, path: String) ->
         .ok_or("No folder for Garmin files")?;
     std::fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
     let name = src.file_name().and_then(|s| s.to_str()).unwrap_or("ride.fit").replace(".garmin.fit", ".fit");
-    let dst = folder.join(name);
-    std::fs::copy(&src, &dst).map_err(|e| format!("{}: {e}", src.display()))?;
+    let bytes = std::fs::read(&src).map_err(|e| format!("{}: {e}", src.display()))?;
+    let dst = garmin_copy_path(&folder, &name, &bytes);
+    if !dst.exists() {
+        write_bytes(&dst, &bytes)?;
+    }
     let opener = handle.opener();
     let _ = opener.reveal_item_in_dir(&dst);
     opener
@@ -685,6 +729,27 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn activity_names_never_collide() {
+        let dir = std::env::temp_dir().join(format!("zt-names-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let sfx = [".fit", ".garmin.fit"];
+        let base = "2026-11-19-10-00_Ride";
+        assert_eq!(free_stem(&dir, base, &sfx), base);
+        write_bytes(&dir.join(format!("{base}.fit")), b"one").unwrap();
+        assert_eq!(free_stem(&dir, base, &sfx), format!("{base}-2"));
+        // a lone Garmin copy blocks the name too
+        write_bytes(&dir.join(format!("{base}-2.garmin.fit")), b"two").unwrap();
+        assert_eq!(free_stem(&dir, base, &sfx), format!("{base}-3"));
+        assert_eq!(std::fs::read(dir.join(format!("{base}.fit"))).unwrap(), b"one");
+        assert!(std::fs::read_dir(&dir).unwrap().flatten().all(|e| !e.file_name().to_string_lossy().ends_with(".tmp")));
+        // Garmin folder: the same ride again reuses its file, a different ride gets a new name
+        assert_eq!(garmin_copy_path(&dir, &format!("{base}.fit"), b"one"), dir.join(format!("{base}.fit")));
+        assert_eq!(garmin_copy_path(&dir, &format!("{base}.fit"), b"other"), dir.join(format!("{base}-2.fit")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     /// Parse every .zwo below $ZWO_TEST_DIR (if set) — used to validate against a real library.
     #[test]

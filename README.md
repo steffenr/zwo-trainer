@@ -210,7 +210,9 @@ Deleting always goes to the system Trash (the Recycle Bin on Windows), so it can
 | ← / → | previous / next segment |
 | ↑ / ↓ | intensity ±1 % (with Shift ±10 %) |
 | + / − | shift gear (virtual gears); during free-ride segments ↑ / ↓ shift too |
-| Esc | end workout |
+| Esc | end workout (closes an open menu instead) |
+
+Menus work with the keyboard too: arrow keys move between items, Esc closes the menu. Recording stays at one sample per second even when the window is hidden or minimised.
 
 If you switch to another app during a ride (a video, a browser) and zwoTrainer might still have the keyboard focus, turn off **Keyboard shortcuts while riding** under Settings → Riding. The on-screen buttons and controllers keep working.
 
@@ -366,9 +368,9 @@ The limits can be changed per rider (Settings → Rider) and drive the colours, 
 
 | What | Where |
 |---|---|
-| Riders, settings, progress, history, update setting | `state.json` in the app data folder: `~/Library/Application Support/dev.steffenr.zwotrainer/` (macOS), `%APPDATA%\dev.steffenr.zwotrainer\` (Windows), `~/.local/share/dev.steffenr.zwotrainer/` (Linux) |
+| Riders, settings, progress, history, update setting | `state.json` in the app data folder: `~/Library/Application Support/dev.steffenr.zwotrainer/` (macOS), `%APPDATA%\dev.steffenr.zwotrainer\` (Windows), `~/.local/share/dev.steffenr.zwotrainer/` (Linux). If the file is ever damaged, zwoTrainer keeps it as `state.json.corrupt-<number>` next to it and starts fresh, so nothing is overwritten. |
 | Garmin session tokens and the Intervals.icu API key (owner-only file) | `…/dev.steffenr.zwotrainer/secrets.json` (never synced) |
-| Ride files | `…/dev.steffenr.zwotrainer/activities/<rider>/*.fit` (plus `*.garmin.fit`) |
+| Ride files | `…/dev.steffenr.zwotrainer/activities/<rider>/*.fit` (plus `*.garmin.fit`); rides started in the same minute get separate files (`…-2.fit`), and nothing ever replaces an existing ride file |
 | Workouts | your workouts folder; zwoTrainer only reads it, except *Move to Trash* |
 
 Nothing is sent anywhere except what you enable: uploads to the platforms you connect, and the cloud folder you choose for profile sync. The update check only downloads the release manifest from GitHub (switch it off under Settings → App → Updates).
@@ -383,12 +385,12 @@ Nothing is sent anywhere except what you enable: uploads to the platforms you co
 | ERG doesn't react | Make sure the trainer is connected as **trainer** (FTMS), not as a power meter; "Power only" in the ride header means no ERG. If zwoTrainer warns that another app controls the trainer and ERG doesn't react, close Zwift, the Zwift Companion app and other training apps (also on your phone or tablet), then connect the trainer again. |
 | Zwift Ride buttons do nothing | Connect only the **left** controller; check the *button test* in the Shifter dialog; update the Ride firmware in the Zwift Companion app. |
 | Zwift Click stops after ~1 min | Unlock it once in the Zwift phone app (see above). |
-| A workout is missing | It must be a `.zwo` file inside the workouts folder; use **Settings → App → Rescan**. |
+| A workout is missing | It must be a `.zwo` file inside the workouts folder; use **Settings → App → Rescan**. Files that can't be read, or describe a workout longer than 48 hours, are skipped. |
 | Garmin upload fails | Sign out and in again under Settings → Connections; use *Manual FIT import* meanwhile. |
 | Intervals.icu says the key is wrong | Create a new key under intervals.icu → Settings → Developer Settings and paste it again (no spaces). |
 | COROS import fails | Pick the **.zip** file zwoTrainer highlighted, not the .fit; processing in Training Hub can take a few minutes. |
 | Update fails or "Check now" says GitHub can't be reached | Check the internet connection and try again later; you can always download the newest version from the Releases page and install it over the old one. |
-| Sync says "waiting for iCloud downloads" | iCloud hasn't downloaded the files yet; zwoTrainer asks it to and picks them up on the next run. |
+| Sync says "waiting for iCloud downloads" | iCloud hasn't downloaded the files yet; zwoTrainer asks it to and picks them up on the next run. Until then it leaves those riders alone (nothing is overwritten), and on a new computer the default "Rider 1" is only uploaded once every rider file has arrived. |
 
 ---
 
@@ -399,7 +401,12 @@ Nothing is sent anywhere except what you enable: uploads to the platforms you co
 
 ```bash
 cd src-tauri && cargo test                                                    # unit tests
+cd src-tauri && cargo clippy --all-targets                                    # lints (keep warning-free)
 ZWO_TEST_DIR=~/Downloads/zwo cargo test scan_real_library -- --nocapture       # parse a whole library
+node --test scripts/*.test.mjs                                                # UI unit tests (compact ride, battery, html``)
+node scripts/check-i18n.mjs                                                   # translations complete (en / de / fr)
+node scripts/check-css.mjs                                                    # CSS layers, imports, nesting
+node scripts/check-html.mjs                                                   # markup reaches the DOM only through mount()
 npx -y -p playwright node scripts/shots/run.mjs                               # retake all website screenshots (site/img)
 ```
 
@@ -409,14 +416,16 @@ The website screenshots are generated from the real interface with a sample ride
 
 GitHub Actions builds and publishes everything (workflows in `.github/workflows/`):
 
-- **CI** (`ci.yml`, every push to `main` and every PR): tests and clippy on Linux, tests on macOS and Windows.
-- **Release** (`release.yml`): *Actions → Release → Run workflow*, pick **patch / minor / major**. It bumps the version in `src-tauri/Cargo.toml` (the only place it lives) and `Cargo.lock`, commits `chore(release): X`, tags `vX` and pushes. Needs a repository secret **`RELEASE_PAT`** (a token with *Contents: read & write*), because pushes made with the default token don't start other workflows.
+- **CI** (`ci.yml`, every push to `develop` and every PR): tests and clippy on Linux plus the UI checks (syntax, unit tests, translations, CSS, markup), tests on macOS and Windows.
+- **Release** (`release.yml`): *Actions → Release → Run workflow* on `develop`, pick **patch / minor / major**. It bumps the version in `src-tauri/Cargo.toml` (the only place it lives) and `Cargo.lock`, commits `chore(release): X`, tags `vX` and pushes the commit and the tag together (atomically: both or neither). Only one release runs at a time. Needs a repository secret **`RELEASE_PAT`** (a token with *Contents: read & write*), because pushes made with the default token don't start other workflows.
 - **Build** (`build-app.yml`, on every `v*` tag): builds macOS Apple silicon + Intel, Windows x64 and Linux x64 in parallel, then publishes one GitHub release with all installers, notes generated from the commits since the previous tag and `THIRD-PARTY-NOTICES.html` (the licences of all bundled Rust crates, generated with [cargo-about](https://github.com/EmbarkStudios/cargo-about) from `src-tauri/about.toml` and `about.hbs`). Run it by hand (*Run workflow*) for a test build: the installers are attached to the run instead.
 - **In-app updates:** with the repository secret **`TAURI_SIGNING_PRIVATE_KEY`** (plus `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` if the key has one), *Build* also signs update files (`src-tauri/tauri.updater.conf.json` turns on `createUpdaterArtifacts`), and the release gets the macOS `.app.tar.gz` bundles and a `latest.json` (`scripts/updater-manifest.mjs`) that the apps read from `releases/latest/download/latest.json`. One-time setup: `scripts/setup-updater-key.sh` creates the key in `~/.tauri/`, writes the public key into `tauri.conf.json` and sets both secrets with `gh`. Back the key and password up: without them, installed apps can't be updated any more. Without the secret, builds still work, just without update files.
 - **Website** (`pages.yml`): publishes the static site in `site/` to GitHub Pages on every push to `develop` that changes it, after each successful release build (the download page then shows the new version) and by hand. One-time setup: *Settings → Pages → Build and deployment → Source: GitHub Actions*.
 - **Dependabot** (`.github/dependabot.yml`): opens monthly pull requests against `develop`. All GitHub Actions updates come in one PR, minor and patch updates of the Rust crates in another, and each major crate update (e.g. `tauri`, `btleplug`) in its own. CI runs on every PR.
 
-To release by hand instead: `node scripts/sync-version.mjs 1.2.0`, commit, `git tag v1.2.0 && git push --follow-tags`.
+To release by hand instead: `node scripts/sync-version.mjs 1.2.0`, commit, then `git tag -a v1.2.0 -m v1.2.0 && git push --atomic origin develop v1.2.0`. (A plain `git tag` creates a lightweight tag, which `git push --follow-tags` doesn't push, so no build would start.)
+
+If the build for a release fails, re-run *Build* for the existing tag (*Re-run failed jobs* on that run); don't run *Release* again, which would bump to the next version.
 
 Supported ZWO elements: `SteadyState`, `SolidState`, `Warmup`, `Cooldown`, `Ramp`, `IntervalsT`, `FreeRide`, `MaxEffort`, `textevent` (inside elements and at workout level) and the cadence attributes. Ramps follow Zwift's rule: `PowerLow` is the start value and `PowerHigh` the end value.
 
