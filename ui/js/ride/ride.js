@@ -105,7 +105,7 @@ class Ride {
     loadSounds(['up', 'down', 'done']);
     this.autoStartCount = 0;
     this.compact = new CompactView({
-      resize: (compact) => invoke('ride_window', { compact }),
+      resize: (compact, leave = false) => invoke('ride_window', { compact, leave }),
       apply: (compact) => {
         document.body.classList.toggle('compact-riding', compact);
         if (!compact) this.diagram.update(this.t, this.samples);
@@ -905,11 +905,11 @@ class Ride {
 
   /** Leave the ride screen: expand from compact, release devices to idle, restore the normal views and pending updates.
    *  The teardown always runs, even when the window can't be restored to full size: a stuck ride screen with
-   *  `ride` still set would keep sync and profile switching deferred. CompactView already reported the error. */
+   *  `ride` still set would keep sync and profile switching deferred. `CompactView.leave()` retries the restore
+   *  once and otherwise at least resets the minimum window size (it reports the error itself). */
   async close() {
-    let restored = false;
-    try { restored = await this.compact.set(false); } catch (err) { toast(String(err)); }
-    if (!restored) document.body.classList.remove('compact-riding');
+    try { await this.compact.leave(); } catch (err) { toast(String(err)); }
+    document.body.classList.remove('compact-riding');
     clearInterval(this.loop);
     this.ending = true;
     trainer.setFreeRide(); // release ERG (also on Discard, which skips finish())

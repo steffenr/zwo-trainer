@@ -624,8 +624,8 @@ async fn trainer_resume(app: State<'_, App>) -> Res<()> {
 // ---------------------------------------------------------------- compact ride window
 
 #[tauri::command]
-fn ride_window(window: tauri::WebviewWindow, pending: State<'_, ride_window::Pending>, compact: bool) -> Res<()> {
-    pending.set(&window, compact)
+fn ride_window(window: tauri::WebviewWindow, pending: State<'_, ride_window::Pending>, compact: bool, leave: Option<bool>) -> Res<()> {
+    pending.set(&window, compact, leave.unwrap_or(false))
 }
 
 // ---------------------------------------------------------------- virtual shifting controllers
