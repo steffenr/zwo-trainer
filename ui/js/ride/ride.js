@@ -20,8 +20,8 @@ import { IC } from '../components/icons.js';
 import { badge } from '../components/indicators.js';
 import { segCtl, selectSeg } from '../components/buttons.js';
 import {
-  OS, $, $$, setText, setAttr, setHtml, SPEED, state, live, fresh, trainer, ctrls,
-  shifting, bounds, ftp, maxHr, weight, mode, planById, workoutInfo, ride, setRide, restartAnim,
+  OS, $, $$, setText, setAttr, setHtml, SPEED, state, fresh, trainer, ctrls,
+  shifting, bounds, ftp, maxHr, weight, planById, workoutInfo, setRide, restartAnim,
   modal, confirmDialog, choiceDialog, announce, toast, rovingKey,
 } from '../core.js';
 import { api, route, openMenu, pointerFocused, segmentText, markEntry } from '../app.js';
@@ -60,7 +60,6 @@ function startTest(id) {
 const SEG_KIND = { steady: 'kindSteady', warmup: 'segWarmup', cooldown: 'segCooldown', ramp: 'segRamp', on: 'kindOn', off: 'kindOff', freeride: 'freeRide', maxeffort: 'maxEffort' };
 /** Short label for the current segment type (warm-up, interval, ramp, free ride, all-out …). */
 const segKind = (s) => `${t(s.erg === false ? 'kindAllOut' : SEG_KIND[s.type] || 'segment')}${s.reps ? ` ${s.rep}/${s.reps}` : ''}`;
-/** Fill a metric bar: frac 0…1, optional target marker (0…1) and colour. */
 /** Fill a small metric bar (0–1) and optionally mark a target band. */
 function setBar(el, frac, { mark = null, color = null, band = null } = {}) {
   if (!el) return;
