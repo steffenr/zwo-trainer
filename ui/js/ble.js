@@ -31,6 +31,11 @@ class Device extends Emitter {
 
   get connected() { return this.mode !== null && !this.reconnecting; }
 
+  /** Display name. The simulator's is translated when it is read, so it follows a language switch;
+   *  real devices keep the name they advertise. */
+  get name() { return this.mode === 'sim' ? t('simulator') : this.devName; }
+  set name(v) { this.devName = v; }
+
   /** Rust → UI status updates for this kind. */
   onStatus(s) {
     if (this.mode === 'sim') return;
@@ -43,7 +48,7 @@ class Device extends Emitter {
 
   /** Tell listeners (top bar, ride screen) the current connection state. */
   emitStatus() {
-    this.emit('status', { connected: this.connected, name: this.name, erg: this.erg, ergDenied: !!this.ergDenied, reconnecting: this.reconnecting });
+    this.emit('status', { connected: this.connected, sim: this.mode === 'sim', name: this.name, erg: this.erg, ergDenied: !!this.ergDenied, reconnecting: this.reconnecting });
   }
 
   scan(secs = 4) { return invoke('ble_scan', { kind: this.kind, secs }); }
@@ -111,7 +116,7 @@ export class Trainer extends Device {
   startSim() {
     this.stopSim();
     if (this.mode === 'ble') invoke('ble_disconnect', { kind: 'trainer' }).catch(() => {});
-    this.mode = 'sim'; this.name = t('simulator'); this.erg = true; this.reconnecting = false;
+    this.mode = 'sim'; this.erg = true; this.reconnecting = false;
     let cad = 88;
     this.simTimer = setInterval(() => {
       const base = this.simTarget ?? 160;
@@ -130,7 +135,7 @@ export class HeartRate extends Device {
   startSim() {
     this.stopSim();
     if (this.mode === 'ble') invoke('ble_disconnect', { kind: 'hr' }).catch(() => {});
-    this.mode = 'sim'; this.name = t('simulator'); this.reconnecting = false;
+    this.mode = 'sim'; this.reconnecting = false;
     let hr = 110;
     this.simTimer = setInterval(() => { hr += (Math.random() - 0.45) * 2; hr = Math.max(95, Math.min(175, hr)); this.emit('data', { hr: Math.round(hr) }); }, 1000);
     this.emitStatus();
