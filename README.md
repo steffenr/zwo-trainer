@@ -370,7 +370,7 @@ The limits can be changed per rider (Settings → Rider) and drive the colours, 
 | What | Where |
 |---|---|
 | Riders, settings, progress, history, update setting | `state.json` in the app data folder: `~/Library/Application Support/dev.steffenr.zwotrainer/` (macOS), `%APPDATA%\dev.steffenr.zwotrainer\` (Windows), `~/.local/share/dev.steffenr.zwotrainer/` (Linux). If the file is ever damaged, zwoTrainer keeps it as `state.json.corrupt-<number>` next to it and starts fresh, so nothing is overwritten. |
-| Garmin session tokens and the Intervals.icu API key (owner-only file) | `…/dev.steffenr.zwotrainer/secrets.json` (never synced) |
+| Garmin session tokens (with the OAuth consumer pair, downloaded once per Garmin sign-in) and the Intervals.icu API key (owner-only file) | `…/dev.steffenr.zwotrainer/secrets.json` (never synced) |
 | Ride files | `…/dev.steffenr.zwotrainer/activities/<rider>/*.fit` (plus `*.garmin.fit`); rides started in the same minute get separate files (`…-2.fit`), and nothing ever replaces an existing ride file |
 | Workouts | your workouts folder; zwoTrainer only reads it, except *Move to Trash* |
 
