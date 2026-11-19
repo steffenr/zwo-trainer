@@ -1,6 +1,6 @@
 # DESIGN.md — zwoTrainer design system
 
-The visual and interaction rules for zwoTrainer. The styles live in `ui/css/` (tokens on `:root` in `tokens.css`, see [CSS structure](#css-structure)) plus a few constants in `ui/js/render.js` / `ui/js/app.js`. Any new screen or component must follow this document; if you introduce a new pattern, document it here.
+The visual and interaction rules for zwoTrainer. The styles live in `ui/css/` (tokens on `:root` in `tokens.css`, see [CSS structure](#css-structure)) plus a few constants in `ui/js/render.js` / `ui/js/riders.js` (avatar colours). Any new screen or component must follow this document; if you introduce a new pattern, document it here.
 
 ## CSS structure
 
@@ -272,15 +272,15 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 - **Locked items** (later plan workouts) show 🔒 and are not clickable; explain in the tooltip.
 - **Feedback:** use a toast for background results (saved, synced, uploaded), the ride hint for actions during a ride, and inline status inside the related control (upload spinners and ✓ in the ride summary and history). The update card is the one exception that stays until the rider acts, and it never appears during a ride.
 - **Motion:** 150 ms for hover/border/opacity, 200 ms for hint and popover fades, and `.4s` for gauge arcs. No bounces and no animation during ERG-critical moments. Any new decorative animation must be disabled under `prefers-reduced-motion`.
-- **Platform wording:** labels follow the OS via `PLAT` in app.js: *Show in Finder / Explorer / Files*, *Trash / Recycle Bin*, *this Mac / PC / computer*. Never hard-code the macOS terms.
+- **Platform wording:** labels follow the OS via `PLAT` in core.js: *Show in Finder / Explorer / Files*, *Trash / Recycle Bin*, *this Mac / PC / computer*. Never hard-code the macOS terms.
 - **Text:** plain, friendly wording in sentence case, in English, German and French (`ui/js/i18n/`; German "du", French "vous"). Leave room for German, the longest of the three: labels in segmented controls and buttons must still fit at 900 px. Units use a thin space in tables ("250 W", "90 %"), and durations are `m:ss` / `h:mm:ss` (`fmtTime`) or "1h 05m" (`fmtDur`).
 - **Accessibility:**
   - Icon-only buttons need a `title` and an `aria-label` (`tText()`), and their SVG is `aria-hidden="true"`. A button whose action changes names the action it will do now: the ride play button is *Start*, then *Pause* / *Resume*. Toggles that keep their name carry `aria-pressed` (chart overlay toggles, the power gauge for watts ↔ % FTP, the mode switch). Keyboard shortcuts go in `aria-keyshortcuts` as well as the title.
-  - Transient messages (toasts, ride hints) are announced with `announce()` in app.js through a polite live region that exists in index.html from the start: `#live` on the page, `#modal-live` inside the dialog (an open modal makes the rest of the page inert). Both are `.sr-only` (utilities.css). Never create a live region together with its text; it is often not read.
+  - Transient messages (toasts, ride hints) are announced with `announce()` in core.js through a polite live region that exists in index.html from the start: `#live` on the page, `#modal-live` inside the dialog (an open modal makes the rest of the page inert). Both are `.sr-only` (utilities.css). Never create a live region together with its text; it is often not read.
   - Status is never shown by colour alone: dots are paired with text in the devices menu and tooltips.
   - Contrast is ≥ 4.5:1 for text (use the zone *ink* tokens for coloured text).
   - Everything should be reachable by keyboard, and rows are focusable (`tabindex="0"`, Enter opens). Keyboard focus is one shared rule in `utilities.css` (`:focus-visible` on buttons, links, `[tabindex]`, `summary`, `[role=…]` → 2 px `--accent` outline, offset 2; inset −2 inside popovers), so `all: unset` controls get it too. It sits in the last layer on purpose; don't remove focus outlines in a view (`outline: none` there has no effect).
-  - Popover menus (`popoverOpen()` in app.js): opening focuses the first item, ↑/↓/Home/End move, Esc or Tab closes and returns focus to the anchor, the anchor carries `aria-haspopup` / `aria-expanded`. While a popover is open the ride shortcuts are off, so Esc never stops the workout.
+  - Popover menus (`popoverOpen()` in actions.js): opening focuses the first item, ↑/↓/Home/End move, Esc or Tab closes and returns focus to the anchor, the anchor carries `aria-haspopup` / `aria-expanded`. While a popover is open the ride shortcuts are off, so Esc never stops the workout.
   - Every input has an accessible name: a `<label>`, or an `aria-label` when the visible text isn't a label (zone limits, the two gear-range fields).
   - Text is at least 12 px.
 
