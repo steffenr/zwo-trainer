@@ -72,7 +72,7 @@ scripts/shots/              every website screenshot (site/img) from the real ui
 site/                       static website (home, features, download) with dark/light screenshots in site/img; no build step
 .github/workflows/
   ci.yml                    push/PR: tests + clippy + UI syntax + i18n + CSS + markup checks (Linux), tests (macOS, Windows)
-  release.yml               manual: bump patch/minor/major, commit, tag vX, push (needs RELEASE_PAT)
+  release.yml               manual: full CI, then bump patch/minor/major, commit, tag vX, push (needs RELEASE_PAT)
   build-app.yml             tag v*: build macOS arm64/x64, Windows, Linux → one GitHub release (+ latest.json for updates)
   pages.yml                 successful release build, manual: deploy site/ of the latest release (or a given ref) to GitHub Pages
 .github/dependabot.yml      monthly PRs to develop: all Actions in one, Cargo minor+patch in one, each Cargo major alone
@@ -103,7 +103,7 @@ node scripts/shots/fixture/make.mjs                  # rebuild the screenshot sa
 ## Releases & platforms
 
 - **Version:** only in `src-tauri/Cargo.toml` (`[package] version`), mirrored into `Cargo.lock` by `scripts/sync-version.mjs`. Don't add `version` back to `tauri.conf.json`.
-- **Releasing:** run the *Release* workflow (bump; `develop` only, one run at a time) → it pushes the bump commit and tag `vX` in one `git push --atomic` → *Build zwoTrainer* builds all four targets and publishes the GitHub release. If the build fails, fix it and re-run the build for the existing tag; don't bump again. By hand, use an annotated tag (`git tag -a vX -m vX`) or push the tag explicitly: `--follow-tags` skips lightweight tags. The Tauri CLI comes from `npx` in CI, pinned to an exact version (`TAURI_CLI` in `build-app.yml`, bumped by hand because Dependabot can't see it); there is no package.json on purpose.
+- **Releasing:** run the *Release* workflow (bump; `develop` only, one run at a time) → it first runs all of `ci.yml` (`workflow_call`) and stops if anything fails → it pushes the bump commit and tag `vX` in one `git push --atomic` → *Build zwoTrainer* builds all four targets and publishes the GitHub release. If the build fails, fix it and re-run the build for the existing tag; don't bump again. By hand, use an annotated tag (`git tag -a vX -m vX`) or push the tag explicitly: `--follow-tags` skips lightweight tags. The Tauri CLI comes from `npx` in CI, pinned to an exact version (`TAURI_CLI` in `build-app.yml`, bumped by hand because Dependabot can't see it); there is no package.json on purpose.
 - **Workflow actions:** GitHub's own `actions/*` use a major tag; every third-party action is pinned to a commit SHA with its tag as a comment (`@<sha> # v2.9.3`), which Dependabot keeps current. Rust is installed with `rustup` on the runner, not through an action.
 - **Installers are unsigned** (macOS uses ad-hoc signing `signingIdentity: "-"`, which keeps the Bluetooth permission stable). Adding real signing/notarisation means adding secrets to `build-app.yml`.
 - **In-app updates** are a separate signature (minisign, `tauri-plugin-updater`), not code signing:

@@ -7,6 +7,8 @@ on:
   push:
     branches: [develop]
   pull_request:
+  # release.yml runs every check before it bumps and tags
+  workflow_call:
 
 # Read-only token: CI only checks out and builds.
 permissions:
