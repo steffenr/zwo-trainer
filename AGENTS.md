@@ -113,6 +113,7 @@ node --test scripts/markdown.test.mjs                  # description Markdown: e
 node --test scripts/ftp-tests.test.mjs                 # FTP test protocols: results only from tagged, ≥ 95 % ridden efforts; CP, W′, VO2max
 node --test scripts/vshift.test.mjs                    # virtual shifting: gear table, virtual speed, flat-road power, target watts
 node --test scripts/i18n.test.mjs                      # t(): plurals (French 0 is singular), placeholders, English fallback; pct(), locales
+node --test scripts/sound.test.mjs                     # noteStarts(): countdown note starts after decoder delay and noise floor
 node --test scripts/updater-manifest.test.mjs            # latest.json: every platform signed, else the run fails
 node scripts/sync-version.mjs [x.y.z]                # print / set the app version
 npx -y -p playwright node scripts/shots/run.mjs [names…] [--list|--theme t|--out dir|--force]   # retake website screenshots
