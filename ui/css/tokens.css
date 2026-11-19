@@ -12,17 +12,17 @@
   --text: #1f2328;
   --text-2: #555555;
   --muted: #646b75;        /* ≥ 4.5:1 on --surface and --surface-2 */
-  --accent: #00a3c4;
-  --accent-hover: #0090ad;
+  --accent: #007690;       /* white on it 5.26:1, on --surface 5.26, on --surface-2 4.86, on --accent-soft 4.57 */
+  --accent-hover: #00657b; /* white on it 6.67:1 */
   --accent-ink: #ffffff;
-  --accent-soft: rgba(0, 163, 196, .10);
+  --accent-soft: rgba(0, 118, 144, .10);
   --ok: #2e9e4f;
   --ok-soft: rgba(46, 158, 79, .12);
   --warn: #b7791f;
   --warn-soft: rgba(183, 121, 31, .12);
   --danger: #e0352b;
   --pos: #1f2328;          /* position line in the diagram */
-  --done: #00a3c4;         /* completed bar */
+  --done: #00a3c4;         /* completed bar (brand cyan; graphic only, never text) */
   --trace: #1f2328;        /* actual power trace */
   --ftp: #1f2328;          /* FTP marker */
   --track: #eceef2;
