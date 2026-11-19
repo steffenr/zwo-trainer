@@ -53,6 +53,7 @@ Always use tokens (`var(--…)`), never raw hex in components. Dark values apply
 | `--warn` / `--warn-soft` | `#8a5a12` | `#f2c14e` | connecting, ERG off, changed intensity (`.warn-text`); light value ≥ 4.5:1 as text, also on `--warn-soft` |
 | `--danger` | `#c62f26` | `#ff5a4f` | destructive text and buttons, errors (`.danger-text`: failed actions, sync errors); light value ≥ 4.5:1 as text and under white |
 | `--danger-ink` | `#ffffff` | `#000000` | label on a `--danger` fill (`.btn.danger`): 5.47:1 on the light `#c62f26`, 6.83:1 on the dark red, where white would be only 3.08:1 |
+| `--z4-soft` | 28 % Z4 fill | 18 % Z4 fill | FTP-test badge background; `--text` on it ≥ 12.5:1 light, ≥ 9.7:1 dark |
 | `--pos`, `--trace`, `--ftp` | text colour | white | chart position line, power trace, FTP line |
 | `--done` | `#00a3c4` (brand cyan) | accent | completed part of the workout; graphic only, never text |
 | `--cad` / `--hrline` | `#8b3dff` / `#e0004d` | `#b98bff` / `#ff4d7d` | cadence and heart-rate traces |
@@ -224,7 +225,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 | **Workout row** `.wrow` | grid: status · title (+ meta) · mini profile 200 × 28 · duration · intensity tag + TSS · actions (☆, ⋯, primary action), left-aligned so ☆ and ⋯ line up on every row. All rows of a list (all weeks of a plan) share one column grid (`.wlist` / `.weeks`, rows are subgrids): the action column is at least 150 px and grows to the widest row, so longer labels ("Démarrer" + "Sauter", "Überspringen") never overlap the TSS. The mini profile goes at ≤ 1100 px and the duration at ≤ 980 px; the actions stay at every width. Radius 11, hover border `--line-strong`. The next workout in a plan gets the accent border and a soft gradient. |
 | **Intensity tag** `.ztag` | zone fill, black 11 px 650 text "Z1–Z5", radius 5, min-width 26. |
 | **Zone filter** `.zone-filter` | outlined chips with a 9 px zone dot; when active the border is the zone colour, the background is 16 % zone colour, and the zone name is shown. |
-| **Badge** `.badge` | 11 px 700, radius 6. Default is accent; `.ok`, `.warn` (e.g. *Not completed* in the test history), `.muted` and `.test` (Z4 ink) variants. |
+| **Badge** `.badge` | 11 px 700, radius 6. Default is accent; `.ok`, `.warn` (e.g. *Not completed* in the test history), `.muted` and `.test` (`--z4-soft` fill with `--text`) variants. A badge fill is always a fill or soft token, never an ink token; its text is ≥ 4.5:1 on it in both themes. |
 | **Plausibility note** `.ftp-check` | inside the FTP result box, above the buttons, when the new FTP differs > 15 % from the current one: `--warn-soft` background, thin warn border, 13.5 px text. |
 | **FTP result box** `.ftp-result` | accent border + `--accent-soft` for a new FTP; `.incomplete` switches to `--warn` / `--warn-soft` with an "Effort not completed" heading, an explanation and the effort details. |
 | **ERG pill** `.erg` | 11.5 px 700 uppercase-ish, radius 6: `.on` ok, `.off` warn, `.vs` virtual gears. |

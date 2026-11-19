@@ -30,7 +30,7 @@
 }
 .test-about { color: var(--text-2); font-size: var(--fs-md); margin: 0; flex: 1; }
 .test-method { font-size: var(--fs-sm); font-weight: 600; color: var(--accent); }
-.badge.test { background: var(--z4-ink); color: #000; }
+.badge.test { background: var(--z4-soft); color: var(--text); }
 /* test history: an .hlist with its own columns */
 .trow { grid-template-columns: 130px 1fr 90px 80px 140px; }
 
