@@ -66,12 +66,12 @@ jobs:
           node-version: 22
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.settings.target }}
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update ${{ matrix.settings.target && format('--target {0}', matrix.settings.target) || '' }}
+          rustup default stable
 
       - name: Rust cache
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: './src-tauri -> target'
           key: ${{ matrix.settings.name }}
@@ -169,7 +169,7 @@ jobs:
           test -n "$(ls -A release)"
 
       - name: Install cargo-about
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
         with:
           tool: cargo-about
 
@@ -224,7 +224,7 @@ jobs:
           cat release/latest.json
 
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           name: zwoTrainer ${{ github.ref_name }}
           body_path: notes.md
