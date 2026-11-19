@@ -33,7 +33,7 @@ ui/                         frontend — static files served by Tauri (frontendD
   js/sound.js               countdown beep, rising/falling countdown notes and end chime (Web Audio)
   js/html.js                html`` tagged template (auto-escaping), raw(), tHtml(), mount(), esc()
   js/components/            markup helpers, one file per CSS component family (same names as css/components/):
-                            icons (IC), buttons (segCtl, segRow, selectSeg, menuBtn), indicators (badge, wdTag, zoneTag), dialog (dialogHead, closeBtn)
+                            icons (IC), buttons (segCtl, segRow, selectSeg, menuBtn), indicators (badge, wdTag, zoneTag), dialog (dialogHead, closeBtn), avatar (avatarInk: black or white initials from the fill's luminance)
   js/battery.js             battery badge for the devices popover: state thresholds (ok ≥ 40, low 16–39, critical ≤ 15), lowest level, icon HTML
   sounds/                   power-up.mp3, power-down.mp3 (3 notes ~1 s apart), workout-done.mp3 (all CC0)
   js/ble.js                 device objects (Trainer, HeartRate, Controllers), simulator, Tauri event binding
@@ -93,6 +93,7 @@ node scripts/check-css.mjs                           # every CSS file imported i
 node scripts/check-html.mjs                          # markup reaches the DOM only through mount()
 node --test scripts/compact-ride.test.mjs             # compact/full transition lifecycle
 node --test scripts/battery.test.mjs                   # battery state, lowest level, badge
+node --test scripts/avatar.test.mjs                    # avatar initials ink (black / white) per fill colour
 node --test scripts/html.test.mjs                      # html`` escaping, raw/Safe nesting, tHtml, mount
 node --test scripts/updater-manifest.test.mjs            # latest.json: every platform signed, else the run fails
 node scripts/sync-version.mjs [x.y.z]                # print / set the app version

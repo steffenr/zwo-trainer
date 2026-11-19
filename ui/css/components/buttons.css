@@ -18,7 +18,7 @@
     background: var(--accent); border-color: var(--accent); color: var(--accent-ink);
     &:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
   }
-  &.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+  &.danger { background: var(--danger); border-color: var(--danger); color: var(--danger-ink); }
   &.ghost {
     background: transparent;
     &:hover { background: var(--surface-2); }

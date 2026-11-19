@@ -32,6 +32,6 @@
   width: 34px; height: 34px; border-radius: var(--r-md); display: grid; place-items: center; color: #fff; font: 800 var(--fs-lg) var(--font); flex: none;
   &.sm { width: 26px; height: 26px; border-radius: var(--r-sm); font-size: var(--fs-2xs); }
   &.garmin { background: var(--garmin-bg); color: var(--garmin-ink); outline: 1px solid var(--line-strong); }
-  &.sync { background: var(--accent); color: #fff; }
+  &.sync { background: var(--accent); color: var(--accent-ink); }
   &.ext { background: var(--surface-3); color: var(--text); font-size: var(--fs-sm); font-weight: 800; letter-spacing: -.02em; outline: 1px solid var(--line-strong); }
 }

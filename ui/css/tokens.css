@@ -41,6 +41,7 @@
   /* Garmin brand button and tile: dark on light, light on dark */
   --garmin-bg: #1d1d1f;
   --garmin-ink: #ffffff;
+  --danger-ink: #ffffff;   /* label on a --danger fill: 5.47:1 on #c62f26 */
 
   /* radius scale */
   --r-2xs: 3px;            /* swatches, bars */
@@ -76,6 +77,7 @@
     --shadow: none; --shadow-lg: 0 30px 80px rgba(0, 0, 0, .8); --backdrop: rgba(0, 0, 0, .7);
     --z1-ink: #a6a6a6; --z2-ink: #5aa4ff; --z3-ink: #6fd06f; --z4-ink: #ffcc3f; --z5-ink: #ff7a52; --cad: #b98bff; --hrline: #ff4d7d;
     --garmin-bg: #f2f2f3; --garmin-ink: #000000;
+    --danger-ink: #000000;   /* 6.83:1 on #ff5a4f (white would be 3.08) */
     color-scheme: dark;
   }
 }
@@ -90,5 +92,6 @@
   --shadow: none; --shadow-lg: 0 30px 80px rgba(0, 0, 0, .8); --backdrop: rgba(0, 0, 0, .7);
   --z1-ink: #a6a6a6; --z2-ink: #5aa4ff; --z3-ink: #6fd06f; --z4-ink: #ffcc3f; --z5-ink: #ff7a52; --cad: #b98bff; --hrline: #ff4d7d;
   --garmin-bg: #f2f2f3; --garmin-ink: #000000;
+  --danger-ink: #000000;   /* 6.83:1 on #ff5a4f (white would be 3.08) */
   color-scheme: dark;
 }

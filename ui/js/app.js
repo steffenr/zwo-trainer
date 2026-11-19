@@ -21,6 +21,7 @@ import { IC } from './components/icons.js';
 import { badge, wdTag, zoneTag } from './components/indicators.js';
 import { dialogHead, closeBtn } from './components/dialog.js';
 import { segCtl, segRow, selectSeg, menuBtn } from './components/buttons.js';
+import { avatarInk } from './components/avatar.js';
 
 // Platform wording: zwoTrainer runs on macOS, Windows and Linux; only labels differ.
 const OS = (() => {
@@ -392,16 +393,15 @@ const AVATAR_EMOJI = ['🚴', '🚵', '🏃', '🏊', '⚡', '🔥', '🚀', '�
 /** Only a #rrggbb colour may reach markup or CSS (same rule as clean_avatar in state.rs). */
 const safeColor = (c) => (typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c) ? c : null);
 const avatarBg = (p) => safeColor(p.avatar?.color) || avatarColor(p.id);
+/** Classes of an avatar: emoji on a tint, or initials in black or white, whichever contrasts more with the fill. */
+const avatarCls = (p, cls) => `avatar ${cls} ${p.avatar?.emoji ? 'emoji' : avatarInk(avatarBg(p)) === 'dark' ? 'ink-dark' : ''}`.replace(/\s+/g, ' ').trim();
 /** Rider avatar: emoji on a tint, or the initials on the rider's colour (only a #rrggbb colour reaches CSS). */
-const avatar = (p, cls = '') => {
-  const e = p.avatar?.emoji;
-  return html`<span class="avatar ${cls} ${e ? 'emoji' : ''}" style="--av:${avatarBg(p)}">${e || initials(p.name)}</span>`;
-};
+const avatar = (p, cls = '') => html`<span class="${avatarCls(p, cls)}" style="--av:${avatarBg(p)}">${p.avatar?.emoji || initials(p.name)}</span>`;
 /** DOM version of avatar() for live previews: user input is only ever set as text, never parsed as HTML. */
 const avatarNode = (p, cls = '') => {
   const e = p.avatar?.emoji;
   const s = document.createElement('span');
-  s.className = `avatar ${cls} ${e ? 'emoji' : ''}`.trim();
+  s.className = avatarCls(p, cls);
   s.style.setProperty('--av', avatarBg(p));
   s.textContent = e || initials(p.name);
   return s;

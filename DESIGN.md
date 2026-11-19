@@ -52,6 +52,7 @@ Always use tokens (`var(--…)`), never raw hex in components. Dark values apply
 | `--ok` / `--ok-soft` | `#2e9e4f` | `#4cd07a` | connected, success, ERG on |
 | `--warn` / `--warn-soft` | `#8a5a12` | `#f2c14e` | connecting, ERG off, changed intensity (`.warn-text`); light value ≥ 4.5:1 as text, also on `--warn-soft` |
 | `--danger` | `#c62f26` | `#ff5a4f` | destructive text and buttons, errors (`.danger-text`: failed actions, sync errors); light value ≥ 4.5:1 as text and under white |
+| `--danger-ink` | `#ffffff` | `#000000` | label on a `--danger` fill (`.btn.danger`): 5.47:1 on the light `#c62f26`, 6.83:1 on the dark red, where white would be only 3.08:1 |
 | `--pos`, `--trace`, `--ftp` | text colour | white | chart position line, power trace, FTP line |
 | `--done` | `#00a3c4` (brand cyan) | accent | completed part of the workout; graphic only, never text |
 | `--cad` / `--hrline` | `#8b3dff` / `#e0004d` | `#b98bff` / `#ff4d7d` | cadence and heart-rate traces |
@@ -68,6 +69,7 @@ Always use tokens (`var(--…)`), never raw hex in components. Dark values apply
 | Free ride | `#b4bac2` | — |
 
 - **Fills** are used for bars, chips, tags and filter dots. Text on a fill is black (`.ztag`).
+- **Text on a coloured fill** always uses its ink token (`--accent-ink`, `--danger-ink`, `--garmin-ink`), never a literal `#fff`: the dark theme's fills are light, and white on the dark accent is only 2.08:1.
 - **Inks** (`--zN-ink`) are for coloured text on the page background, such as target % and upcoming watts.
 - **Never** use zone colours for buttons, status or decoration.
 
@@ -230,7 +232,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 | **Popover / menu** `.popover` | radius 12, `--shadow-lg`, 6 px padding, 220 px minimum. Items are full-width rows with radius 8 and hover `--surface-2`; separate destructive items with `<hr>` and mark them `.danger-text` with a trailing "…". |
 | **"⋯" menu** | `menuBtn(items)` gives a quiet 28–34 px button. Use it for every secondary or destructive action: Finder, Trash, Reset progress, … |
 | **Devices menu** | 300 px popover with the title "DEVICES" and one row per device kind: 34 px icon tile (`.dev-ico`, ok-tinted when connected) · name and status · action text ("Connect" / "Change"). Connected devices that report a battery show a **battery badge** (`.batt`) after the name: a 20 × 12 icon filled to the level plus the percentage. State colours: `ok` (≥ 40 %, `--ok`), `low` (16–39 %, `--warn`), `critical` (≤ 15 %, `--danger`); never colour alone, the percentage and an accessible label always accompany it. With several controllers the lowest level is shown. Battery appears only in this menu, not in the top bar. |
-| **Avatar** `.avatar` | circle with `--av` background and white 700 initials. With an emoji, the background is 22 % `--av` mixed with the surface, plus an inset 1.5 px `--av` ring. Sizes: 28 (lists), 32 (top bar), 72–84 (`.xl`: who's riding, editor). |
+| **Avatar** `.avatar` | circle with `--av` background and 700 initials in white, or black (`.ink-dark`) when black contrasts more with the fill (`avatarInk()` in `js/components/avatar.js`, WCAG luminance > ≈ 0.18). All preset colours get black initials (6.3–9.8:1; white was 2.2–4.0:1); dark custom colours keep white. With an emoji, the background is 22 % `--av` mixed with the surface, plus an inset 1.5 px `--av` ring. Sizes: 28 (lists), 32 (top bar), 72–84 (`.xl`: who's riding, editor). |
 | **Toast** `.toast` | inverted (text-colour background), radius 12, bottom centre, 3.2 s. Short and plain. Screen readers hear it through `announce()` (see Accessibility). |
 | **Update card** `.update-card` | the only persistent notice: fixed bottom-right (24 px), 340 px, `--surface`, `--line` border, radius 14, `--shadow-lg`. 30 px accent-soft download tile · "zwoTrainer X is available" / muted "You have Y" · actions *What's new* (ghost, left), *Later* (ghost) and *Install &amp; restart* (primary). While installing: status line and a `.pbar` with the download progress. Hidden while riding (`body.riding`), pops in like a popover. |
 | **Description** `.plan-desc` + `.md` | card under the plan header (and inside the Workouts folder header): rendered Markdown in `--text-2`, 14.5 px / 1.6, max 78 ch, accent underlined links, selectable text. Longer than 300 characters → a plain-text preview, smart-trimmed at the last sentence end after ~180 characters (else at a word boundary with “…”), followed by an inline accent *Show more* link; expanded shows the full Markdown with *Show less* at the end (`smartTrim`, `markdownPlain`). Plan cards show the first sentence (2-line clamp, `.pc-desc`). |
