@@ -10,13 +10,14 @@
 #    environment only admits `v*` tags, so a build dispatched from any branch can't read them.
 #    Repository-level copies from an older setup are deleted.
 #
-# Running it again with the existing key only moves/refreshes the secrets.
+# Running it again with the existing key only moves/refreshes the secrets. KEY=<file> uses
+# another key file (e.g. after a key change, see "Changing the key" in AGENTS.md).
 #
 # Back up ~/.tauri/zwotrainer.key and its password (e.g. in your password manager). Without
 # them no update can ever reach the apps that are already installed.
 set -euo pipefail
 
-KEY="${HOME}/.tauri/zwotrainer.key"
+KEY="${KEY:-${HOME}/.tauri/zwotrainer.key}"
 CONF="src-tauri/tauri.conf.json"
 REPO="${REPO:-steffenr/zwo-trainer}"
 
