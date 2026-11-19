@@ -3,8 +3,9 @@
 // which reloads everything that depends on the rider. The rider list itself lives in core.js (profiles).
 //
 // Import cycles with app.js (applyAppState, loadLibrary; app.js wires the chip and asks who is riding) and
-// through actions.js, devices.js, connections.js and views/settings.js. Safe because nothing from those
-// modules is used while this module is evaluated, only inside functions that run after boot.
+// views/settings.js (a new rider opens Settings, which redraws the chip), and through actions.js, devices.js
+// and connections.js. Safe because nothing from those modules is used while this module is evaluated, only
+// inside functions that run after boot.
 import { invoke } from './ble.js';
 import { t } from './i18n/index.js';
 import { html, raw, tHtml, tText, mount } from './html.js';

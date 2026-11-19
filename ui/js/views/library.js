@@ -4,8 +4,9 @@
 // zones, description and Ride / Start / Skip / Open plan.
 //
 // Import cycles with app.js (api, setMode, refreshView; app.js routes here) and with actions.js (bindActions,
-// moreMenu, markEntry, toggleFav here; its preview action and ⋯ menu use openPreview and `wf`). Safe because
-// nothing from those modules is used while this module is evaluated, only inside functions that run after boot.
+// moreMenu, markEntry, toggleFav here; its preview action and ⋯ menu use openPreview and `wf`), and through
+// ride/ride.js (startRide). Safe because nothing from those modules is used while this module is evaluated,
+// only inside functions that run after boot.
 import { powerAt, estimateTss } from '../zwo.js';
 import { ZONES, FREE_COLOR, zoneOf, fmtTime, fmtDur, Diagram, motionOK } from '../render.js';
 import { t, pct } from '../i18n/index.js';
