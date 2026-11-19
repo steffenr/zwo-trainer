@@ -210,7 +210,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 
 - **Normal minimum window:** 900 × 640; Compact ride view: 320 × 200.
 - **≤ 1100 px:** the workout rows drop the mini profile.
-- **≤ 980 px:** the ride panels wrap 2 + 1 and the rows drop the duration.
+- **≤ 980 px:** the ride panels wrap 2 + 1 and the rows drop the duration. Every row keeps its actions (☆, ⋯, *Ride* / *Start* + *Skip*): at the 900 px minimum, next to the Workouts sidebar, the title still gets ~170 px with the widest translated action cell (German favourites: ↑ ↓ ☆ ⋯ *Fahren*). Never hide the actions to make room; the title ellipsizes first.
 - **Above 1400 px:** ride readouts scale up (see Typography).
 
 ## Components
@@ -221,7 +221,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 | **Icon button** `.icon-btn` | 36 × 36, transparent, muted icon, `--surface-2` on hover. |
 | **Segmented control** `.seg-ctl` | `--surface-2` track, radius 10, 3 px padding; the selected item is a raised `--surface` pill. Used for the mode switch, duration filter, theme, upload mode and shifting. The top-bar mode switch is a `role="group"` labelled "Mode" whose buttons carry `aria-pressed` (plain Tab between them; they switch the whole view, so they are not tabs). In dialogs build it with `segRow()`: a `radiogroup` labelled by its row text, buttons are `role="radio"` with `aria-checked`, one tab stop, arrow keys / Home / End move and select (`rovingKey`). Focus shows a 2 px accent outline. |
 | **Card / panel** `.card` `.panel` | `--surface`, 1 px `--line`, radius 14, padding 20 / 16, `--shadow`. |
-| **Workout row** `.wrow` | grid: status · title (+ meta) · mini profile 200 × 28 · duration · intensity tag + TSS · actions (☆, ⋯, primary action), left-aligned so ☆ and ⋯ line up on every row. All rows of a list (all weeks of a plan) share one column grid (`.wlist` / `.weeks`, rows are subgrids): the action column is at least 150 px and grows to the widest row, so longer labels ("Démarrer" + "Sauter", "Überspringen") never overlap the TSS. Radius 11, hover border `--line-strong`. The next workout in a plan gets the accent border and a soft gradient. |
+| **Workout row** `.wrow` | grid: status · title (+ meta) · mini profile 200 × 28 · duration · intensity tag + TSS · actions (☆, ⋯, primary action), left-aligned so ☆ and ⋯ line up on every row. All rows of a list (all weeks of a plan) share one column grid (`.wlist` / `.weeks`, rows are subgrids): the action column is at least 150 px and grows to the widest row, so longer labels ("Démarrer" + "Sauter", "Überspringen") never overlap the TSS. The mini profile goes at ≤ 1100 px and the duration at ≤ 980 px; the actions stay at every width. Radius 11, hover border `--line-strong`. The next workout in a plan gets the accent border and a soft gradient. |
 | **Intensity tag** `.ztag` | zone fill, black 11 px 650 text "Z1–Z5", radius 5, min-width 26. |
 | **Zone filter** `.zone-filter` | outlined chips with a 9 px zone dot; when active the border is the zone colour, the background is 16 % zone colour, and the zone name is shown. |
 | **Badge** `.badge` | 11 px 700, radius 6. Default is accent; `.ok`, `.warn` (e.g. *Not completed* in the test history), `.muted` and `.test` (Z4 ink) variants. |
