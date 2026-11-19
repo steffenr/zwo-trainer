@@ -174,7 +174,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 **Rust**
 - `Result<T, String>` at the command boundary (`type Res<T>`). Error strings are shown to the user, so make them short, plain English and actionable.
 - **No new crates without a strong reason;** keep the release binary small (`opt-level = "s"`, LTO). Prefer std plus existing deps (serde_json `Value` for flexible JSON).
-- **File writes** go through `state::write_json` (tmp + fsync + rename) and must never be partial.
+- **File writes** go through `state::write_json` (tmp + fsync + rename) and must never be partial. Non-JSON files (FIT) go through `write_bytes` in lib.rs (dot tmp + fsync + rename); activity names are made unique with `free_stem` and never overwrite an existing file.
 - **Paths from the UI** are relative to the workouts folder and pass `library::inside_root` (path-traversal guard). Deleting goes to the Trash (`trash` crate), never `remove_file` on user content.
 - **Bluetooth:** dedupe ERG writes, never block the async runtime (use `spawn_blocking` for blocking work), reconnect silently.
 - **Tests:** every parser, encoder, protocol decoder and merge rule has unit tests next to the code (`#[cfg(test)] mod tests`). Add one for every bug fix.
