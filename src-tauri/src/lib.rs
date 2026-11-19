@@ -22,7 +22,7 @@ use tauri_plugin_opener::OpenerExt;
 
 struct App {
     store: Arc<state::Store>,
-    cache: library::Cache,
+    cache: Arc<library::Cache>,
     ble: Arc<ble::Ble>,
     shifters: Arc<shifter::Controllers>,
     awake: Mutex<Option<std::process::Child>>,
@@ -145,15 +145,18 @@ fn switch_profile(app: State<'_, App>, id: String) -> Res<Value> {
 
 // ---------------------------------------------------------------- library
 
+/// Scanning reads up to thousands of files: on a blocking thread, never on an async worker
+/// (Bluetooth events and other commands run there).
 #[tauri::command]
 async fn scan_library(app: State<'_, App>) -> Res<library::Library> {
-    let root = app.store.zwo_dir();
-    Ok(app.cache.scan(&root))
+    let (root, cache) = (app.store.zwo_dir(), app.cache.clone());
+    tokio::task::spawn_blocking(move || cache.scan(&root)).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn load_workout(app: State<'_, App>, file: String) -> Res<library::LoadedWorkout> {
-    library::load(&app.store.zwo_dir(), &file)
+    let root = app.store.zwo_dir();
+    tokio::task::spawn_blocking(move || library::load(&root, &file)).await.map_err(|e| e.to_string())?
 }
 
 /// Native folder picker; stores the choice in the active profile (None if cancelled).
@@ -661,7 +664,7 @@ pub fn run() {
             let ble = ble::Ble::new(app.handle().clone());
             app.manage(App {
                 store: Arc::new(state::Store::new(&data_dir)),
-                cache: library::Cache::default(),
+                cache: Arc::new(library::Cache::default()),
                 shifters: shifter::Controllers::new(app.handle().clone(), ble.clone()),
                 ble,
                 awake: Mutex::new(None),

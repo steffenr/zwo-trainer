@@ -110,12 +110,23 @@ fn http() -> reqwest::Client {
     reqwest::Client::builder().timeout(Duration::from_secs(60)).user_agent(USER_AGENT).build().expect("http client")
 }
 
-async fn consumer() -> Result<(String, String), String> {
+/// The consumer pair kept in the rider's Garmin record, if any.
+fn cached_consumer(rec: &Value) -> Option<(String, String)> {
+    Some((rec["consumer"]["key"].as_str()?.to_string(), rec["consumer"]["secret"].as_str()?.to_string()))
+}
+
+/// The OAuth consumer pair for Garmin's token exchange. Downloaded (CONSUMER_URL) only when the
+/// record has none, i.e. once per sign-in, then kept in it (`secrets.json`, never synced), so
+/// a token refresh needs no download. A sign-in starts from an empty record and fetches it anew.
+async fn consumer(rec: &mut Value) -> Result<(String, String), String> {
+    if let Some(c) = cached_consumer(rec) {
+        return Ok(c);
+    }
     let v: Value = http().get(CONSUMER_URL).send().await.map_err(|e| e.to_string())?.json().await.map_err(|e| e.to_string())?;
-    Ok((
-        v["consumer_key"].as_str().ok_or("Garmin consumer key unavailable")?.to_string(),
-        v["consumer_secret"].as_str().ok_or("Garmin consumer key unavailable")?.to_string(),
-    ))
+    let key = v["consumer_key"].as_str().ok_or("Garmin consumer key unavailable")?.to_string();
+    let secret = v["consumer_secret"].as_str().ok_or("Garmin consumer key unavailable")?.to_string();
+    rec["consumer"] = json!({ "key": key, "secret": secret });
+    Ok((key, secret))
 }
 
 fn parse_form(s: &str) -> Vec<(String, String)> {
@@ -124,7 +135,8 @@ fn parse_form(s: &str) -> Vec<(String, String)> {
 
 /// Ticket → OAuth1 → OAuth2. Returns the secret record stored for the rider.
 pub async fn login_with_ticket(ticket: &str, now: i64) -> Result<Value, String> {
-    let (ck, cs) = consumer().await?;
+    let mut rec = json!({});
+    let (ck, cs) = consumer(&mut rec).await?;
     let url = format!("{CONNECT_API}/oauth-service/oauth/preauthorized");
     let q = vec![
         ("ticket".to_string(), ticket.to_string()),
@@ -141,7 +153,7 @@ pub async fn login_with_ticket(ticket: &str, now: i64) -> Result<Value, String> 
     let get = |k: &str| f.iter().find(|(a, _)| a == k).map(|(_, v)| v.clone());
     let token = get("oauth_token").ok_or("Garmin did not return a token")?;
     let secret = get("oauth_token_secret").ok_or("Garmin did not return a token")?;
-    let mut rec = json!({ "oauth1": { "token": token, "secret": secret, "mfaToken": get("mfa_token") } });
+    rec["oauth1"] = json!({ "token": token, "secret": secret, "mfaToken": get("mfa_token") });
     refresh_oauth2(&mut rec, now).await?;
     // who is signed in (best effort)
     if let Ok(name) = display_name(&rec).await {
@@ -152,7 +164,7 @@ pub async fn login_with_ticket(ticket: &str, now: i64) -> Result<Value, String> 
 
 /// OAuth1 → fresh OAuth2 bearer (mutates `rec`).
 pub async fn refresh_oauth2(rec: &mut Value, now: i64) -> Result<(), String> {
-    let (ck, cs) = consumer().await?;
+    let (ck, cs) = consumer(rec).await?;
     let t = rec["oauth1"]["token"].as_str().ok_or("Garmin is not connected")?.to_string();
     let ts = rec["oauth1"]["secret"].as_str().ok_or("Garmin is not connected")?.to_string();
     let url = format!("{CONNECT_API}/oauth-service/oauth/exchange/user/2.0");
@@ -342,5 +354,13 @@ mod tests {
         let u = signin_url();
         assert!(u.starts_with("https://sso.garmin.com/sso/signin?id=gauth-widget&embedWidget=true"));
         assert!(u.contains("service=https%3A%2F%2Fsso.garmin.com%2Fsso%2Fembed"));
+    }
+
+    #[test]
+    fn consumer_is_kept_with_the_session() {
+        assert_eq!(cached_consumer(&json!({ "oauth1": { "token": "t" } })), None, "older records fetch it once");
+        let rec = json!({ "consumer": { "key": "k", "secret": "s" }, "oauth1": { "token": "t" } });
+        assert_eq!(cached_consumer(&rec), Some(("k".into(), "s".into())));
+        assert_eq!(cached_consumer(&json!({ "consumer": { "key": "k" } })), None, "incomplete pair");
     }
 }

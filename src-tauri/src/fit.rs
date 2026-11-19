@@ -361,7 +361,8 @@ pub fn encode(ride: &Ride, flavor: Flavor) -> Result<(Vec<u8>, Summary), String>
             (0, V::Enum(Some(9))),  // event = lap
             (1, V::Enum(Some(1))),  // stop
             (2, V::U32(Some(*ls))),
-            (7, V::U32(Some(((le - ls + 1) as f64 * 1000.0) as u32))),
+            // saturating: the wall clock may step backwards mid-ride (NTP, time zone change)
+            (7, V::U32(Some(((le.saturating_sub(*ls) + 1) as f64 * 1000.0) as u32))),
             (8, V::U32(Some((secs * 1000.0) as u32))),
             (9, V::U32(Some((a.dist * 100.0).round() as u32))),
             (11, V::U16(Some(a.kj().round() as u16))),
@@ -390,7 +391,7 @@ pub fn encode(ride: &Ride, flavor: Flavor) -> Result<(Vec<u8>, Summary), String>
         (2, V::U32(Some(start))),
         (5, V::Enum(Some(2))),
         (6, V::Enum(Some(6))),
-        (7, V::U32(Some(((end - start + 1) as f64 * 1000.0) as u32))),
+        (7, V::U32(Some(((end.saturating_sub(start) + 1) as f64 * 1000.0) as u32))),
         (8, V::U32(Some((secs * 1000.0) as u32))),
         (9, V::U32(Some((total.dist * 100.0).round() as u32))),
         (11, V::U16(Some(total.kj().round() as u16))),
@@ -496,6 +497,18 @@ mod tests {
         if let Ok(p) = std::env::var("FIT_TEST_OUT") {
             std::fs::write(format!("{p}.workout.fit"), &g).unwrap();
         }
+    }
+
+    #[test]
+    fn clock_stepping_back_is_survived() {
+        // the system clock jumps back 2 h in the middle of the ride
+        let mut r = sample_ride();
+        for (i, s) in r.samples.iter_mut().enumerate().skip(300) {
+            s.wall -= 7_200_000 - (i as i64 % 2);
+        }
+        let (g, sum) = encode(&r, Flavor::Garmin).unwrap();
+        assert_eq!(crc16(&g), 0);
+        assert_eq!(sum.duration, 600);
     }
 
     #[test]

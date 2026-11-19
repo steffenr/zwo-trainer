@@ -8,8 +8,13 @@
 //!
 //! Rules (predictable, never "resurrects" what you deleted):
 //!  - the newer copy of a profile (updatedAt) wins for everything it owns: name, avatar,
-//!    rider settings, plan progress, favorites;
+//!    rider settings, favorites;
 //!  - ride history and FTP tests are append-only logs and are merged from both sides;
+//!  - what a ride or test produced on one Mac survives a later, unrelated save on the other:
+//!    plan progress is merged per workout (the later `at` wins), personal bests per duration
+//!    (the higher one), and the FTP of an applied test newer than the other side's applied test
+//!    wins over the newer profile's FTP. (Unmarking a workout as done can come back from the
+//!    other Mac this way; losing a ridden workout would be worse.)
 //!  - machine-specific settings stay local: paired devices, workouts folder, Garmin FIT folder;
 //!  - a deleted profile leaves a tombstone, so it is removed on the other Macs too;
 //!  - secrets (Garmin session) are never synced — sign in once per Mac.
@@ -84,15 +89,54 @@ fn ts(p: &Value) -> &str {
 }
 
 /// Merge an append-only log (history / tests) from both sides; `newer` wins for identical keys.
-fn union_log(newer: &Value, older: &Value, key: impl Fn(&Value) -> String, cap: usize) -> Value {
+/// Newest first, at most `cap` entries (`None`: all of them).
+fn union_log(newer: &Value, older: &Value, key: impl Fn(&Value) -> String, cap: Option<usize>) -> Value {
     let mut m: BTreeMap<String, Value> = BTreeMap::new();
     for e in older.as_array().into_iter().flatten().chain(newer.as_array().into_iter().flatten()) {
         m.insert(key(e), e.clone());
     }
     let mut v: Vec<Value> = m.into_values().collect();
     v.sort_by(|a, b| b["at"].as_str().unwrap_or("").cmp(a["at"].as_str().unwrap_or("")));
-    v.truncate(cap);
+    if let Some(cap) = cap {
+        v.truncate(cap);
+    }
     Value::Array(v)
+}
+
+/// Plans of both sides; per workout entry the one with the later `at`.
+fn merge_plans(newer: &Value, older: &Value) -> Value {
+    let mut out = newer.as_object().cloned().unwrap_or_default();
+    for (folder, op) in older.as_object().into_iter().flatten() {
+        let Some(np) = out.get_mut(folder).filter(|p| p.is_object()) else {
+            out.insert(folder.clone(), op.clone());
+            continue;
+        };
+        let mut entries = np["entries"].as_object().cloned().unwrap_or_default();
+        for (file, oe) in op["entries"].as_object().into_iter().flatten() {
+            let at = |e: &Value| e["at"].as_str().unwrap_or("").to_string();
+            if entries.get(file).is_none_or(|ne| at(ne) < at(oe)) {
+                entries.insert(file.clone(), oe.clone());
+            }
+        }
+        np["entries"] = Value::Object(entries);
+    }
+    Value::Object(out)
+}
+
+/// Personal bests of both sides: the higher value per duration.
+fn merge_bests(newer: &Value, older: &Value) -> Value {
+    let mut out = newer.as_object().cloned().unwrap_or_default();
+    for (k, ov) in older.as_object().into_iter().flatten() {
+        if out.get(k).and_then(Value::as_f64).is_none_or(|nv| ov.as_f64().is_some_and(|o| o > nv)) {
+            out.insert(k.clone(), ov.clone());
+        }
+    }
+    Value::Object(out)
+}
+
+/// `at` of the test a profile applied as its FTP (`accepted`), if its FTP still is that test's.
+fn applied_test(p: &Value) -> Option<&str> {
+    p["tests"].as_array()?.iter().find(|t| t["accepted"] == json!(true) && t["ftp"] == p["settings"]["ftp"])?["at"].as_str()
 }
 
 /// Merge two copies of the same profile (see module docs). `local` keeps its machine settings.
@@ -102,8 +146,27 @@ pub fn merge(local: &Value, remote: &Value) -> Value {
     let mut out = newer.clone();
     keep_local(&mut out, local);
     let hk = |e: &Value| format!("{}|{}", e["at"].as_str().unwrap_or(""), e["file"].as_str().unwrap_or(""));
-    out["history"] = union_log(&newer["history"], &older["history"], hk, 1000);
-    out["tests"] = union_log(&newer["tests"], &older["tests"], |e| e["at"].as_str().unwrap_or("").to_string(), 200);
+    // every ride is kept: a ride's FIT file outlives a capped list, and old rides are the rider's
+    out["history"] = union_log(&newer["history"], &older["history"], hk, None);
+    out["tests"] = union_log(&newer["tests"], &older["tests"], |e| e["at"].as_str().unwrap_or("").to_string(), Some(200));
+    if older["plans"].is_object() {
+        out["plans"] = merge_plans(&newer["plans"], &older["plans"]);
+    }
+    if older["settings"]["bests"].is_object() && out["settings"].is_object() {
+        out["settings"]["bests"] = merge_bests(&newer["settings"]["bests"], &older["settings"]["bests"]);
+    }
+    // A test the newer side hasn't seen yet, applied after the newer side's own applied test,
+    // brings its FTP along. A test it has seen was already superseded there (e.g. by hand).
+    let seen = |at: &str| newer["tests"].as_array().into_iter().flatten().any(|t| t["at"].as_str() == Some(at));
+    if let Some(at) = applied_test(older).filter(|a| !seen(a) && applied_test(newer).is_none_or(|n| n < *a)) {
+        if out["settings"].is_object() {
+            out["settings"]["ftp"] = older["settings"]["ftp"].clone();
+        }
+        // only that test stays marked as applied
+        for t in out["tests"].as_array_mut().into_iter().flatten() {
+            t["accepted"] = json!(t["at"].as_str() == Some(at));
+        }
+    }
     out["updatedAt"] = json!(ts(newer));
     out
 }
@@ -167,43 +230,56 @@ fn placeholder_id(name: &str) -> Option<&str> {
 /// Returns { changed, pulled, pushed, filesUp, filesDown, pending, skipped, at, app }:
 /// `pending` = iCloud placeholders still downloading, `skipped` = riders left alone this run
 /// because their remote file isn't readable yet.
-pub fn run(store: &Store) -> Result<Value, String> {
-    store.update(|doc| {
-        let dir = doc["sync"]["dir"].as_str().filter(|s| !s.is_empty()).map(state::expand).ok_or("No sync folder chosen")?;
-        if !dir.is_dir() {
-            return Err(format!("Sync folder not found: {}", dir.display()));
-        }
-        let pdir = root(&dir).join("profiles");
-        std::fs::create_dir_all(&pdir).map_err(|e| e.to_string())?;
-        let pending = request_icloud_downloads(&pdir);
+/// One sync at a time (auto sync and "Sync now" can overlap).
+static RUNNING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-        let mut remote: BTreeMap<String, Value> = BTreeMap::new();
-        // Ids whose remote copy exists but can't be used in this run (iCloud placeholder not
-        // downloaded yet, unreadable or not a profile file): never pushed over or deleted.
-        let mut blocked: BTreeSet<String> = BTreeSet::new();
-        for e in std::fs::read_dir(&pdir).map_err(|e| e.to_string())?.flatten() {
-            let name = e.file_name().to_string_lossy().to_string();
-            if let Some(id) = placeholder_id(&name) {
-                blocked.insert(id.to_string());
-                continue;
+/// Profile files in the sync folder: readable ones by id, plus the ids whose copy exists but
+/// can't be used in this run (iCloud placeholder not downloaded yet, unreadable or not a
+/// profile file); those are never pushed over or deleted.
+fn read_remote(pdir: &Path) -> Result<(BTreeMap<String, Value>, BTreeSet<String>), String> {
+    let mut remote: BTreeMap<String, Value> = BTreeMap::new();
+    let mut blocked: BTreeSet<String> = BTreeSet::new();
+    for e in std::fs::read_dir(pdir).map_err(|e| e.to_string())?.flatten() {
+        let name = e.file_name().to_string_lossy().to_string();
+        if let Some(id) = placeholder_id(&name) {
+            blocked.insert(id.to_string());
+            continue;
+        }
+        let path = e.path();
+        if path.extension().and_then(|x| x.to_str()) != Some("json") {
+            continue;
+        }
+        // only our own file names: skips "p_x (conflicted copy).json", "p_x 2.json", "...json"
+        let Some(id) = path.file_stem().and_then(|s| s.to_str()).filter(|s| state::is_profile_id(s)).map(str::to_string) else { continue };
+        match std::fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str::<Value>(&s).ok()) {
+            Some(v) if v["profile"].is_object() || v["deleted"].as_bool() == Some(true) => {
+                remote.insert(id, v);
             }
-            let path = e.path();
-            if path.extension().and_then(|x| x.to_str()) != Some("json") {
-                continue;
-            }
-            // only our own file names: skips "p_x (conflicted copy).json", "p_x 2.json", "...json"
-            let Some(id) = path.file_stem().and_then(|s| s.to_str()).filter(|s| state::is_profile_id(s)).map(str::to_string) else { continue };
-            match std::fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str::<Value>(&s).ok()) {
-                Some(v) if v["profile"].is_object() || v["deleted"].as_bool() == Some(true) => {
-                    remote.insert(id, v);
-                }
-                _ => {
-                    blocked.insert(id);
-                }
+            _ => {
+                blocked.insert(id);
             }
         }
-        // a readable copy wins over a stale placeholder of the same file
-        blocked.retain(|id| !remote.contains_key(id));
+    }
+    // a readable copy wins over a stale placeholder of the same file
+    blocked.retain(|id| !remote.contains_key(id));
+    Ok((remote, blocked))
+}
+
+/// Sync in three steps, so the store lock (which every command needs) is held only for the
+/// merge itself, never during cloud-folder I/O: read the folder, merge into state.json under
+/// the lock, then write the profile files and copy FIT files.
+pub fn run(store: &Store) -> Result<Value, String> {
+    let _one = RUNNING.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = store.read(|doc| doc["sync"]["dir"].as_str().filter(|s| !s.is_empty()).map(state::expand))?.ok_or("No sync folder chosen")?;
+    if !dir.is_dir() {
+        return Err(format!("Sync folder not found: {}", dir.display()));
+    }
+    let pdir = root(&dir).join("profiles");
+    std::fs::create_dir_all(&pdir).map_err(|e| e.to_string())?;
+    let pending = request_icloud_downloads(&pdir);
+    let (remote, blocked) = read_remote(&pdir)?;
+
+    let (writes, ids, mut out) = store.update(|doc| {
         let first_sync = doc["sync"]["lastSync"].is_null();
         // First sync on this Mac and the folder already has riders: drop untouched default
         // profiles here, so a fresh install doesn't add a second "Rider 1" everywhere.
@@ -226,8 +302,9 @@ pub fn run(store: &Store) -> Result<Value, String> {
         ids.sort();
         ids.dedup();
 
-        let (mut pulled, mut pushed, mut changed) = (0, 0, false);
-        let write_remote = |id: &str, v: Value| state::write_json(&pdir.join(format!("{id}.json")), &v, false);
+        let (mut pulled, mut changed) = (0, false);
+        // profile files to write once the lock is released
+        let mut writes: Vec<(String, Value)> = vec![];
         let template = doc["profiles"][doc["activeProfile"].as_str().unwrap_or_default()].clone();
 
         for id in ids {
@@ -240,8 +317,7 @@ pub fn run(store: &Store) -> Result<Value, String> {
 
             if let Some(at) = tomb.get(&id).and_then(Value::as_str) {
                 if !r_deleted {
-                    write_remote(&id, json!({ "format": FORMAT, "updatedAt": at, "deleted": true }))?;
-                    pushed += 1;
+                    writes.push((id.clone(), json!({ "format": FORMAT, "updatedAt": at, "deleted": true })));
                 }
                 continue;
             }
@@ -270,8 +346,7 @@ pub fn run(store: &Store) -> Result<Value, String> {
                     if hold_pristine && is_pristine(&l) {
                         continue;
                     }
-                    write_remote(&id, json!({ "format": FORMAT, "updatedAt": ts(&l), "profile": strip_local(&l) }))?;
-                    pushed += 1;
+                    writes.push((id.clone(), json!({ "format": FORMAT, "updatedAt": ts(&l), "profile": strip_local(&l) })));
                 }
                 (None, Some(mut p)) => {
                     state::normalize_profile(&mut p, &id);
@@ -292,8 +367,7 @@ pub fn run(store: &Store) -> Result<Value, String> {
                     }
                     let stripped = strip_local(&m);
                     if strip_paths(&stripped) != strip_paths(&strip_local(&rp)) {
-                        write_remote(&id, json!({ "format": FORMAT, "updatedAt": ts(&m), "profile": stripped }))?;
-                        pushed += 1;
+                        writes.push((id.clone(), json!({ "format": FORMAT, "updatedAt": ts(&m), "profile": stripped })));
                     }
                 }
                 (None, None) => {}
@@ -307,13 +381,6 @@ pub fn run(store: &Store) -> Result<Value, String> {
             changed = true;
         }
 
-        // ride files (FIT) for every remaining profile
-        let mut files = (0, 0);
-        for id in doc["profiles"].as_object().unwrap().keys() {
-            let (a, b) = sync_files(&store.activities_dir(id), &root(&dir).join("activities").join(id));
-            files.0 += a;
-            files.1 += b;
-        }
         let at = state::now_iso();
         // a first sync that couldn't see every rider yet stays "first", so the next run can
         // still replace an untouched default with the riders from the folder
@@ -321,9 +388,27 @@ pub fn run(store: &Store) -> Result<Value, String> {
             doc["sync"]["lastSync"] = json!(at);
         }
         doc["sync"]["lastError"] = Value::Null;
-        Ok(json!({ "changed": changed, "pulled": pulled, "pushed": pushed, "filesUp": files.0, "filesDown": files.1, "pending": pending, "skipped": blocked.len(), "at": at, "app": Store::summary(doc) }))
-    })
+        let ids: Vec<String> = doc["profiles"].as_object().unwrap().keys().cloned().collect();
+        let out = json!({ "changed": changed, "pulled": pulled, "pending": pending, "skipped": blocked.len(), "at": at, "app": Store::summary(doc) });
+        Ok((writes, ids, out))
+    })?;
+
+    for (id, v) in &writes {
+        state::write_json(&pdir.join(format!("{id}.json")), v, false)?;
+    }
+    // ride files (FIT) for every remaining profile
+    let mut files = (0, 0);
+    for id in &ids {
+        let (a, b) = sync_files(&store.activities_dir(id), &root(&dir).join("activities").join(id));
+        files.0 += a;
+        files.1 += b;
+    }
+    out["pushed"] = json!(writes.len());
+    out["filesUp"] = json!(files.0);
+    out["filesDown"] = json!(files.1);
+    Ok(out)
 }
+
 
 /// A profile nobody has used yet (fresh install).
 fn is_pristine(p: &Value) -> bool {
@@ -366,6 +451,58 @@ mod tests {
         assert_eq!(m["settings"]["devices"]["trainer"]["id"], "x");
         assert_eq!(m["history"].as_array().unwrap().len(), 2);
         assert_eq!(m["history"][0]["at"], "2026-09-05T00:00:00Z");
+    }
+
+    #[test]
+    fn long_histories_are_kept_whole() {
+        let at = |i: usize| format!("2020-01-01T00:{:02}:{:02}Z", i / 60, i % 60);
+        let side = |r: std::ops::Range<usize>| r.map(at).collect::<Vec<_>>();
+        let (a, b) = (side(0..900), side(900..1800));
+        let m = merge(&prof("Me", "2026-01-02T00:00:00Z", &a.iter().map(String::as_str).collect::<Vec<_>>()),
+                      &prof("Me", "2026-01-01T00:00:00Z", &b.iter().map(String::as_str).collect::<Vec<_>>()));
+        assert_eq!(m["history"].as_array().unwrap().len(), 1800, "no ride dropped above 1000");
+    }
+
+    #[test]
+    fn ride_results_survive_a_later_save_elsewhere() {
+        // Mac A: rode plan day 2, a new 20-min best, applied an FTP test (all at 10:00)
+        let mut a = prof("Me", "2026-11-01T10:00:00Z", &[]);
+        a["settings"]["ftp"] = json!(262);
+        a["settings"]["bests"] = json!({ "m20": 275, "s5": 900 });
+        a["tests"] = json!([{ "at": "2026-11-01T09:00:00Z", "ftp": 262, "accepted": true },
+                            { "at": "2026-10-01T09:00:00Z", "ftp": 250, "accepted": false }]);
+        a["plans"] = json!({ "base": { "startedAt": "s", "entries": {
+            "d1.zwo": { "status": "done", "at": "2026-10-30T10:00:00Z" },
+            "d2.zwo": { "status": "done", "at": "2026-11-01T10:00:00Z" } } } });
+        // Mac B, not synced since day 1: changed the theme at 11:00 (newer profile)
+        let mut b = prof("Me", "2026-11-01T11:00:00Z", &[]);
+        b["settings"]["theme"] = json!("dark");
+        b["settings"]["bests"] = json!({ "m20": 268, "s5": 950 });
+        b["tests"] = json!([{ "at": "2026-10-01T09:00:00Z", "ftp": 250, "accepted": true }]);
+        b["plans"] = json!({ "base": { "startedAt": "s", "entries": {
+            "d1.zwo": { "status": "done", "at": "2026-10-30T10:00:00Z" } } },
+            "other": { "entries": { "x.zwo": { "status": "skipped", "at": "2026-10-31T10:00:00Z" } } } });
+        for m in [merge(&a, &b), merge(&b, &a)] {
+            assert_eq!(m["settings"]["theme"], "dark", "the newer save still wins");
+            assert_eq!(m["settings"]["ftp"], 262, "FTP of the newer applied test");
+            let applied: Vec<_> = m["tests"].as_array().unwrap().iter().filter(|t| t["accepted"] == true).map(|t| t["at"].clone()).collect();
+            assert_eq!(applied, vec![json!("2026-11-01T09:00:00Z")], "one applied test");
+            assert_eq!(m["settings"]["bests"], json!({ "m20": 275, "s5": 950 }), "higher best per duration");
+            assert_eq!(m["plans"]["base"]["entries"]["d2.zwo"]["status"], "done", "day 2 kept");
+            assert_eq!(m["plans"]["other"]["entries"]["x.zwo"]["status"], "skipped", "plans of both sides");
+        }
+        // a later entry for the same workout wins
+        let mut c = b.clone();
+        c["plans"]["base"]["entries"]["d2.zwo"] = json!({ "status": "skipped", "at": "2026-11-02T10:00:00Z" });
+        assert_eq!(merge(&a, &c)["plans"]["base"]["entries"]["d2.zwo"]["status"], "skipped");
+        // an FTP typed in by hand on the newer side (no applied test behind it) is kept unless
+        // the other side applied a test
+        let mut d = prof("Me", "2026-11-03T10:00:00Z", &[]);
+        d["settings"]["ftp"] = json!(255);
+        assert_eq!(merge(&d, &prof("Me", "2026-11-01T10:00:00Z", &[]))["settings"]["ftp"], 255);
+        // … also when the other side still has an applied test this side already knew
+        d["tests"] = a["tests"].clone();
+        assert_eq!(merge(&d, &a)["settings"]["ftp"], 255, "typed in after seeing that test");
     }
 
     #[test]
@@ -451,6 +588,45 @@ mod tests {
         a.save_profile(p).unwrap();
         assert_eq!(run(&a).unwrap()["pushed"], 1);
         (base, root(&cloud).join("profiles"), a, b)
+    }
+
+    #[test]
+    fn ride_paths_point_at_this_machines_folder() {
+        let mut p = json!({ "history": [
+            { "at": "1", "fitPath": "/Users/other/Library/x/activities/p_1/ride.fit", "garminPath": "/elsewhere/ride.garmin.fit", "file": "plan/w.zwo" },
+            { "at": "2" },
+        ] });
+        let here = Path::new("/home/me/data/activities/p_1");
+        relocate_paths(&mut p, here);
+        assert_eq!(p["history"][0]["fitPath"], json!(here.join("ride.fit").display().to_string()));
+        assert_eq!(p["history"][0]["garminPath"], json!(here.join("ride.garmin.fit").display().to_string()));
+        assert_eq!(p["history"][0]["file"], "plan/w.zwo", "only *Path fields");
+        assert_eq!(p["history"][1], json!({ "at": "2" }), "entries without files stay as they are");
+    }
+
+    #[test]
+    fn deleted_riders_stay_deleted() {
+        let (base, pdir, a, b) = setup("tomb");
+        let anna = a.create_profile("Anna").unwrap()["activeProfile"].as_str().unwrap().to_string();
+        let ben = a.create_profile("Ben").unwrap()["activeProfile"].as_str().unwrap().to_string();
+        run(&a).unwrap();
+        run(&b).unwrap();
+        a.delete_profile(&anna).unwrap();
+        a.delete_profile(&ben).unwrap();
+        run(&a).unwrap();
+        // B edits Ben after the deletion (later updatedAt): Ben is kept; Anna (untouched) goes
+        b.update(|d| { d["profiles"][&ben]["updatedAt"] = json!("2999-01-01T00:00:00Z"); Ok(()) }).unwrap();
+        run(&b).unwrap();
+        let ids = |s: &Store| s.app_state()["profiles"].as_array().unwrap().iter().map(|p| p["id"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+        assert!(!ids(&b).contains(&anna));
+        assert!(ids(&b).contains(&ben), "edited after the deletion");
+        // the tombstone keeps Anna gone in later rounds on both sides, and her file says deleted
+        run(&a).unwrap();
+        run(&b).unwrap();
+        assert!(!ids(&a).contains(&anna) && !ids(&b).contains(&anna));
+        let f: Value = serde_json::from_str(&std::fs::read_to_string(pdir.join(format!("{anna}.json"))).unwrap()).unwrap();
+        assert_eq!(f["deleted"], true);
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     fn profile_files(pdir: &Path) -> Vec<String> {

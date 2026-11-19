@@ -3,7 +3,7 @@
 use crate::zwo;
 use serde::Serialize;
 use std::cmp::Ordering;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use std::time::SystemTime;
@@ -61,7 +61,24 @@ fn description_file(folder_name: &str, md_files: &[String]) -> Option<String> {
         .cloned()
 }
 
+/// Bytes read from a description file; the rest of a bigger file is never read.
 const MAX_DESCRIPTION: usize = 64 * 1024;
+
+/// The first `max` bytes of a text file, cut back to the last whole UTF-8 character.
+fn read_capped(path: &Path, max: usize) -> Option<String> {
+    use std::io::Read;
+    let mut buf = Vec::new();
+    std::fs::File::open(path).ok()?.take(max as u64).read_to_end(&mut buf).ok()?;
+    match String::from_utf8(buf) {
+        Ok(s) => Some(s),
+        Err(e) => {
+            let ok = e.utf8_error().valid_up_to();
+            let mut b = e.into_bytes();
+            b.truncate(ok);
+            String::from_utf8(b).ok()
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Library {
@@ -207,12 +224,16 @@ impl Cache {
     pub fn scan(&self, root: &Path) -> Library {
         let mut plans = vec![];
         let mut singles = vec![];
-        self.walk(root, Path::new(""), &mut plans, &mut singles);
+        self.walk(root, Path::new(""), &mut plans, &mut singles, &mut HashSet::new());
         plans.sort_by(|a: &Plan, b| natural_cmp(&a.id, &b.id));
         Library { root: root.display().to_string(), exists: root.is_dir(), plans, singles }
     }
 
-    fn walk(&self, abs: &Path, rel: &Path, plans: &mut Vec<Plan>, singles: &mut Vec<WorkoutInfo>) {
+    /// `seen`: folders already walked (resolved), so a symlink back up the tree can't loop.
+    fn walk(&self, abs: &Path, rel: &Path, plans: &mut Vec<Plan>, singles: &mut Vec<WorkoutInfo>, seen: &mut HashSet<PathBuf>) {
+        if !seen.insert(abs.canonicalize().unwrap_or_else(|_| abs.to_path_buf())) {
+            return;
+        }
         let Ok(rd) = std::fs::read_dir(abs) else { return };
         let mut files = vec![];
         let mut md_files = vec![];
@@ -222,7 +243,13 @@ impl Cache {
             if name.starts_with('.') {
                 continue;
             }
-            let Ok(ft) = e.file_type() else { continue };
+            // a symlink counts as what it points to (a plan folder linked in from elsewhere)
+            // (only links cost an extra stat; ~2,600 files must stay well under a second)
+            let Ok(mut ft) = e.file_type() else { continue };
+            if ft.is_symlink() {
+                let Ok(m) = std::fs::metadata(e.path()) else { continue };
+                ft = m.file_type();
+            }
             if ft.is_dir() {
                 dirs.push(name);
             } else if ft.is_file() && name.to_ascii_lowercase().ends_with(".zwo") {
@@ -251,8 +278,8 @@ impl Cache {
             let folder_name = rel.file_name().and_then(|s| s.to_str()).unwrap_or(&rel_s).to_string();
             let kind = folder_kind(&workouts);
             let description = description_file(&folder_name, &md_files)
-                .and_then(|f| std::fs::read_to_string(abs.join(f)).ok())
-                .map(|t| t.chars().take(MAX_DESCRIPTION).collect::<String>().trim().to_string())
+                .and_then(|f| read_capped(&abs.join(f), MAX_DESCRIPTION))
+                .map(|t| t.trim().to_string())
                 .filter(|t| !t.is_empty());
             plans.push(Plan {
                 name: pretty_folder(&folder_name),
@@ -267,7 +294,7 @@ impl Cache {
             });
         }
         for d in dirs {
-            self.walk(&abs.join(&d), &rel.join(&d), plans, singles);
+            self.walk(&abs.join(&d), &rel.join(&d), plans, singles, seen);
         }
     }
 }
@@ -310,6 +337,43 @@ mod tests {
         assert_eq!(folder_kind(&[wi(Some(1)), wi(Some(2))]), "plan");
         assert_eq!(folder_kind(&[wi(Some(1)), wi(Some(1)), wi(Some(1))]), "collection");
         assert_eq!(folder_kind(&[wi(None), wi(None)]), "collection");
+    }
+
+    #[test]
+    fn descriptions_are_capped_in_bytes() {
+        let dir = std::env::temp_dir().join(format!("zt-desc-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("big.md");
+        // 3-byte characters, so the cap falls inside one
+        std::fs::write(&f, "€".repeat(30_000)).unwrap();
+        let t = read_capped(&f, MAX_DESCRIPTION).unwrap();
+        assert!(t.len() <= MAX_DESCRIPTION && t.len() > MAX_DESCRIPTION - 3, "{}", t.len());
+        assert!(t.chars().all(|c| c == '€'), "no broken character at the cut");
+        std::fs::write(&f, "short").unwrap();
+        assert_eq!(read_capped(&f, MAX_DESCRIPTION).unwrap(), "short");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_plans_are_scanned_once() {
+        let base = std::env::temp_dir().join(format!("zt-links-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (root, elsewhere) = (base.join("lib"), base.join("elsewhere"));
+        std::fs::create_dir_all(elsewhere.join("Base Plan")).unwrap();
+        std::fs::create_dir_all(&root).unwrap();
+        let zwo = r#"<workout_file><name>W</name><workout><SteadyState Duration="600" Power="0.6"/></workout></workout_file>"#;
+        std::fs::write(elsewhere.join("Base Plan/Week01_Day01.zwo"), zwo).unwrap();
+        std::fs::write(elsewhere.join("single.zwo"), zwo).unwrap();
+        std::os::unix::fs::symlink(elsewhere.join("Base Plan"), root.join("Base Plan")).unwrap();
+        std::os::unix::fs::symlink(elsewhere.join("single.zwo"), root.join("single.zwo")).unwrap();
+        // a link back up the tree must not loop
+        std::os::unix::fs::symlink(&root, elsewhere.join("Base Plan/loop")).unwrap();
+        let lib = Cache::default().scan(&root);
+        assert_eq!(lib.plans.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), vec!["Base Plan"]);
+        assert_eq!(lib.singles.len(), 1, "linked file");
+        assert!(load(&root, "Base Plan/Week01_Day01.zwo").is_ok(), "loads through the link");
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
