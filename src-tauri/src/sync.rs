@@ -230,43 +230,56 @@ fn placeholder_id(name: &str) -> Option<&str> {
 /// Returns { changed, pulled, pushed, filesUp, filesDown, pending, skipped, at, app }:
 /// `pending` = iCloud placeholders still downloading, `skipped` = riders left alone this run
 /// because their remote file isn't readable yet.
-pub fn run(store: &Store) -> Result<Value, String> {
-    store.update(|doc| {
-        let dir = doc["sync"]["dir"].as_str().filter(|s| !s.is_empty()).map(state::expand).ok_or("No sync folder chosen")?;
-        if !dir.is_dir() {
-            return Err(format!("Sync folder not found: {}", dir.display()));
-        }
-        let pdir = root(&dir).join("profiles");
-        std::fs::create_dir_all(&pdir).map_err(|e| e.to_string())?;
-        let pending = request_icloud_downloads(&pdir);
+/// One sync at a time (auto sync and "Sync now" can overlap).
+static RUNNING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-        let mut remote: BTreeMap<String, Value> = BTreeMap::new();
-        // Ids whose remote copy exists but can't be used in this run (iCloud placeholder not
-        // downloaded yet, unreadable or not a profile file): never pushed over or deleted.
-        let mut blocked: BTreeSet<String> = BTreeSet::new();
-        for e in std::fs::read_dir(&pdir).map_err(|e| e.to_string())?.flatten() {
-            let name = e.file_name().to_string_lossy().to_string();
-            if let Some(id) = placeholder_id(&name) {
-                blocked.insert(id.to_string());
-                continue;
+/// Profile files in the sync folder: readable ones by id, plus the ids whose copy exists but
+/// can't be used in this run (iCloud placeholder not downloaded yet, unreadable or not a
+/// profile file); those are never pushed over or deleted.
+fn read_remote(pdir: &Path) -> Result<(BTreeMap<String, Value>, BTreeSet<String>), String> {
+    let mut remote: BTreeMap<String, Value> = BTreeMap::new();
+    let mut blocked: BTreeSet<String> = BTreeSet::new();
+    for e in std::fs::read_dir(pdir).map_err(|e| e.to_string())?.flatten() {
+        let name = e.file_name().to_string_lossy().to_string();
+        if let Some(id) = placeholder_id(&name) {
+            blocked.insert(id.to_string());
+            continue;
+        }
+        let path = e.path();
+        if path.extension().and_then(|x| x.to_str()) != Some("json") {
+            continue;
+        }
+        // only our own file names: skips "p_x (conflicted copy).json", "p_x 2.json", "...json"
+        let Some(id) = path.file_stem().and_then(|s| s.to_str()).filter(|s| state::is_profile_id(s)).map(str::to_string) else { continue };
+        match std::fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str::<Value>(&s).ok()) {
+            Some(v) if v["profile"].is_object() || v["deleted"].as_bool() == Some(true) => {
+                remote.insert(id, v);
             }
-            let path = e.path();
-            if path.extension().and_then(|x| x.to_str()) != Some("json") {
-                continue;
-            }
-            // only our own file names: skips "p_x (conflicted copy).json", "p_x 2.json", "...json"
-            let Some(id) = path.file_stem().and_then(|s| s.to_str()).filter(|s| state::is_profile_id(s)).map(str::to_string) else { continue };
-            match std::fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str::<Value>(&s).ok()) {
-                Some(v) if v["profile"].is_object() || v["deleted"].as_bool() == Some(true) => {
-                    remote.insert(id, v);
-                }
-                _ => {
-                    blocked.insert(id);
-                }
+            _ => {
+                blocked.insert(id);
             }
         }
-        // a readable copy wins over a stale placeholder of the same file
-        blocked.retain(|id| !remote.contains_key(id));
+    }
+    // a readable copy wins over a stale placeholder of the same file
+    blocked.retain(|id| !remote.contains_key(id));
+    Ok((remote, blocked))
+}
+
+/// Sync in three steps, so the store lock (which every command needs) is held only for the
+/// merge itself, never during cloud-folder I/O: read the folder, merge into state.json under
+/// the lock, then write the profile files and copy FIT files.
+pub fn run(store: &Store) -> Result<Value, String> {
+    let _one = RUNNING.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = store.read(|doc| doc["sync"]["dir"].as_str().filter(|s| !s.is_empty()).map(state::expand))?.ok_or("No sync folder chosen")?;
+    if !dir.is_dir() {
+        return Err(format!("Sync folder not found: {}", dir.display()));
+    }
+    let pdir = root(&dir).join("profiles");
+    std::fs::create_dir_all(&pdir).map_err(|e| e.to_string())?;
+    let pending = request_icloud_downloads(&pdir);
+    let (remote, blocked) = read_remote(&pdir)?;
+
+    let (writes, ids, mut out) = store.update(|doc| {
         let first_sync = doc["sync"]["lastSync"].is_null();
         // First sync on this Mac and the folder already has riders: drop untouched default
         // profiles here, so a fresh install doesn't add a second "Rider 1" everywhere.
@@ -289,8 +302,9 @@ pub fn run(store: &Store) -> Result<Value, String> {
         ids.sort();
         ids.dedup();
 
-        let (mut pulled, mut pushed, mut changed) = (0, 0, false);
-        let write_remote = |id: &str, v: Value| state::write_json(&pdir.join(format!("{id}.json")), &v, false);
+        let (mut pulled, mut changed) = (0, false);
+        // profile files to write once the lock is released
+        let mut writes: Vec<(String, Value)> = vec![];
         let template = doc["profiles"][doc["activeProfile"].as_str().unwrap_or_default()].clone();
 
         for id in ids {
@@ -303,8 +317,7 @@ pub fn run(store: &Store) -> Result<Value, String> {
 
             if let Some(at) = tomb.get(&id).and_then(Value::as_str) {
                 if !r_deleted {
-                    write_remote(&id, json!({ "format": FORMAT, "updatedAt": at, "deleted": true }))?;
-                    pushed += 1;
+                    writes.push((id.clone(), json!({ "format": FORMAT, "updatedAt": at, "deleted": true })));
                 }
                 continue;
             }
@@ -333,8 +346,7 @@ pub fn run(store: &Store) -> Result<Value, String> {
                     if hold_pristine && is_pristine(&l) {
                         continue;
                     }
-                    write_remote(&id, json!({ "format": FORMAT, "updatedAt": ts(&l), "profile": strip_local(&l) }))?;
-                    pushed += 1;
+                    writes.push((id.clone(), json!({ "format": FORMAT, "updatedAt": ts(&l), "profile": strip_local(&l) })));
                 }
                 (None, Some(mut p)) => {
                     state::normalize_profile(&mut p, &id);
@@ -355,8 +367,7 @@ pub fn run(store: &Store) -> Result<Value, String> {
                     }
                     let stripped = strip_local(&m);
                     if strip_paths(&stripped) != strip_paths(&strip_local(&rp)) {
-                        write_remote(&id, json!({ "format": FORMAT, "updatedAt": ts(&m), "profile": stripped }))?;
-                        pushed += 1;
+                        writes.push((id.clone(), json!({ "format": FORMAT, "updatedAt": ts(&m), "profile": stripped })));
                     }
                 }
                 (None, None) => {}
@@ -370,13 +381,6 @@ pub fn run(store: &Store) -> Result<Value, String> {
             changed = true;
         }
 
-        // ride files (FIT) for every remaining profile
-        let mut files = (0, 0);
-        for id in doc["profiles"].as_object().unwrap().keys() {
-            let (a, b) = sync_files(&store.activities_dir(id), &root(&dir).join("activities").join(id));
-            files.0 += a;
-            files.1 += b;
-        }
         let at = state::now_iso();
         // a first sync that couldn't see every rider yet stays "first", so the next run can
         // still replace an untouched default with the riders from the folder
@@ -384,9 +388,27 @@ pub fn run(store: &Store) -> Result<Value, String> {
             doc["sync"]["lastSync"] = json!(at);
         }
         doc["sync"]["lastError"] = Value::Null;
-        Ok(json!({ "changed": changed, "pulled": pulled, "pushed": pushed, "filesUp": files.0, "filesDown": files.1, "pending": pending, "skipped": blocked.len(), "at": at, "app": Store::summary(doc) }))
-    })
+        let ids: Vec<String> = doc["profiles"].as_object().unwrap().keys().cloned().collect();
+        let out = json!({ "changed": changed, "pulled": pulled, "pending": pending, "skipped": blocked.len(), "at": at, "app": Store::summary(doc) });
+        Ok((writes, ids, out))
+    })?;
+
+    for (id, v) in &writes {
+        state::write_json(&pdir.join(format!("{id}.json")), v, false)?;
+    }
+    // ride files (FIT) for every remaining profile
+    let mut files = (0, 0);
+    for id in &ids {
+        let (a, b) = sync_files(&store.activities_dir(id), &root(&dir).join("activities").join(id));
+        files.0 += a;
+        files.1 += b;
+    }
+    out["pushed"] = json!(writes.len());
+    out["filesUp"] = json!(files.0);
+    out["filesDown"] = json!(files.1);
+    Ok(out)
 }
+
 
 /// A profile nobody has used yet (fresh install).
 fn is_pristine(p: &Value) -> bool {

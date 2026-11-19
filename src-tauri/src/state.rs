@@ -189,6 +189,12 @@ impl Store {
         write_json(&self.state_path(), doc, false)
     }
 
+    /// Read from the document under the store lock, without writing it.
+    pub(crate) fn read<T>(&self, f: impl FnOnce(&Value) -> T) -> Result<T, String> {
+        let _g = self.lock.lock().unwrap();
+        Ok(f(&self.load()?))
+    }
+
     /// Run a read-modify-write on the document under the store lock.
     pub(crate) fn update<T>(&self, f: impl FnOnce(&mut Value) -> Result<T, String>) -> Result<T, String> {
         let _g = self.lock.lock().unwrap();
