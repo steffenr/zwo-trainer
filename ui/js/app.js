@@ -453,7 +453,13 @@ function bindChrome() {
   hrm.on('data', onSensor);
   ctrls.on('status', (s) => { setDev('controller', s); ride?.render(true); });
   document.addEventListener('keydown', (e) => ride?.onKey(e));
+  // where focus came from, for the ride's Space / Enter rule (Ride.keyTarget): an element focused by a click
+  // or tap is remembered; one reached with Tab or focused by the app is not
+  document.addEventListener('pointerdown', () => { pointerDown = true; }, true);
+  document.addEventListener('pointerup', () => { pointerDown = false; }, true);
+  document.addEventListener('focusin', (e) => { pointerFocused = pointerDown ? e.target : null; }, true);
 }
+let pointerDown = false, pointerFocused = null;
 
 // kinds with a connection attempt from connectSaved() still running (hides "Retry auto-connect" meanwhile)
 const connectingKinds = new Set();
@@ -2773,13 +2779,21 @@ class Ride {
     }
   }
 
+  /** True when Space / Enter belong to the focused element rather than to the ride shortcuts: a control the
+   *  rider reached with the keyboard, or any focused radio / tab. A control focused by a click keeps the shortcuts. */
+  keyTarget(el) {
+    if (!el?.matches?.('button, a[href], select, textarea, summary, [tabindex], [role]')) return false;
+    return el.matches('[role=radio], [role=tab]') || el !== pointerFocused;
+  }
+
   /** Keyboard shortcuts while riding (space, arrows, +/−); ignored in dialogs, inputs, or when switched off in Settings. */
   onKey(e) {
     // an open popover menu owns the keyboard (Esc closes it, never stops the ride)
     if (this.ending || modal.open || $('#popover') || e.target.matches('input') || state.settings.keyboardShortcuts === false) return;
-    // Space / Enter on a focused radio (free-ride choice) selects it instead of play/pause. Plain buttons
-    // keep the shortcut: after clicking "next", Space should still pause, not skip again.
-    if ((e.key === ' ' || e.key === 'Enter') && e.target.closest?.('[role=radio], [role=tab]')) return;
+    // Space / Enter activate a control the rider reached with the keyboard (Tab), and always
+    // select a focused radio or tab (free-ride choice). A button that only has focus because it was clicked
+    // keeps the shortcut: after clicking "next", Space should still pause, not skip again.
+    if ((e.key === ' ' || e.key === 'Enter') && this.keyTarget(e.target)) return;
     const map = { ' ': 'play', ArrowRight: 'next', ArrowLeft: 'prev', Escape: 'stop' };
     if (map[e.key]) { e.preventDefault(); return this.control(map[e.key]); }
     if (e.key === '+' || e.key === '=') { e.preventDefault(); return this.shift(1); }

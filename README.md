@@ -211,6 +211,7 @@ Deleting always goes to the system Trash (the Recycle Bin on Windows), so it can
 | ↑ / ↓ | intensity ±1 % (with Shift ±10 %) |
 | + / − | shift gear (virtual gears); during free-ride segments ↑ / ↓ shift too |
 | Esc | end workout (closes an open menu instead) |
+| Tab, then Space / Enter | press the ride button you moved to with Tab (Space no longer pauses until you click elsewhere); a button you clicked with the mouse keeps Space = start / pause |
 
 Menus work with the keyboard too: arrow keys move between items, Esc closes the menu. Screen readers announce notices (uploads, sync, errors) and the short ride hints (gear, intensity, auto-pause); every ride button has a spoken name, the play button says whether it starts, pauses or resumes, and the chart line toggles and the power gauge (watts ↔ % FTP) report whether they are on. Recording stays at one sample per second even when the window is hidden or minimised.
 
