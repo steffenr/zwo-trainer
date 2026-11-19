@@ -11,7 +11,7 @@ const attrsOf = (o = {}) => {
 };
 
 /**
- * Segmented control as a radio group: one tab stop, arrow keys move (rovingKey in app.js), the
+ * Segmented control as a radio group: one tab stop, arrow keys move (rovingKey in core.js), the
  * selected button has .on and aria-checked. items: [[value, label, attrs?]] — label escaped unless
  * a fragment; attrs an object of extra attributes. The group needs an accessible name: `labelledBy`
  * (id of a visible label) or `label` (text).

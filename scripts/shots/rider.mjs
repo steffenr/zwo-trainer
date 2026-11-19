@@ -15,7 +15,7 @@ const at = (days, hh = 18, mm = 14) => {
 const BB = 'base-builder-6wk';
 const f = (week, day, name) => `${BB}/Week${String(week).padStart(2, '0')}_Day${String(day).padStart(2, '0')}_${name.replace(/ /g, '_')}.zwo`;
 
-/** One ridden workout as the app stores it in history (see Ride.finish in app.js). */
+/** One ridden workout as the app stores it in history (see Ride.finish in ride.js). */
 function ride({ file, plan = BB, title, days, hh, mm, dur, avg, np, hr, cad = 88, garmin = true }) {
   const end = at(days, hh, mm);
   return {

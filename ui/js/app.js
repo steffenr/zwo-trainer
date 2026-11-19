@@ -1,9 +1,9 @@
-// zwoTrainer UI controller. Sections, top to bottom:
-//   riders, api and library helpers · profile sync · in-app updates · theme, riders, top bar
-//   · devices menu · routing and views (renderHome / renderPlan / renderWorkouts / renderTests /
-//   renderHistory) · actions (bindActions, ⋯ menus) · dialogs (preview, settings, devices,
-//   connections) · the Ride class (ride screen and loop) · ride summary.
-// Shared state, DOM helpers, dialogs and toasts live in ./core.js.
+// zwoTrainer UI controller (entry module). Sections, top to bottom:
+//   riders, api and library helpers · boot · theme, riders, top bar · devices menu · routing and views
+//   (renderHome / renderPlan / renderWorkouts / renderTests / renderHistory) · actions (bindActions,
+//   ⋯ menus) · dialogs (preview, workouts folder, devices) · other platforms and uploads.
+// Elsewhere: shared state, DOM helpers, dialogs and toasts in ./core.js; the ride screen and summary in
+// ./ride.js; Settings in ./settings.js; profile sync in ./sync.js; in-app updates in ./updates.js.
 // Markup: html`` from ./html.js (auto-escaping) and the helpers in ./components/ for shared pieces;
 // markup reaches the DOM only through mount() (scripts/check-html.mjs). Rust is reached only through
 // invoke() / listen() (ble.js).
