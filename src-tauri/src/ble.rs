@@ -211,21 +211,23 @@ impl Drop for Conn {
 
 static NEXT_SERIAL: AtomicU64 = AtomicU64::new(1);
 
-/// What a reconnect does once it is done, given what the slot holds now (`(serial, id)` of its `Conn`).
+/// What a reconnect does once it is done, given what the slot holds now (`(serial, id)` of its `Conn`)
+/// and whether a manual connect of the same device is running (`connecting`).
 #[derive(PartialEq, Debug)]
 enum Takeover {
     /// The slot still holds the connection that dropped: replace it (or, after giving up, clear it).
     Mine,
     /// The user disconnected or connected another device meanwhile: leave the slot alone and close
-    /// our own link, unless the slot now holds the same device (closing it would cut that connection).
+    /// our own link, unless the slot now holds the same device or the user is connecting it by hand
+    /// (closing it would cut that connection).
     Superseded { close_link: bool },
 }
 
-fn takeover(slot: Option<(u64, &str)>, serial: u64, id: &str) -> Takeover {
+fn takeover(slot: Option<(u64, &str)>, connecting: bool, serial: u64, id: &str) -> Takeover {
     match slot {
         Some((s, _)) if s == serial => Takeover::Mine,
         Some((_, other)) => Takeover::Superseded { close_link: other != id },
-        None => Takeover::Superseded { close_link: true },
+        None => Takeover::Superseded { close_link: !connecting },
     }
 }
 
@@ -323,16 +325,61 @@ pub struct Ble {
     /// Ids of peripherals the adapter reported as disconnected. Controllers listen to this because
     /// their notification stream doesn't end when the device is switched off (e.g. on macOS).
     dropped: broadcast::Sender<String>,
+    /// Ids a manual `connect()` is setting up right now. Its slot is empty meanwhile, so a running
+    /// reconnect of the same device must not take that for "the user disconnected" and close the link.
+    connecting: Claims,
+}
+
+/// A set of device ids with work in progress; a `Claim` holds one id and frees it when dropped.
+#[derive(Default)]
+pub(crate) struct Claims(std::sync::Mutex<std::collections::HashSet<String>>);
+
+pub(crate) struct Claim<'a> {
+    set: &'a Claims,
+    id: String,
+}
+
+impl Claims {
+    /// `None` while another claim holds `id`.
+    pub(crate) fn claim(&self, id: &str) -> Option<Claim<'_>> {
+        let fresh = self.0.lock().unwrap_or_else(|e| e.into_inner()).insert(id.to_string());
+        fresh.then(|| Claim { set: self, id: id.to_string() })
+    }
+
+    pub(crate) fn contains(&self, id: &str) -> bool {
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).contains(id)
+    }
+}
+
+impl Drop for Claim<'_> {
+    fn drop(&mut self) {
+        self.set.0.lock().unwrap_or_else(|e| e.into_inner()).remove(&self.id);
+    }
 }
 
 /// Wait until the adapter reports `id` as disconnected (never returns if the channel stays quiet).
-pub(crate) async fn wait_dropped(rx: &mut broadcast::Receiver<String>, id: &str) {
+/// A lagged receiver may have missed exactly that report, so it then asks `alive()` instead.
+pub(crate) async fn wait_dropped<F, Fut>(rx: &mut broadcast::Receiver<String>, id: &str, alive: F)
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = bool>,
+{
     loop {
         match rx.recv().await {
             Ok(got) if got == id => return,
             Err(broadcast::error::RecvError::Closed) => return,
+            Err(broadcast::error::RecvError::Lagged(_)) if !alive().await => return,
             _ => {}
         }
+    }
+}
+
+/// `alive` for `wait_dropped`: whether the link of `p` is still up.
+pub(crate) fn link_up(p: &Peripheral) -> impl Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = bool> + Send>> {
+    let p = p.clone();
+    move || {
+        let p = p.clone();
+        Box::pin(async move { p.is_connected().await.unwrap_or(false) })
     }
 }
 
@@ -345,6 +392,7 @@ impl Ble {
             hr: Mutex::new(None),
             scan_gate: Mutex::new(()),
             dropped: broadcast::channel(16).0,
+            connecting: Claims::default(),
         })
     }
 
@@ -443,6 +491,8 @@ impl Ble {
     }
 
     pub async fn connect(self: &Arc<Self>, kind: Kind, id: &str) -> Result<Value, String> {
+        // held until the slot is filled: a reconnect of this device then leaves the link open
+        let _claim = self.connecting.claim(id);
         // drop an existing connection of the same kind first
         self.disconnect(kind).await;
         let periph = self.find(kind, id, Duration::from_secs(12)).await?;
@@ -679,7 +729,7 @@ impl Ble {
     /// connection (the user disconnected or connected another device), also after a slow `setup()`.
     async fn reconnect(self: Arc<Self>, kind: Kind, serial: u64, id: String, name: String, periph: Peripheral) {
         self.status(kind, false, &name, false, true);
-        let mine = |slot: &Option<Conn>| takeover(slot.as_ref().map(Conn::token), serial, &id);
+        let mine = |slot: &Option<Conn>| takeover(slot.as_ref().map(Conn::token), self.connecting.contains(&id), serial, &id);
         for attempt in 1..=8u64 {
             tokio::time::sleep(Duration::from_millis(1500 * attempt.min(4))).await;
             if mine(&*self.slot(kind).lock().await) != Takeover::Mine {
@@ -798,12 +848,15 @@ pub fn parse_power(v: &[u8], crank: &mut Option<CrankState>) -> Option<Map<Strin
     Some(out)
 }
 
-/// Heart Rate Measurement (0x2A37).
+/// Heart Rate Measurement (0x2A37). 0 bpm (no skin contact) is left out, like in Indoor Bike
+/// Data, so the UI lets the last value go stale instead of recording zeros.
 pub fn parse_hr(v: &[u8]) -> Option<Map<String, Value>> {
     let flags = *v.first()?;
     let hr = if flags & 1 != 0 { u16le(v, 1)? } else { *v.get(1)? as u16 };
     let mut out = Map::new();
-    out.insert("hr".into(), json!(hr));
+    if hr > 0 {
+        out.insert("hr".into(), json!(hr));
+    }
     Some(out)
 }
 
@@ -882,13 +935,26 @@ mod tests {
     #[test]
     fn reconnect_takeover() {
         // still the connection that dropped
-        assert_eq!(takeover(Some((7, "A")), 7, "A"), Takeover::Mine);
+        assert_eq!(takeover(Some((7, "A")), false, 7, "A"), Takeover::Mine);
         // user disconnected meanwhile: slot empty, close our link
-        assert_eq!(takeover(None, 7, "A"), Takeover::Superseded { close_link: true });
+        assert_eq!(takeover(None, false, 7, "A"), Takeover::Superseded { close_link: true });
+        // slot empty because the user is connecting A by hand right now: don't cut that link
+        assert_eq!(takeover(None, true, 7, "A"), Takeover::Superseded { close_link: false });
         // user connected trainer B meanwhile: keep B, close A
-        assert_eq!(takeover(Some((9, "B")), 7, "A"), Takeover::Superseded { close_link: true });
+        assert_eq!(takeover(Some((9, "B")), false, 7, "A"), Takeover::Superseded { close_link: true });
         // user reconnected A by hand meanwhile: keep theirs, don't cut the shared link
-        assert_eq!(takeover(Some((9, "A")), 7, "A"), Takeover::Superseded { close_link: false });
+        assert_eq!(takeover(Some((9, "A")), false, 7, "A"), Takeover::Superseded { close_link: false });
+    }
+
+    #[test]
+    fn claims() {
+        let set = Claims::default();
+        let a = set.claim("A").expect("free");
+        assert!(set.claim("A").is_none(), "held");
+        assert!(set.contains("A") && !set.contains("B"));
+        let _b = set.claim("B").expect("other ids are independent");
+        drop(a);
+        assert!(!set.contains("A") && set.claim("A").is_some(), "freed on drop");
     }
 
     #[tokio::test]
@@ -896,11 +962,28 @@ mod tests {
         let (tx, mut rx) = broadcast::channel(16);
         tx.send("other".to_string()).unwrap();
         tx.send("mine".to_string()).unwrap();
-        tokio::time::timeout(Duration::from_secs(1), wait_dropped(&mut rx, "mine")).await.expect("returns once its id is reported");
+        let up = || async { true };
+        tokio::time::timeout(Duration::from_secs(1), wait_dropped(&mut rx, "mine", up)).await.expect("returns once its id is reported");
 
         let (tx2, mut rx2) = broadcast::channel(16);
         tx2.send("other".to_string()).unwrap();
-        assert!(tokio::time::timeout(Duration::from_millis(100), wait_dropped(&mut rx2, "mine")).await.is_err(), "other ids don't end the watch");
+        assert!(tokio::time::timeout(Duration::from_millis(100), wait_dropped(&mut rx2, "mine", up)).await.is_err(), "other ids don't end the watch");
+    }
+
+    #[tokio::test]
+    async fn wait_dropped_checks_the_link_after_lagging() {
+        // more reports than the channel holds: our own may be among the lost ones
+        let lagged = || {
+            let (tx, rx) = broadcast::channel(2);
+            for i in 0..5 {
+                tx.send(format!("other{i}")).unwrap();
+            }
+            (tx, rx)
+        };
+        let (_tx, mut rx) = lagged();
+        tokio::time::timeout(Duration::from_secs(1), wait_dropped(&mut rx, "mine", || async { false })).await.expect("link down → returns");
+        let (_tx, mut rx) = lagged();
+        assert!(tokio::time::timeout(Duration::from_millis(100), wait_dropped(&mut rx, "mine", || async { true })).await.is_err(), "link up → keeps watching");
     }
 
     #[test]
@@ -921,6 +1004,9 @@ mod tests {
     fn heart_rate() {
         assert_eq!(parse_hr(&[0x00, 142]).unwrap()["hr"], json!(142));
         assert_eq!(parse_hr(&[0x01, 0x2c, 0x01]).unwrap()["hr"], json!(300));
+        // poor strap contact: no value rather than 0 bpm (same as Indoor Bike Data)
+        assert!(parse_hr(&[0x00, 0]).unwrap().is_empty());
+        assert!(parse_hr(&[0x01, 0, 0]).unwrap().is_empty());
     }
 
     #[test]

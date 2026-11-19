@@ -144,7 +144,7 @@ export class Controllers extends Emitter {
   async connect(id) { const info = await invoke('ctrl_connect', { id }); return info; }
   async disconnect() { await invoke('ctrl_disconnect').catch(() => {}); }
   list() { return invoke('ctrl_list').catch(() => []); }
-  onStatus(s) { this.count = s.count || 0; this.names = s.name || ''; this.ids = s.ids || []; this.emit('status', { connected: this.count > 0, name: this.names }); }
+  onStatus(s) { this.count = s.count || 0; this.names = s.name || ''; this.ids = s.ids || []; this.emit('status', { connected: this.count > 0, reconnecting: !!s.reconnecting, name: this.names }); }
 }
 
 /** Wire Rust events to the device objects. Sensor data from real devices goes to `onData`. */

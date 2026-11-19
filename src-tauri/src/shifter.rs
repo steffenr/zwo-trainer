@@ -23,8 +23,12 @@
 
 use btleplug::api::{Central, CharPropFlags, Characteristic, Peripheral as _, ScanFilter, WriteType};
 use btleplug::platform::Peripheral;
+use crate::ble::Claims;
 use futures::StreamExt;
 use serde_json::{json, Value};
+use std::collections::HashSet;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
@@ -220,18 +224,38 @@ pub struct Controllers {
     app: AppHandle,
     ble: Arc<Ble>,
     conns: Mutex<Vec<Conn>>,
+    /// Ids with a connect running. A second connect of the same controller (auto-connect retry
+    /// next to a manual connect) waits for it instead of opening a second link, which would
+    /// fire every press twice.
+    pending: Claims,
+    /// Ids the rider connected and hasn't disconnected: one that drops is reconnected (`reconnect`).
+    wanted: std::sync::Mutex<HashSet<String>>,
+    /// Ids with a reconnect running (one per controller).
+    reconnecting: Claims,
 }
 
 impl Controllers {
     pub fn new(app: AppHandle, ble: Arc<Ble>) -> Arc<Self> {
-        Arc::new(Self { app, ble, conns: Mutex::new(vec![]) })
+        Arc::new(Self {
+            app,
+            ble,
+            conns: Mutex::new(vec![]),
+            pending: Claims::default(),
+            wanted: std::sync::Mutex::new(HashSet::new()),
+            reconnecting: Claims::default(),
+        })
+    }
+
+    fn wanted(&self) -> std::sync::MutexGuard<'_, HashSet<String>> {
+        self.wanted.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     async fn status(&self) {
         let (names, ids): (Vec<String>, Vec<String>) = self.conns.lock().await.iter().map(|c| (c.name.clone(), c.id.clone())).unzip();
+        let reconnecting = names.is_empty() && self.wanted().iter().any(|id| self.reconnecting.contains(id));
         let _ = self.app.emit(
             "device-status",
-            json!({ "kind": "controller", "connected": !names.is_empty(), "name": names.join(" + "), "count": names.len(), "ids": ids }),
+            json!({ "kind": "controller", "connected": !names.is_empty(), "reconnecting": reconnecting, "name": names.join(" + "), "count": names.len(), "ids": ids }),
         );
     }
 
@@ -269,7 +293,45 @@ impl Controllers {
         Ok(out)
     }
 
+    /// The controller `id` as `{ id, name }` if it is connected.
+    async fn known(&self, id: &str) -> Option<Value> {
+        self.conns.lock().await.iter().find(|c| c.id == id).map(|c| json!({ "id": c.id, "name": c.name }))
+    }
+
+    /// Connect `id` and keep it connected: it is reconnected after a dropout until `disconnect_all`.
     pub async fn connect(self: &Arc<Self>, id: &str) -> Result<Value, String> {
+        let res = self.connect_once(id).await;
+        if res.is_ok() {
+            self.wanted().insert(id.to_string());
+        }
+        res
+    }
+
+    /// Connect `id` once: an already connected controller is returned as it is, and a connect
+    /// that is already running is waited for.
+    async fn connect_once(self: &Arc<Self>, id: &str) -> Result<Value, String> {
+        let mut waited = Duration::ZERO;
+        let _claim = loop {
+            if let Some(c) = self.known(id).await {
+                return Ok(c);
+            }
+            if let Some(claim) = self.pending.claim(id) {
+                break claim;
+            }
+            if waited > Duration::from_secs(60) {
+                return Err("The controller is still connecting".into());
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            waited += Duration::from_millis(250);
+        };
+        // the other connect may have finished between the two checks
+        if let Some(c) = self.known(id).await {
+            return Ok(c);
+        }
+        self.open(id).await
+    }
+
+    async fn open(self: &Arc<Self>, id: &str) -> Result<Value, String> {
         let adapter = self.ble.adapter().await?;
         let mut periph = adapter.peripherals().await.ok().and_then(|ps| ps.into_iter().find(|p| p.id().to_string() == id));
         if periph.is_none() {
@@ -296,16 +358,26 @@ impl Controllers {
         let name = ty.as_ref().map(|(t, l)| device_name(Some(*t), if l.is_empty() { "Zwift controller" } else { l })).unwrap_or_else(|| "Zwift controller".into());
 
         tokio::time::timeout(Duration::from_secs(15), periph.connect()).await.map_err(|_| "Connection timed out")?.map_err(|e| e.to_string())?;
+        // don't keep the link open when the setup fails
+        let res = self.setup(periph.clone(), id, name).await;
+        if res.is_err() {
+            let _ = periph.disconnect().await;
+        }
+        res
+    }
+
+    /// Everything after the link is up. On `Err` the caller closes the link.
+    async fn setup(self: &Arc<Self>, periph: Peripheral, id: &str, name: String) -> Result<Value, String> {
         periph.discover_services().await.map_err(|e| e.to_string())?;
         let services: Vec<Uuid> = periph.services().iter().map(|s| s.uuid).collect();
         if protocol(&services, false) == Some(Protocol::Obc) {
-            // don't keep the link open when the setup fails
-            let res = self.connect_obc(periph.clone(), id).await;
-            if res.is_err() {
-                let _ = periph.disconnect().await;
-            }
-            return res;
+            return self.connect_obc(periph, id).await;
         }
+        self.connect_zwift(periph, id, name).await
+    }
+
+    /// Zwift Ride / Click / Play: subscribe, RideOn handshake, emit newly pressed buttons.
+    async fn connect_zwift(self: &Arc<Self>, periph: Peripheral, id: &str, name: String) -> Result<Value, String> {
         let chars = periph.characteristics();
         let ch = |u: Uuid| chars.iter().find(|c| c.uuid == u).cloned();
         let async_c: Characteristic = ch(ASYNC).ok_or("Not a Zwift controller (service missing)")?;
@@ -333,7 +405,6 @@ impl Controllers {
                 }
             }
             if !ok {
-                let _ = periph.disconnect().await;
                 return Err(format!("Handshake failed: {last} (sync RX properties {:?})", rx.properties));
             }
         }
@@ -343,6 +414,7 @@ impl Controllers {
         let me = self.clone();
         let pid = id.to_string();
         let mut gone = self.ble.subscribe_dropped();
+        let up = crate::ble::link_up(&periph);
         // Held until the Conn is registered (see connect_obc).
         let mut conns = self.conns.lock().await;
         let task = tokio::spawn(async move {
@@ -351,7 +423,7 @@ impl Controllers {
                 // the stream may never end when the controller is switched off: also watch the adapter
                 let n = tokio::select! {
                     n = stream.next() => match n { Some(n) => n, None => break },
-                    _ = crate::ble::wait_dropped(&mut gone, &pid) => break,
+                    _ = crate::ble::wait_dropped(&mut gone, &pid, &up) => break,
                 };
                 if n.uuid == ASYNC || n.uuid == SYNC_TX {
                     let hex: String = n.value.iter().map(|b| format!("{b:02x}")).collect();
@@ -370,8 +442,7 @@ impl Controllers {
                 }
             }
             // stream ended → device gone
-            me.conns.lock().await.retain(|c| c.id != pid);
-            me.status().await;
+            me.gone(&pid).await;
         });
         let battery = crate::battery::watch(self.app.clone(), periph.clone(), "controller", id.to_string());
         conns.push(Conn { periph, id: id.to_string(), name: name.clone(), task, _battery: battery });
@@ -406,6 +477,7 @@ impl Controllers {
         // Held until the Conn is registered: if the link drops right away, the task's cleanup
         // waits for the lock instead of running on a list that doesn't have the Conn yet.
         let mut gone = self.ble.subscribe_dropped();
+        let up = crate::ble::link_up(&periph);
         let mut conns = self.conns.lock().await;
         let task = tokio::spawn(async move {
             let mut tracker = obc::Tracker::default();
@@ -413,7 +485,7 @@ impl Controllers {
             loop {
                 let n = tokio::select! {
                     n = stream.next() => match n { Some(n) => n, None => break },
-                    _ = crate::ble::wait_dropped(&mut gone, &pid) => break,
+                    _ = crate::ble::wait_dropped(&mut gone, &pid, &up) => break,
                 };
                 if n.uuid != obc::BUTTON_STATE {
                     continue;
@@ -425,8 +497,7 @@ impl Controllers {
                 }
             }
             // stream ended → device gone
-            me.conns.lock().await.retain(|c| c.id != pid);
-            me.status().await;
+            me.gone(&pid).await;
         });
         let battery = crate::battery::watch(self.app.clone(), periph.clone(), "controller", id.to_string());
         conns.push(Conn { periph, id: id.to_string(), name: name.clone(), task, _battery: battery });
@@ -435,7 +506,49 @@ impl Controllers {
         Ok(json!({ "id": id, "name": name }))
     }
 
+    /// The link of `id` ended (switched off, out of range): forget it and, unless the rider
+    /// disconnected it, reconnect.
+    async fn gone(self: &Arc<Self>, id: &str) {
+        self.conns.lock().await.retain(|c| c.id != id);
+        if self.wanted().contains(id) {
+            tokio::spawn(self.clone().reconnect(id.to_string()));
+        }
+        self.status().await;
+    }
+
+    /// Reconnect a dropped controller, like the trainer: 8 tries over about a minute, stopping
+    /// when the rider disconnects. Boxed, because it calls `connect_once`, whose task calls it.
+    fn reconnect(self: Arc<Self>, id: String) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        Box::pin(async move {
+            let Some(_claim) = self.reconnecting.claim(&id) else { return };
+            self.status().await;
+            for attempt in 1..=8u64 {
+                tokio::time::sleep(Duration::from_millis(1500 * attempt.min(4))).await;
+                if !self.wanted().contains(&id) || self.connect_once(&id).await.is_ok() {
+                    break;
+                }
+            }
+            // the rider disconnected while the last try was connecting: don't keep that link
+            if !self.wanted().contains(&id) {
+                let dropped: Vec<Conn> = {
+                    let mut conns = self.conns.lock().await;
+                    let (gone, keep) = conns.drain(..).partition(|c| c.id == id);
+                    *conns = keep;
+                    gone
+                };
+                for c in dropped {
+                    c.task.abort();
+                    let _ = c.periph.disconnect().await;
+                }
+            }
+            drop(_claim);
+            self.status().await;
+        })
+    }
+
     pub async fn disconnect_all(&self) {
+        // first, so a reconnect stops and a dropping link isn't reconnected
+        self.wanted().clear();
         let conns: Vec<Conn> = self.conns.lock().await.drain(..).collect();
         for c in conns {
             c.task.abort();

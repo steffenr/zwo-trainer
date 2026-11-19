@@ -6,7 +6,8 @@
 // <release-dir> holds the installers and the updater files next to their .sig signatures
 // (created by `tauri build` with tauri.updater.conf.json and TAURI_SIGNING_PRIVATE_KEY).
 // Each signed file becomes a platform entry; the signature text goes into the manifest
-// itself. The updater looks for "{os}-{arch}-{bundle}" first, then "{os}-{arch}", so every
+// itself. Every platform in RULES must be there: an installer without its .sig, or one that is
+// missing, fails the run, because the apps installed that way would never see this release. The updater looks for "{os}-{arch}-{bundle}" first, then "{os}-{arch}", so every
 // install type updates in kind (an .msi install stays an .msi install), and the plain key
 // points to the default bundle of that platform.
 //
@@ -36,12 +37,13 @@ const repo = process.env.GITHUB_REPOSITORY || 'steffenr/zwo-trainer';
 const server = process.env.GITHUB_SERVER_URL || 'https://github.com';
 const version = tag.replace(/^v/, '');
 const platforms = {};
+const problems = [];
 
 for (const file of readdirSync(dir).sort()) {
   const rule = RULES.find(([re]) => re.test(file));
   if (!rule) continue;
   const sig = join(dir, `${file}.sig`);
-  if (!existsSync(sig)) { console.error(`updater-manifest: ${file} has no .sig — skipped`); continue; }
+  if (!existsSync(sig)) { problems.push(`${file} has no .sig`); continue; }
   const entry = {
     signature: readFileSync(sig, 'utf8').trim(),
     url: `${server}/${repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(file)}`,
@@ -52,8 +54,9 @@ for (const file of readdirSync(dir).sort()) {
   if (plain) platforms[plain] = entry;
 }
 
-if (!Object.keys(platforms).length) {
-  console.error(`updater-manifest: no signed update files in ${dir}`);
+for (const [, key] of RULES) if (!platforms[key]) problems.push(`${key}: no signed update file`);
+if (problems.length) {
+  for (const p of problems) console.error(`updater-manifest: ${p}`);
   process.exit(1);
 }
 

@@ -5,8 +5,12 @@
 #
 # 1. creates the updater signing key in ~/.tauri/zwotrainer.key (kept outside the repo)
 # 2. writes its public key into src-tauri/tauri.conf.json (plugins.updater.pubkey)
-# 3. stores the private key and its password as GitHub repository secrets
-#    (TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD) with the gh CLI
+# 3. stores the private key and its password as secrets of the GitHub environment `release`
+#    (TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD) with the gh CLI; the
+#    environment only admits `v*` tags, so a build dispatched from any branch can't read them.
+#    Repository-level copies from an older setup are deleted.
+#
+# Running it again with the existing key only moves/refreshes the secrets.
 #
 # Back up ~/.tauri/zwotrainer.key and its password (e.g. in your password manager). Without
 # them no update can ever reach the apps that are already installed.
@@ -49,13 +53,21 @@ PUB="$PUB" CONF="$CONF" node -e '
 echo "Wrote the public key into $CONF."
 
 if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
-  gh secret set TAURI_SIGNING_PRIVATE_KEY --repo "$REPO" < "$KEY"
-  printf '%s' "$PASSWORD" | gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --repo "$REPO"
-  echo "Stored TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD in $REPO."
+  # the environment, open to v* tags only (the policy call fails harmlessly when it exists)
+  gh api -X PUT "repos/$REPO/environments/release" \
+    -F 'deployment_branch_policy[protected_branches]=false' -F 'deployment_branch_policy[custom_branch_policies]=true' >/dev/null
+  gh api -X POST "repos/$REPO/environments/release/deployment-branch-policies" -f name='v*' -f type=tag >/dev/null 2>&1 || true
+  gh secret set TAURI_SIGNING_PRIVATE_KEY --repo "$REPO" --env release < "$KEY"
+  printf '%s' "$PASSWORD" | gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --repo "$REPO" --env release
+  for s in TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
+    gh secret delete "$s" --repo "$REPO" >/dev/null 2>&1 || true
+  done
+  echo "Stored TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD in the release environment of $REPO."
 else
   echo
-  echo "gh isn't installed or signed in. Add these repository secrets by hand"
-  echo "(GitHub → Settings → Secrets and variables → Actions → New repository secret):"
+  echo "gh isn't installed or signed in. Create the environment \"release\" by hand"
+  echo "(GitHub → Settings → Environments → New environment; Deployment branches and tags:"
+  echo "selected, add the tag rule v*) and add these environment secrets:"
   echo "  TAURI_SIGNING_PRIVATE_KEY           the contents of $KEY"
   echo "  TAURI_SIGNING_PRIVATE_KEY_PASSWORD  the password (leave the secret out if there is none)"
 fi

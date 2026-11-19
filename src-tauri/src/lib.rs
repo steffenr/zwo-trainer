@@ -248,6 +248,24 @@ fn write_bytes(path: &Path, bytes: &[u8]) -> Res<()> {
     })
 }
 
+/// The ride file a command got from the UI: a `.fit` directly inside the active rider's
+/// activities folder (where `save_activity` and sync put them), so a compromised page can't
+/// export or upload any other readable file.
+fn ride_file(app: &App, path: &str) -> Res<PathBuf> {
+    in_activities(&app.store.activities_dir(&app.store.active_id()), Path::new(path))
+}
+
+fn in_activities(dir: &Path, path: &Path) -> Res<PathBuf> {
+    let outside = || "This ride file isn't in the rider's activities folder".to_string();
+    if path.extension().and_then(|e| e.to_str()) != Some("fit") {
+        return Err(outside());
+    }
+    // resolved, so `..` and symlinks can't lead out
+    let file = path.canonicalize().map_err(|e| format!("{}: {e}", path.display()))?;
+    let dir = dir.canonicalize().map_err(|_| outside())?;
+    if file.parent() == Some(dir.as_path()) { Ok(file) } else { Err(outside()) }
+}
+
 /// Encode a finished ride as FIT and store it with the profile: a generic file
 /// (export) plus a Garmin-flavoured copy for Garmin Connect. Returns { path, garminPath, summary }.
 #[tauri::command]
@@ -270,8 +288,8 @@ async fn save_activity(app: State<'_, App>, ride: fit::Ride) -> Res<Value> {
 
 /// Save a copy of a stored activity via the native save dialog.
 #[tauri::command]
-async fn export_activity(handle: tauri::AppHandle, path: String) -> Res<Option<String>> {
-    let src = PathBuf::from(&path);
+async fn export_activity(handle: tauri::AppHandle, app: State<'_, App>, path: String) -> Res<Option<String>> {
+    let src = ride_file(&app, &path)?;
     let name = src.file_name().and_then(|s| s.to_str()).unwrap_or("ride.fit").to_string();
     let (tx, rx) = tokio::sync::oneshot::channel();
     let mut dlg = handle.dialog().file().set_file_name(&name).add_filter("FIT activity", &["fit"]);
@@ -292,7 +310,7 @@ async fn export_activity(handle: tauri::AppHandle, path: String) -> Res<Option<S
 /// (default: Downloads), reveal it in Finder and open Garmin Connect's import page.
 #[tauri::command]
 fn garmin_import(handle: tauri::AppHandle, app: State<'_, App>, path: String) -> Res<String> {
-    let src = PathBuf::from(&path);
+    let src = ride_file(&app, &path)?;
     let gsrc = src.with_extension("garmin.fit");
     let src = if gsrc.exists() { gsrc } else { src };
     let folder = app.store.active_profile()["settings"]["garmin"]["folder"]
@@ -422,7 +440,8 @@ async fn service_upload(app: State<'_, App>, id: String, path: String, name: Str
     let s = services::get(&id)?;
     let profile = app.store.active_id();
     let rec = app.store.secret(&profile, &services::secret_key(&id));
-    services::upload(s, &rec, Path::new(&path), &name, &description).await
+    let file = ride_file(&app, &path)?;
+    services::upload(s, &rec, &file, &name, &description).await
 }
 
 /// Manual route: put the FIT (COROS: a ZIP) into the export folder, show it in Finder and open
@@ -437,7 +456,7 @@ fn service_manual(handle: tauri::AppHandle, app: State<'_, App>, id: String, pat
         .map(state::expand)
         .or_else(dirs::download_dir)
         .ok_or("No folder for ride files")?;
-    let dst = services::prepare_manual(s, Path::new(&path), &folder)?;
+    let dst = services::prepare_manual(s, &ride_file(&app, &path)?, &folder)?;
     let opener = handle.opener();
     let _ = opener.reveal_item_in_dir(&dst);
     opener.open_url(url, None::<&str>).map_err(|e| e.to_string())?;
@@ -505,6 +524,7 @@ fn garmin_disconnect(app: State<'_, App>) -> Res<Value> {
 /// Upload the Garmin-flavoured FIT of a ride; returns { activityId, url } (id may be null while Garmin processes).
 #[tauri::command]
 async fn garmin_upload(app: State<'_, App>, path: String, name: Option<String>, description: Option<String>, start: Option<i64>) -> Res<Value> {
+    let src = ride_file(&app, &path)?;
     let profile = app.store.active_id();
     let mut rec = app.store.secret(&profile, "garmin");
     let before = rec["oauth2"].clone();
@@ -512,7 +532,6 @@ async fn garmin_upload(app: State<'_, App>, path: String, name: Option<String>, 
     if rec["oauth2"] != before {
         app.store.set_secret(&profile, "garmin", rec)?;
     }
-    let src = PathBuf::from(&path);
     let gsrc = src.with_extension("garmin.fit");
     let file = if gsrc.exists() { gsrc } else { src };
     let mut id = garmin::upload(&token, &file).await?;
@@ -729,6 +748,24 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ride_files_stay_in_the_activities_folder() {
+        let root = std::env::temp_dir().join(format!("zt-ridefile-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = root.join("activities").join("p_1");
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        for f in [dir.join("ride.fit"), dir.join("notes.txt"), dir.join("sub/deep.fit"), root.join("other.fit")] {
+            std::fs::write(f, b"x").unwrap();
+        }
+        assert_eq!(in_activities(&dir, &dir.join("ride.fit")).unwrap(), dir.join("ride.fit").canonicalize().unwrap());
+        assert!(in_activities(&dir, &root.join("other.fit")).is_err(), "outside");
+        assert!(in_activities(&dir, &dir.join("../../other.fit")).is_err(), "`..` out of the folder");
+        assert!(in_activities(&dir, &dir.join("notes.txt")).is_err(), "not a FIT file");
+        assert!(in_activities(&dir, &dir.join("sub/deep.fit")).is_err(), "only the folder itself");
+        assert!(in_activities(&dir, &dir.join("missing.fit")).is_err());
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn activity_names_never_collide() {

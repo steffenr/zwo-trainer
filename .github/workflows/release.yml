@@ -3,6 +3,8 @@ name: Release
 
 # One-click release. Run it from Actions -> "Release" -> "Run workflow" and pick a semantic
 # bump (patch/minor/major). It:
+#   0. runs the full CI (ci.yml: tests, clippy, JS tests, i18n/CSS/markup checks on Linux,
+#      macOS and Windows); nothing is bumped or tagged unless all of it passes
 #   1. reads the current version from src-tauri/Cargo.toml (the single source of truth)
 #   2. bumps it and writes Cargo.toml + Cargo.lock (scripts/sync-version.mjs)
 #   3. commits "chore(release): X", creates an annotated tag vX and pushes both in one
@@ -37,9 +39,17 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  checks:
+    name: Checks
+    # Releases are cut from develop only.
+    if: github.ref == 'refs/heads/develop'
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   release:
     name: Bump version and tag
-    # Releases are cut from develop only.
+    needs: checks
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
