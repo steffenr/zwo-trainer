@@ -24,7 +24,8 @@ import {
   shifting, bounds, ftp, maxHr, weight, planById, workoutInfo, setRide, pointerFocused, restartAnim,
   modal, confirmDialog, choiceDialog, announce, toast, rovingKey,
 } from '../core.js';
-import { api, route, openMenu, segmentText, markEntry } from '../app.js';
+import { api, route, openMenu, markEntry } from '../app.js';
+import { segmentText } from '../views/parts.js';
 import { updFound, updLater, showUpdateCard } from '../updates.js';
 import { coach } from './coach.js';
 import { finishRide } from './summary.js';

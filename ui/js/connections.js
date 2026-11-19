@@ -8,7 +8,8 @@
 import { invoke } from './ble.js';
 import { t } from './i18n/index.js';
 import { state, toast, planById, workoutInfo } from './core.js';
-import { api, showWeekDay } from './app.js';
+import { api } from './app.js';
+import { showWeekDay } from './views/parts.js';
 
 export {
   svcCache, setSvcCache, SVC_LOGO, refreshServices, svcMode, svcRoute, syncMode, uploadToService, manualImport,
