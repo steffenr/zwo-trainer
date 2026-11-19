@@ -1,27 +1,28 @@
 name: Deploy site
 
-# Publishes the website in site/ to GitHub Pages.
-#  - push to develop that changes site/ -> redeploy
-#  - after "Build zwoTrainer" has published a release (tag push) -> redeploy from that tag,
-#    so the download page names the new version once its installers are online
-#  - workflow_dispatch -> manual redeploy
+# Publishes the website in site/ to GitHub Pages, always as of the latest release, so the site
+# never describes features that aren't released yet (site changes on develop wait for it).
+#  - after "Build zwoTrainer" has published a release (tag push) -> deploy site/ of that
+#    release, so the download page names the new version once its installers are online
+#  - workflow_dispatch -> redeploy the latest release; `ref` (e.g. develop) deploys another
+#    branch or tag instead, for an urgent site fix
 #
 # workflow_run is used instead of a tag trigger: it runs on the default branch, which the
-# github-pages environment allows, and only after the release assets exist. It deploys the
-# default branch, not the triggering run's commit (CodeQL: untrusted checkout).
+# github-pages environment allows, and only after the release assets exist. The tag to deploy
+# comes from the releases API, not from the triggering run (CodeQL: untrusted checkout).
 #
 # One-time setup: Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
 
 on:
-  push:
-    branches: [develop]
-    paths:
-      - 'site/**'
-      - '.github/workflows/pages.yml'
   workflow_run:
     workflows: ['Build zwoTrainer']
     types: [completed]
   workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or tag to deploy (empty: the latest release)'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -46,12 +47,22 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      # Always check out the default branch (github.sha), never the commit of the triggering
-      # workflow_run: that runs with pages/id-token write and must not execute foreign code.
-      # release.yml pushes the version bump to the branch before tagging, so the default
-      # branch already carries the released version.
+      # The latest release's tag from the API (never the triggering workflow_run's commit: this
+      # job runs with pages/id-token write and must not execute foreign code).
+      - name: Pick the release to deploy
+        id: pick
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WANT: ${{ inputs.ref }}
+        run: |
+          REF="${WANT:-$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)}"
+          echo "Deploying ${REF}"
+          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v7
         with:
+          ref: ${{ steps.pick.outputs.ref }}
           persist-credentials: false
 
       - name: Setup Node (for the version script)

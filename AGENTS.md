@@ -74,7 +74,7 @@ site/                       static website (home, features, download) with dark/
   ci.yml                    push/PR: tests + clippy + UI syntax + i18n + CSS + markup checks (Linux), tests (macOS, Windows)
   release.yml               manual: bump patch/minor/major, commit, tag vX, push (needs RELEASE_PAT)
   build-app.yml             tag v*: build macOS arm64/x64, Windows, Linux → one GitHub release (+ latest.json for updates)
-  pages.yml                 site/ change on develop, successful release build, manual: deploy site/ to GitHub Pages
+  pages.yml                 successful release build, manual: deploy site/ of the latest release (or a given ref) to GitHub Pages
 .github/dependabot.yml      monthly PRs to develop: all Actions in one, Cargo minor+patch in one, each Cargo major alone
 ```
 
@@ -212,7 +212,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 
 ## Website (`site/`)
 
-- **Keep it in step with releases:** when a release changes what the site describes (features, requirements, settings, dialogs), update the copy in `index.html` / `features.html` / `download.html` and retake the affected screenshots in the same change. Wording follows the README.
+- **Keep it in step with releases:** when a release changes what the site describes (features, requirements, settings, dialogs), update the copy in `index.html` / `features.html` / `download.html` and retake the affected screenshots in the same change. Wording follows the README. `pages.yml` deploys `site/` of the latest release tag, so such changes go live with the release they describe.
 - **Screenshots:** every image exists as `<name>-dark.webp` and `<name>-light.webp`, shown with `class="sd"` / `class="sl"`. **All of them are scripted** in `scripts/shots/`; don't take site screenshots by hand.
   - **Retake:** `npx -y -p playwright node scripts/shots/run.mjs` (all, ~15 s) or with shot names (`… ride compact`); `--list` shows them. Playwright comes via npx, not a repo dependency; run `npx -y playwright install chromium` once.
   - **Reading the result (cheap):** one line per image. `unchanged` needs no look. `updated n % px in W×H at x,y` says how much and where. Only changed images are written, and all of them land on one contact sheet (path printed; `--sheet <file>` to choose): look at that single image, not at each file. `--out <dir>` writes elsewhere to compare before touching `site/img`.
