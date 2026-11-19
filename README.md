@@ -326,7 +326,7 @@ Keep riders in sync across Macs through a folder your cloud app already syncs. N
 
 - **Synced:** all riders, including avatar, FTP and zones, weight, plan progress, favorites, ride history, FTP tests and the ride FIT files.
 - **Stays on each Mac:** paired devices, the workouts folder, the Garmin FIT folder and the Garmin sign-in.
-- **Conflicts:** the newest change to a rider wins. Ride history and FTP tests are merged from both sides. Deleting a rider removes it on all Macs.
+- **Conflicts:** the newest change to a rider wins. Ride history and FTP tests are merged from both sides, and so is what a ride produced: plan progress (per workout), personal bests (the higher one) and the FTP of a test applied on the other computer. Unmarking a workout as done can come back from a computer that still has it marked. Deleting a rider removes it on all Macs.
 - **When it runs:** at launch, a few seconds after every change, when the window gets focus and every 5 minutes, never during a ride. **Sync now** forces a run.
 - **First sync on a new Mac:** an untouched default rider is replaced by the riders already in the folder, so you don't get a second "Rider 1".
 - **Layout in the cloud folder:** `zwoTrainer/profiles/<id>.json` and `zwoTrainer/activities/<id>/*.fit`.

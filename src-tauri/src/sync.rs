@@ -8,8 +8,13 @@
 //!
 //! Rules (predictable, never "resurrects" what you deleted):
 //!  - the newer copy of a profile (updatedAt) wins for everything it owns: name, avatar,
-//!    rider settings, plan progress, favorites;
+//!    rider settings, favorites;
 //!  - ride history and FTP tests are append-only logs and are merged from both sides;
+//!  - what a ride or test produced on one Mac survives a later, unrelated save on the other:
+//!    plan progress is merged per workout (the later `at` wins), personal bests per duration
+//!    (the higher one), and the FTP of an applied test newer than the other side's applied test
+//!    wins over the newer profile's FTP. (Unmarking a workout as done can come back from the
+//!    other Mac this way; losing a ridden workout would be worse.)
 //!  - machine-specific settings stay local: paired devices, workouts folder, Garmin FIT folder;
 //!  - a deleted profile leaves a tombstone, so it is removed on the other Macs too;
 //!  - secrets (Garmin session) are never synced — sign in once per Mac.
@@ -95,6 +100,42 @@ fn union_log(newer: &Value, older: &Value, key: impl Fn(&Value) -> String, cap: 
     Value::Array(v)
 }
 
+/// Plans of both sides; per workout entry the one with the later `at`.
+fn merge_plans(newer: &Value, older: &Value) -> Value {
+    let mut out = newer.as_object().cloned().unwrap_or_default();
+    for (folder, op) in older.as_object().into_iter().flatten() {
+        let Some(np) = out.get_mut(folder).filter(|p| p.is_object()) else {
+            out.insert(folder.clone(), op.clone());
+            continue;
+        };
+        let mut entries = np["entries"].as_object().cloned().unwrap_or_default();
+        for (file, oe) in op["entries"].as_object().into_iter().flatten() {
+            let at = |e: &Value| e["at"].as_str().unwrap_or("").to_string();
+            if entries.get(file).is_none_or(|ne| at(ne) < at(oe)) {
+                entries.insert(file.clone(), oe.clone());
+            }
+        }
+        np["entries"] = Value::Object(entries);
+    }
+    Value::Object(out)
+}
+
+/// Personal bests of both sides: the higher value per duration.
+fn merge_bests(newer: &Value, older: &Value) -> Value {
+    let mut out = newer.as_object().cloned().unwrap_or_default();
+    for (k, ov) in older.as_object().into_iter().flatten() {
+        if out.get(k).and_then(Value::as_f64).is_none_or(|nv| ov.as_f64().is_some_and(|o| o > nv)) {
+            out.insert(k.clone(), ov.clone());
+        }
+    }
+    Value::Object(out)
+}
+
+/// `at` of the test a profile applied as its FTP (`accepted`), if its FTP still is that test's.
+fn applied_test(p: &Value) -> Option<&str> {
+    p["tests"].as_array()?.iter().find(|t| t["accepted"] == json!(true) && t["ftp"] == p["settings"]["ftp"])?["at"].as_str()
+}
+
 /// Merge two copies of the same profile (see module docs). `local` keeps its machine settings.
 pub fn merge(local: &Value, remote: &Value) -> Value {
     let remote_newer = ts(remote) > ts(local);
@@ -104,6 +145,24 @@ pub fn merge(local: &Value, remote: &Value) -> Value {
     let hk = |e: &Value| format!("{}|{}", e["at"].as_str().unwrap_or(""), e["file"].as_str().unwrap_or(""));
     out["history"] = union_log(&newer["history"], &older["history"], hk, 1000);
     out["tests"] = union_log(&newer["tests"], &older["tests"], |e| e["at"].as_str().unwrap_or("").to_string(), 200);
+    if older["plans"].is_object() {
+        out["plans"] = merge_plans(&newer["plans"], &older["plans"]);
+    }
+    if older["settings"]["bests"].is_object() && out["settings"].is_object() {
+        out["settings"]["bests"] = merge_bests(&newer["settings"]["bests"], &older["settings"]["bests"]);
+    }
+    // A test the newer side hasn't seen yet, applied after the newer side's own applied test,
+    // brings its FTP along. A test it has seen was already superseded there (e.g. by hand).
+    let seen = |at: &str| newer["tests"].as_array().into_iter().flatten().any(|t| t["at"].as_str() == Some(at));
+    if let Some(at) = applied_test(older).filter(|a| !seen(a) && applied_test(newer).is_none_or(|n| n < *a)) {
+        if out["settings"].is_object() {
+            out["settings"]["ftp"] = older["settings"]["ftp"].clone();
+        }
+        // only that test stays marked as applied
+        for t in out["tests"].as_array_mut().into_iter().flatten() {
+            t["accepted"] = json!(t["at"].as_str() == Some(at));
+        }
+    }
     out["updatedAt"] = json!(ts(newer));
     out
 }
@@ -366,6 +425,48 @@ mod tests {
         assert_eq!(m["settings"]["devices"]["trainer"]["id"], "x");
         assert_eq!(m["history"].as_array().unwrap().len(), 2);
         assert_eq!(m["history"][0]["at"], "2026-09-05T00:00:00Z");
+    }
+
+    #[test]
+    fn ride_results_survive_a_later_save_elsewhere() {
+        // Mac A: rode plan day 2, a new 20-min best, applied an FTP test (all at 10:00)
+        let mut a = prof("Me", "2026-11-01T10:00:00Z", &[]);
+        a["settings"]["ftp"] = json!(262);
+        a["settings"]["bests"] = json!({ "m20": 275, "s5": 900 });
+        a["tests"] = json!([{ "at": "2026-11-01T09:00:00Z", "ftp": 262, "accepted": true },
+                            { "at": "2026-10-01T09:00:00Z", "ftp": 250, "accepted": false }]);
+        a["plans"] = json!({ "base": { "startedAt": "s", "entries": {
+            "d1.zwo": { "status": "done", "at": "2026-10-30T10:00:00Z" },
+            "d2.zwo": { "status": "done", "at": "2026-11-01T10:00:00Z" } } } });
+        // Mac B, not synced since day 1: changed the theme at 11:00 (newer profile)
+        let mut b = prof("Me", "2026-11-01T11:00:00Z", &[]);
+        b["settings"]["theme"] = json!("dark");
+        b["settings"]["bests"] = json!({ "m20": 268, "s5": 950 });
+        b["tests"] = json!([{ "at": "2026-10-01T09:00:00Z", "ftp": 250, "accepted": true }]);
+        b["plans"] = json!({ "base": { "startedAt": "s", "entries": {
+            "d1.zwo": { "status": "done", "at": "2026-10-30T10:00:00Z" } } },
+            "other": { "entries": { "x.zwo": { "status": "skipped", "at": "2026-10-31T10:00:00Z" } } } });
+        for m in [merge(&a, &b), merge(&b, &a)] {
+            assert_eq!(m["settings"]["theme"], "dark", "the newer save still wins");
+            assert_eq!(m["settings"]["ftp"], 262, "FTP of the newer applied test");
+            let applied: Vec<_> = m["tests"].as_array().unwrap().iter().filter(|t| t["accepted"] == true).map(|t| t["at"].clone()).collect();
+            assert_eq!(applied, vec![json!("2026-11-01T09:00:00Z")], "one applied test");
+            assert_eq!(m["settings"]["bests"], json!({ "m20": 275, "s5": 950 }), "higher best per duration");
+            assert_eq!(m["plans"]["base"]["entries"]["d2.zwo"]["status"], "done", "day 2 kept");
+            assert_eq!(m["plans"]["other"]["entries"]["x.zwo"]["status"], "skipped", "plans of both sides");
+        }
+        // a later entry for the same workout wins
+        let mut c = b.clone();
+        c["plans"]["base"]["entries"]["d2.zwo"] = json!({ "status": "skipped", "at": "2026-11-02T10:00:00Z" });
+        assert_eq!(merge(&a, &c)["plans"]["base"]["entries"]["d2.zwo"]["status"], "skipped");
+        // an FTP typed in by hand on the newer side (no applied test behind it) is kept unless
+        // the other side applied a test
+        let mut d = prof("Me", "2026-11-03T10:00:00Z", &[]);
+        d["settings"]["ftp"] = json!(255);
+        assert_eq!(merge(&d, &prof("Me", "2026-11-01T10:00:00Z", &[]))["settings"]["ftp"], 255);
+        // … also when the other side still has an applied test this side already knew
+        d["tests"] = a["tests"].clone();
+        assert_eq!(merge(&d, &a)["settings"]["ftp"], 255, "typed in after seeing that test");
     }
 
     #[test]
