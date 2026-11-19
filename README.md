@@ -243,7 +243,7 @@ Every button press shows a short confirmation on screen. The display stays awake
 | Heart rate | any Bluetooth heart-rate strap or watch broadcasting HR |
 | Controllers | **Zwift Ride**, **Zwift Click (v1/v2)**, **Zwift Play**, **OpenBikeControl** controllers and bridge apps (e.g. BikeControl) over Bluetooth |
 
-- **Pairing:** pair from the **Devices** menu → *Connect*. Devices are remembered per rider and reconnect at launch and after dropouts.
+- **Pairing:** pair from the **Devices** menu → *Connect*. Devices are remembered per rider and reconnect at launch and after dropouts (controllers too: for about a minute after one drops, e.g. when it falls asleep).
 - **Retry auto-connect:** if the app started before your trainer or heart-rate strap was awake, open the **Devices** menu and click **Retry auto-connect**. It connects every saved device that is still off (with two controllers, only the missing one) and leaves connected devices alone. The button shows only while a saved device is off and no connection attempt is running.
 - **One connection only:** close Zwift and other training apps first, because most trainers and controllers accept just one connection.
 

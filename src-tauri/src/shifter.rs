@@ -26,6 +26,9 @@ use btleplug::platform::Peripheral;
 use crate::ble::Claims;
 use futures::StreamExt;
 use serde_json::{json, Value};
+use std::collections::HashSet;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
@@ -225,18 +228,34 @@ pub struct Controllers {
     /// next to a manual connect) waits for it instead of opening a second link, which would
     /// fire every press twice.
     pending: Claims,
+    /// Ids the rider connected and hasn't disconnected: one that drops is reconnected (`reconnect`).
+    wanted: std::sync::Mutex<HashSet<String>>,
+    /// Ids with a reconnect running (one per controller).
+    reconnecting: Claims,
 }
 
 impl Controllers {
     pub fn new(app: AppHandle, ble: Arc<Ble>) -> Arc<Self> {
-        Arc::new(Self { app, ble, conns: Mutex::new(vec![]), pending: Claims::default() })
+        Arc::new(Self {
+            app,
+            ble,
+            conns: Mutex::new(vec![]),
+            pending: Claims::default(),
+            wanted: std::sync::Mutex::new(HashSet::new()),
+            reconnecting: Claims::default(),
+        })
+    }
+
+    fn wanted(&self) -> std::sync::MutexGuard<'_, HashSet<String>> {
+        self.wanted.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     async fn status(&self) {
         let (names, ids): (Vec<String>, Vec<String>) = self.conns.lock().await.iter().map(|c| (c.name.clone(), c.id.clone())).unzip();
+        let reconnecting = names.is_empty() && self.wanted().iter().any(|id| self.reconnecting.contains(id));
         let _ = self.app.emit(
             "device-status",
-            json!({ "kind": "controller", "connected": !names.is_empty(), "name": names.join(" + "), "count": names.len(), "ids": ids }),
+            json!({ "kind": "controller", "connected": !names.is_empty(), "reconnecting": reconnecting, "name": names.join(" + "), "count": names.len(), "ids": ids }),
         );
     }
 
@@ -279,9 +298,18 @@ impl Controllers {
         self.conns.lock().await.iter().find(|c| c.id == id).map(|c| json!({ "id": c.id, "name": c.name }))
     }
 
+    /// Connect `id` and keep it connected: it is reconnected after a dropout until `disconnect_all`.
+    pub async fn connect(self: &Arc<Self>, id: &str) -> Result<Value, String> {
+        let res = self.connect_once(id).await;
+        if res.is_ok() {
+            self.wanted().insert(id.to_string());
+        }
+        res
+    }
+
     /// Connect `id` once: an already connected controller is returned as it is, and a connect
     /// that is already running is waited for.
-    pub async fn connect(self: &Arc<Self>, id: &str) -> Result<Value, String> {
+    async fn connect_once(self: &Arc<Self>, id: &str) -> Result<Value, String> {
         let mut waited = Duration::ZERO;
         let _claim = loop {
             if let Some(c) = self.known(id).await {
@@ -414,8 +442,7 @@ impl Controllers {
                 }
             }
             // stream ended → device gone
-            me.conns.lock().await.retain(|c| c.id != pid);
-            me.status().await;
+            me.gone(&pid).await;
         });
         let battery = crate::battery::watch(self.app.clone(), periph.clone(), "controller", id.to_string());
         conns.push(Conn { periph, id: id.to_string(), name: name.clone(), task, _battery: battery });
@@ -470,8 +497,7 @@ impl Controllers {
                 }
             }
             // stream ended → device gone
-            me.conns.lock().await.retain(|c| c.id != pid);
-            me.status().await;
+            me.gone(&pid).await;
         });
         let battery = crate::battery::watch(self.app.clone(), periph.clone(), "controller", id.to_string());
         conns.push(Conn { periph, id: id.to_string(), name: name.clone(), task, _battery: battery });
@@ -480,7 +506,49 @@ impl Controllers {
         Ok(json!({ "id": id, "name": name }))
     }
 
+    /// The link of `id` ended (switched off, out of range): forget it and, unless the rider
+    /// disconnected it, reconnect.
+    async fn gone(self: &Arc<Self>, id: &str) {
+        self.conns.lock().await.retain(|c| c.id != id);
+        if self.wanted().contains(id) {
+            tokio::spawn(self.clone().reconnect(id.to_string()));
+        }
+        self.status().await;
+    }
+
+    /// Reconnect a dropped controller, like the trainer: 8 tries over about a minute, stopping
+    /// when the rider disconnects. Boxed, because it calls `connect_once`, whose task calls it.
+    fn reconnect(self: Arc<Self>, id: String) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        Box::pin(async move {
+            let Some(_claim) = self.reconnecting.claim(&id) else { return };
+            self.status().await;
+            for attempt in 1..=8u64 {
+                tokio::time::sleep(Duration::from_millis(1500 * attempt.min(4))).await;
+                if !self.wanted().contains(&id) || self.connect_once(&id).await.is_ok() {
+                    break;
+                }
+            }
+            // the rider disconnected while the last try was connecting: don't keep that link
+            if !self.wanted().contains(&id) {
+                let dropped: Vec<Conn> = {
+                    let mut conns = self.conns.lock().await;
+                    let (gone, keep) = conns.drain(..).partition(|c| c.id == id);
+                    *conns = keep;
+                    gone
+                };
+                for c in dropped {
+                    c.task.abort();
+                    let _ = c.periph.disconnect().await;
+                }
+            }
+            drop(_claim);
+            self.status().await;
+        })
+    }
+
     pub async fn disconnect_all(&self) {
+        // first, so a reconnect stops and a dropping link isn't reconnected
+        self.wanted().clear();
         let conns: Vec<Conn> = self.conns.lock().await.drain(..).collect();
         for c in conns {
             c.task.abort();
