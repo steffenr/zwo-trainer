@@ -12,6 +12,7 @@ use btleplug::platform::{Adapter, Manager, Peripheral};
 use futures::StreamExt;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
@@ -183,7 +184,11 @@ struct Conn {
     mode: Mode,
     control: Option<Characteristic>,
     last_target: Option<Target>,
-    manual: bool,
+    /// Unique per connection: a reconnect only replaces the very connection that dropped.
+    serial: u64,
+    /// A reconnect task is already running for this connection.
+    reconnecting: bool,
+    /// Notification task (sensor events, control point replies); aborted when the `Conn` is dropped.
     task: tokio::task::JoinHandle<()>,
     /// Control point replies `(op code, result)`, forwarded by the notification task.
     replies: mpsc::UnboundedReceiver<(u8, u8)>,
@@ -197,7 +202,41 @@ struct Conn {
     _battery: Option<crate::battery::Watch>,
 }
 
+impl Drop for Conn {
+    /// A replaced or dropped connection must stop emitting `sensor` events (two trainers' power would mix).
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
+static NEXT_SERIAL: AtomicU64 = AtomicU64::new(1);
+
+/// What a reconnect does once it is done, given what the slot holds now (`(serial, id)` of its `Conn`).
+#[derive(PartialEq, Debug)]
+enum Takeover {
+    /// The slot still holds the connection that dropped: replace it (or, after giving up, clear it).
+    Mine,
+    /// The user disconnected or connected another device meanwhile: leave the slot alone and close
+    /// our own link, unless the slot now holds the same device (closing it would cut that connection).
+    Superseded { close_link: bool },
+}
+
+fn takeover(slot: Option<(u64, &str)>, serial: u64, id: &str) -> Takeover {
+    match slot {
+        Some((s, _)) if s == serial => Takeover::Mine,
+        Some((_, other)) => Takeover::Superseded { close_link: other != id },
+        None => Takeover::Superseded { close_link: true },
+    }
+}
+
+/// A control point write may hang (e.g. a link dropping mid-write) while the trainer lock is held.
+const WRITE_TIMEOUT: Duration = Duration::from_secs(2);
+
 impl Conn {
+    fn token(&self) -> (u64, &str) {
+        (self.serial, &self.id)
+    }
+
     fn erg(&self) -> bool {
         self.mode == Mode::Ftms && self.control.is_some()
     }
@@ -209,7 +248,11 @@ impl Conn {
     /// Write a control point command and, when `wait` is set, wait for the trainer's reply to it.
     async fn command(&mut self, cp: &Characteristic, bytes: &[u8], wait: Option<Duration>) -> Result<Reply, String> {
         while self.replies.try_recv().is_ok() {} // drop stale replies
-        self.periph.write(cp, bytes, WriteType::WithResponse).await.map_err(|e| e.to_string())?;
+        // a write that doesn't complete counts as failed (it may not have reached the trainer)
+        tokio::time::timeout(WRITE_TIMEOUT, self.periph.write(cp, bytes, WriteType::WithResponse))
+            .await
+            .map_err(|_| "Trainer didn't confirm the write".to_string())?
+            .map_err(|e| e.to_string())?;
         let Some(wait) = wait else { return Ok(Reply::Silent) };
         let deadline = tokio::time::Instant::now() + wait;
         loop {
@@ -403,10 +446,27 @@ impl Ble {
         // drop an existing connection of the same kind first
         self.disconnect(kind).await;
         let periph = self.find(kind, id, Duration::from_secs(12)).await?;
-        let conn = self.setup(kind, periph, id.to_string()).await?;
+        let conn = match self.setup(kind, periph.clone(), id.to_string()).await {
+            Ok(conn) => conn,
+            Err(e) => {
+                // don't leave a half set-up link open
+                let _ = periph.disconnect().await;
+                return Err(e);
+            }
+        };
         let info = conn.info();
-        self.conn_status(kind, &conn);
-        *self.slot(kind).lock().await = Some(conn);
+        let old = {
+            let mut slot = self.slot(kind).lock().await;
+            self.conn_status(kind, &conn);
+            slot.replace(conn)
+        };
+        // another connect (or a reconnect) filled the slot meanwhile: dropping it stops its events,
+        // and its link is closed unless it is the device we just connected
+        if let Some(old) = old {
+            if old.id != id {
+                let _ = old.periph.disconnect().await;
+            }
+        }
         Ok(info)
     }
 
@@ -482,7 +542,8 @@ impl Ble {
             mode,
             control: None,
             last_target: None,
-            manual: false,
+            serial: NEXT_SERIAL.fetch_add(1, Ordering::Relaxed),
+            reconnecting: false,
             task,
             replies,
             acks: false,
@@ -504,10 +565,9 @@ impl Ble {
     }
 
     pub async fn disconnect(&self, kind: Kind) {
+        // an empty slot also tells a running reconnect to stop
         let conn = self.slot(kind).lock().await.take();
-        if let Some(mut c) = conn {
-            c.manual = true;
-            c.task.abort();
+        if let Some(c) = conn {
             let _ = c.periph.disconnect().await;
             self.status(kind, false, &c.name, false, false);
         }
@@ -596,14 +656,18 @@ impl Ble {
                     let pid = pid.to_string();
                     let _ = self.dropped.send(pid.clone());
                     for kind in [Kind::Trainer, Kind::Hr] {
+                        // one reconnect per dropped connection, even if the adapter reports it twice
                         let dropped = {
-                            let slot = self.slot(kind).lock().await;
-                            slot.as_ref().filter(|c| c.id == pid && !c.manual).map(|c| (c.name.clone(), c.periph.clone()))
+                            let mut slot = self.slot(kind).lock().await;
+                            slot.as_mut().filter(|c| c.id == pid && !c.reconnecting).map(|c| {
+                                c.reconnecting = true;
+                                (c.serial, c.name.clone(), c.periph.clone())
+                            })
                         };
-                        if let Some((name, periph)) = dropped {
+                        if let Some((serial, name, periph)) = dropped {
                             let me = self.clone();
                             let id = pid.clone();
-                            tauri::async_runtime::spawn(async move { me.reconnect(kind, id, name, periph).await });
+                            tauri::async_runtime::spawn(async move { me.reconnect(kind, serial, id, name, periph).await });
                         }
                     }
                 }
@@ -611,28 +675,47 @@ impl Ble {
         });
     }
 
-    async fn reconnect(self: Arc<Self>, kind: Kind, id: String, name: String, periph: Peripheral) {
+    /// Reconnect the dropped connection `serial`. It stops as soon as the slot no longer holds that
+    /// connection (the user disconnected or connected another device), also after a slow `setup()`.
+    async fn reconnect(self: Arc<Self>, kind: Kind, serial: u64, id: String, name: String, periph: Peripheral) {
         self.status(kind, false, &name, false, true);
+        let mine = |slot: &Option<Conn>| takeover(slot.as_ref().map(Conn::token), serial, &id);
         for attempt in 1..=8u64 {
             tokio::time::sleep(Duration::from_millis(1500 * attempt.min(4))).await;
-            // the user may have disconnected or switched devices meanwhile
-            if self.slot(kind).lock().await.as_ref().map(|c| c.id != id || c.manual).unwrap_or(true) {
+            if mine(&*self.slot(kind).lock().await) != Takeover::Mine {
                 return;
             }
-            if let Ok(conn) = self.setup(kind, periph.clone(), id.clone()).await {
-                let mut slot = self.slot(kind).lock().await;
-                if let Some(old) = slot.take() {
-                    old.task.abort();
+            let Ok(conn) = self.setup(kind, periph.clone(), id.clone()).await else { continue };
+            // setup can take a while: check again before replacing anything
+            let mut slot = self.slot(kind).lock().await;
+            match mine(&slot) {
+                Takeover::Mine => {
+                    self.conn_status(kind, &conn);
+                    *slot = Some(conn); // drops the dead connection
                 }
-                self.conn_status(kind, &conn);
-                *slot = Some(conn);
-                return;
+                Takeover::Superseded { close_link } => {
+                    drop(slot);
+                    drop(conn); // stops its notification task and battery polling
+                    if close_link {
+                        let _ = periph.disconnect().await;
+                    }
+                }
             }
+            return;
         }
-        if let Some(c) = self.slot(kind).lock().await.take() {
-            c.task.abort();
+        let mut slot = self.slot(kind).lock().await;
+        let outcome = mine(&slot);
+        if outcome == Takeover::Mine {
+            slot.take();
         }
-        self.status(kind, false, &name, false, false);
+        drop(slot);
+        if outcome != (Takeover::Superseded { close_link: false }) {
+            // the last attempt may have left a half set-up link open
+            let _ = periph.disconnect().await;
+        }
+        if outcome == Takeover::Mine {
+            self.status(kind, false, &name, false, false);
+        }
     }
 }
 
@@ -794,6 +877,18 @@ mod tests {
         assert!(!denied_after(false, Reply::Silent));
         assert!(denied_after(true, Reply::Failed(0x03)), "other errors keep it");
         assert!(!denied_after(false, Reply::Failed(0x03)));
+    }
+
+    #[test]
+    fn reconnect_takeover() {
+        // still the connection that dropped
+        assert_eq!(takeover(Some((7, "A")), 7, "A"), Takeover::Mine);
+        // user disconnected meanwhile: slot empty, close our link
+        assert_eq!(takeover(None, 7, "A"), Takeover::Superseded { close_link: true });
+        // user connected trainer B meanwhile: keep B, close A
+        assert_eq!(takeover(Some((9, "B")), 7, "A"), Takeover::Superseded { close_link: true });
+        // user reconnected A by hand meanwhile: keep theirs, don't cut the shared link
+        assert_eq!(takeover(Some((9, "A")), 7, "A"), Takeover::Superseded { close_link: false });
     }
 
     #[tokio::test]
