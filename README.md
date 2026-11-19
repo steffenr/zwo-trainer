@@ -212,6 +212,8 @@ Deleting always goes to the system Trash (the Recycle Bin on Windows), so it can
 | + / − | shift gear (virtual gears); during free-ride segments ↑ / ↓ shift too |
 | Esc | end workout |
 
+Recording stays at one sample per second even when the window is hidden or minimised.
+
 If you switch to another app during a ride (a video, a browser) and zwoTrainer might still have the keyboard focus, turn off **Keyboard shortcuts while riding** under Settings → Riding. The on-screen buttons and controllers keep working.
 
 **Controller buttons** (Zwift Ride / Play / Click):

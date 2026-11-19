@@ -2650,6 +2650,7 @@ class Ride {
   /** Jump to a time in the workout. Callers go through go(), which applies the FTP-test rules (no skipping inside a measured effort). */
   seek(to) {
     this.t = Math.max(0, Math.min(this.w.duration - 0.01, to));
+    this.lastSec = Math.floor(this.t) - 1; // record from where the jump lands, never the skipped seconds
     this.beeped.clear();
     this.render(true);
   }
@@ -2742,12 +2743,17 @@ class Ride {
       this.ridden += dt;
       const sec = Math.floor(this.t);
       if (sec !== this.lastSec) {
-        // dev fast-forward (SPEED > 1): fill skipped seconds so recordings stay 1 Hz
-        const from = SPEED > 1 && sec > this.lastSec ? this.lastSec + 1 : sec;
+        // Fill every second since the last sample so recordings stay 1 Hz: a late tick (the webview
+        // throttles timers in a hidden or minimised window, or dev fast-forward with ?speed) must not
+        // leave gaps in the FIT file or make test efforts look short. seek() moves lastSec to the
+        // second before the new position, so a jump never records fake seconds in between.
+        const from = sec > this.lastSec ? this.lastSec + 1 : sec;
         this.lastSec = sec;
+        // wall time per sample: one second apart, ending at now (real time; fast-forward spaces them 1 s)
+        const nowWall = SPEED > 1 ? this.startedAt.getTime() + (this.samples.length + sec - from) * 1000 : Date.now();
         for (let ts = from; ts <= sec; ts++) {
           const i = Math.max(0, segmentAt(this.w.segments, Math.min(ts, this.w.duration - 0.01)));
-          const wall = SPEED > 1 ? (this.startedAt.getTime() + this.samples.length * 1000) : Date.now();
+          const wall = nowWall - (sec - ts) * 1000;
           this.samples.push({ t: ts, p: fresh('power'), c: fresh('cadence'), hr: fresh('hr'), v: this.vsSpeed ?? fresh('speed'), tp: this.targetW, seg: i, measure: this.w.segments[i]?.measure, wall });
           const tag = this.w.segments[i]?.measure;
           if (tag) { const acc = ((this.effAcc ||= {})[tag] ||= { sum: 0, n: 0 }); acc.sum += this.samples[this.samples.length - 1].p || 0; acc.n++; }

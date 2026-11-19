@@ -14,6 +14,7 @@
         "height": 880,
         "minWidth": 900,
         "minHeight": 640,
+        "backgroundThrottling": "disabled",
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "trafficLightPosition": {
