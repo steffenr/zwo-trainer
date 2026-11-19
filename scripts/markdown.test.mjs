@@ -11,6 +11,19 @@ test('bare URL with underscores stays one link, no <em>', () => {
   assert.equal(renderMarkdown('https://x.com/a*b*c'), p(a('https://x.com/a*b*c')));
 });
 
+test('a trailing _ closes an italic opened before a bare URL, otherwise it stays in the URL', () => {
+  assert.equal(renderMarkdown('_https://x.com/a_'), p(`<em>${a('https://x.com/a')}</em>`));
+  assert.equal(renderMarkdown('_see https://x.com/a_ now'), p(`<em>see ${a('https://x.com/a')}</em> now`));
+  assert.equal(renderMarkdown('_see https://x.com/_a_b_'), p(`<em>see ${a('https://x.com/_a_b')}</em>`));
+  assert.equal(renderMarkdown('(_https://x.com/a_)'), p(`(<em>${a('https://x.com/a')}</em>)`));
+  assert.equal(renderMarkdown('_see https://x.com/a_.'), p(`<em>see ${a('https://x.com/a')}</em>.`));
+  // no open italic: the underscore belongs to the address
+  assert.equal(renderMarkdown('see https://x.com/a_'), p(`see ${a('https://x.com/a_')}`));
+  assert.equal(renderMarkdown('_see_ https://x.com/a_'), p(`<em>see</em> ${a('https://x.com/a_')}`));
+  assert.equal(renderMarkdown('snake_case https://x.com/a_'), p(`snake_case ${a('https://x.com/a_')}`));
+  assert.equal(renderMarkdown('https://x.com/_a and https://y.com/b_'), p(`${a('https://x.com/_a')} and ${a('https://y.com/b_')}`));
+});
+
 test('Markdown link URL with underscores or stars is kept intact', () => {
   assert.equal(renderMarkdown('[plan](https://x.com/_a_/b__c__)'), p(a('https://x.com/_a_/b__c__', 'plan')));
   assert.equal(renderMarkdown('[plan](https://x.com/*a*)'), p(a('https://x.com/*a*', 'plan')));
