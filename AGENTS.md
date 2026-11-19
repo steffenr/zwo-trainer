@@ -111,6 +111,7 @@ node --test scripts/avatar.test.mjs                    # avatar initials ink (bl
 node --test scripts/html.test.mjs                      # html`` escaping, raw/Safe nesting, tHtml, mount
 node --test scripts/markdown.test.mjs                  # description Markdown: escaping, http(s)-only links, emphasis never breaks links/code
 node --test scripts/ftp-tests.test.mjs                 # FTP test protocols: results only from tagged, ≥ 95 % ridden efforts; CP, W′, VO2max
+node --test scripts/vshift.test.mjs                    # virtual shifting: gear table, virtual speed, flat-road power, target watts
 node --test scripts/updater-manifest.test.mjs            # latest.json: every platform signed, else the run fails
 node scripts/sync-version.mjs [x.y.z]                # print / set the app version
 npx -y -p playwright node scripts/shots/run.mjs [names…] [--list|--theme t|--out dir|--force]   # retake website screenshots
