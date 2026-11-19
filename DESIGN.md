@@ -100,7 +100,7 @@ Always use tokens (`var(--…)`), never raw hex in components. Dark values apply
 | `.k` labels | 11 px (`--fs-2xs`), uppercase, `letter-spacing: .08em`, 600, muted |
 | `.eyebrow` | 11 px (`--fs-2xs`), uppercase, `.09em` |
 
-UI text uses the type tokens only: `--fs-2xs` 11 · `--fs-xs` 12 · `--fs-sm` 13 · `--fs-md` 14 · `--fs-base` 15 · `--fs-lg` 17. Headings (`h1` 26, `h2` 19) and big readouts keep their own sizes. No half-pixel sizes. Headings use `letter-spacing: -0.01em`.
+UI text uses the type tokens only: `--fs-2xs` 11 · `--fs-xs` 12 · `--fs-sm` 13 · `--fs-md` 14 · `--fs-base` 15 · `--fs-lg` 17. Headings (`h1` 26, `h2` 19) and big readouts keep their own sizes. **The smallest text is 11 px (`--fs-2xs`)**, and only for uppercase labels, tags, badges and chart axis labels; running text and fine print are at least 12 px (`--fs-xs`). Fluid sizes (`clamp()` on the ride screen) start and end on the scale or on a readout size, e.g. `clamp(var(--fs-2xs), …, var(--fs-md))`. No half-pixel sizes. Headings use `letter-spacing: -0.01em`.
 
 **Ride readouts:** base sizes at 1400 px width, scaling linearly with `vw` above that, capped at 1.6× (full screen). Use the pattern `clamp(BASEpx, BASE/14 vw, 1.6·BASEpx)`:
 
@@ -178,7 +178,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 ```
 
 - **Panel grid:** 25 / 50 / 25 (`minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr)`) above the chart; the chart takes the remaining height. Below 980 px: Live and Current side by side, Next full width.
-- **Panel header** `.ph`: 19 px accent icon · 12.5 px uppercase label (letter-spacing .09em) · optional status on the right (`.ph-status`, 11 px uppercase; green `ok` when connected). LIVE has a status dot (green when a trainer is connected).
+- **Panel header** `.ph`: 19 px accent icon · 13 px (`--fs-sm`) uppercase label (letter-spacing .09em; grows to 16 px on wide windows) · optional status on the right (`.ph-status`, 11 px uppercase; green `ok` when connected). LIVE has a status dot (green when a trainer is connected).
 - **LIVE** `.live-body`: the watt gauge on top (centred), the four metrics below in a 2 × 2 grid. `.metric`: 19 px icon · uppercase label · value (`--num`, 22 px) + unit + muted extra (`/ 90` cadence target, `69%`) · 5 px bar (`.mbar`). Power shows only the live value (the target is on the gauge); its bar runs 0…1.5× target, coloured by the zone you're riding in. Speed: 0–60 km/h, green. Heart rate: % of max HR.
 - **Cadence target:** only when the segment has one, the cadence row shows `86 / 90 rpm` (or `/ 85–95`); the bar spans 40–130 rpm with a marker (or band, for ranges) at the target and turns **green** on target, **amber** 5–10 rpm off, **red** beyond 10 rpm — the value itself turns red too. CURRENT shows it as *Target cadence* (in `--cad`), the next-segment card as its last line.
 - **Current-segment ring** `ProgressRing`: a single progress arc in the zone colour (it reuses `Gauge` but removes the inner "actual power" track, the FTP tick and the actual arc — only the LIVE watt gauge has two arcs: outer = target, inner = actual).
@@ -282,7 +282,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
   - Everything should be reachable by keyboard, and rows are focusable (`tabindex="0"`, Enter opens). Keyboard focus is one shared rule in `utilities.css` (`:focus-visible` on buttons, links, `[tabindex]`, `summary`, `[role=…]` → 2 px `--accent` outline, offset 2; inset −2 inside popovers), so `all: unset` controls get it too. It sits in the last layer on purpose; don't remove focus outlines in a view (`outline: none` there has no effect).
   - Popover menus (`popoverOpen()` in actions.js): opening focuses the first item, ↑/↓/Home/End move, Esc or Tab closes and returns focus to the anchor, the anchor carries `aria-haspopup` / `aria-expanded`. While a popover is open the ride shortcuts are off, so Esc never stops the workout.
   - Every input has an accessible name: a `<label>`, or an `aria-label` when the visible text isn't a label (zone limits, the two gear-range fields).
-  - Text is at least 12 px.
+  - Text size minimums: see [Typography](#typography) (11 px uppercase labels, otherwise ≥ 12 px).
 
 ## Checklist for UI changes
 
