@@ -131,7 +131,7 @@ test('t: a plural object without the selected form uses "other"', () => {
 test('pct: percent typography per language, numbers and ranges', () => {
   assert.equal(pct(75), '75%');
   assert.equal(pct('75–80'), '75–80%');
-  inLocale('de', () => assert.equal(pct(75), '75%'));
+  inLocale('de', () => assert.equal(pct(75), '75 %')); // German: a plain space before %, like the rest of de.js
   inLocale('fr', () => {
     assert.equal(pct(75), '75 %');
     assert.equal(pct('75–80'), '75–80 %');
