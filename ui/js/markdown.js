@@ -13,6 +13,18 @@ function emphasis(t) {
   return t.replace(/~~([^~]+)~~/g, '<del>$1</del>');
 }
 
+/** Whether `_italic_` is open at the end of `text` (an opening single `_` without its closing one).
+ *  Earlier bare URLs are skipped: their underscores are part of the address. */
+function italicOpen(text) {
+  let open = false;
+  for (const m of text.replace(/https?:\/\/\S+/g, ' ').matchAll(/_+/g)) {
+    if (m[0].length !== 1) continue;
+    const before = m.input[m.index - 1] || ' ', after = m.input[m.index + 1] || ' ';
+    if (open ? !/\s/.test(before) && !/\w/.test(after) : !/\w/.test(before) && !/\s/.test(after)) open = !open;
+  }
+  return open;
+}
+
 /** Inline formatting on an already-escaped line. Links become data-link anchors.
  *  Code spans and finished links are swapped for placeholders before emphasis runs,
  *  so `_` / `*` in code, URLs or link markup never turn into <em> / <strong>. */
@@ -27,9 +39,15 @@ function inline(text) {
     return `\u0001${links.length - 1}\u0001`;
   };
   // A Markdown link's label gets its own emphasis pass; a bare URL is shown as it is
-  // (it may sit inside *…* / **…**, so it never ends with a star).
+  // (it may sit inside *…* / **…**, so it never ends with a star). A URL may end in `_`, except
+  // when an _italic_ opened before it on this line is still open: then that `_` closes it.
   t = t.replace(/\[([^\]]+)\]\(\s*([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\s*\)/g, (_, l, u) => link(emphasis(l), u));
-  t = t.replace(/(^|[\s(*])(https?:\/\/[^\s<)]+[^\s<).,;:!?*])/g, (_, pre, u) => `${pre}${link(u, u)}`);
+  t = t.replace(/(^|[\s(*])(_?)(https?:\/\/[^\s<)]+[^\s<).,;:!?*])/g, (_, pre, us, u, at, all) => {
+    // u[0]: an `_` directly before the URL opens only when a non-space follows it
+    const close = u.endsWith('_') && italicOpen(all.slice(0, at) + pre + us + u[0]) ? '_' : '';
+    if (close) u = u.slice(0, -1);
+    return `${pre}${us}${link(u, u)}${close}`;
+  });
   t = emphasis(t);
   t = t.replace(/\u0001(\d+)\u0001/g, (_, i) => links[+i]);
   return t.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[+i]}</code>`);

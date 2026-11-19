@@ -26,6 +26,26 @@ export class CompactView {
     });
     return this.pending;
   }
+
+  /** Leaving the ride: like set(false), but the native side retries once and, if the window still can't be
+   * restored, resets the minimum size and forgets its snapshot (`leave`). Either way the full view is applied,
+   * so the next ride starts from a clean state; resolves false (after reporting) when the restore failed. */
+  leave() {
+    this.pending = this.pending.then(async () => {
+      if (!this.active) return true;
+      let ok = true;
+      try {
+        await this.resize(false, true);
+      } catch (error) {
+        this.report(error);
+        ok = false;
+      }
+      this.active = false;
+      this.apply(false);
+      return ok;
+    });
+    return this.pending;
+  }
 }
 
 // Size tiers for the compact ride panels (see docs/superpowers/specs/2026-11-16-compact-three-panels-design.md).

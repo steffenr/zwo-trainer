@@ -176,7 +176,7 @@ Deleting always goes to the system Trash (the Recycle Bin on Windows), so it can
 - **Plausibility check:** if the new FTP differs from your current one by more than 15 %, the result shows a note (trainer calibration, which device measured the power, fatigue) before you apply it.
 - **The result** appears as "Your FTP is ~X W". **Use X W as my FTP** applies it and recalculates the zones in watts. Personal bests (5 s, 1, 5, 20 min) are updated automatically.
 - **Test history** lists every result with its change against the previous FTP and a small FTP trend chart. An older result can still be applied later.
-- **Tests in your library:** test-themed ZWO files (FTP Test, Ramp Test, Critical Power, Best effort, Benchmarking, …) are recognised automatically, including inside plans. Following Zwift's convention, their free-ride blocks are the all-out efforts. Ramp-test files that lack the actual ramp (a known WhatsOnZwift export issue) start the built-in Ramp Test instead.
+- **Tests in your library:** test-themed ZWO files (FTP Test, Ramp Test, Critical Power, Best effort, Benchmarking, …) are recognised automatically, including inside plans. Following Zwift's convention, their free-ride blocks are the all-out efforts. Ramp-test files that lack the actual ramp (a known WhatsOnZwift export issue) start the built-in Ramp Test instead. A ramp in a library file is evaluated like the built-in one: only its own steps count (75 % of the best ramp minute, never a harder warm-up), and when you can't hold it, the 5-minute cool-down follows.
 - **W/kg and VO2max** need your weight. VO2max is estimated from your 8-minute power with the ACSM equation (`10.8 · W/kg + 7` ml/kg/min), or after a ramp test from peak power (Hawley & Noakes, `0.01141 · W + 0.435` L/min).
 
 ---
@@ -370,7 +370,7 @@ The limits can be changed per rider (Settings → Rider) and drive the colours, 
 | What | Where |
 |---|---|
 | Riders, settings, progress, history, update setting | `state.json` in the app data folder: `~/Library/Application Support/dev.steffenr.zwotrainer/` (macOS), `%APPDATA%\dev.steffenr.zwotrainer\` (Windows), `~/.local/share/dev.steffenr.zwotrainer/` (Linux). If the file is ever damaged, zwoTrainer keeps it as `state.json.corrupt-<number>` next to it and starts fresh, so nothing is overwritten. |
-| Garmin session tokens and the Intervals.icu API key (owner-only file) | `…/dev.steffenr.zwotrainer/secrets.json` (never synced) |
+| Garmin session tokens (with the OAuth consumer pair, downloaded once per Garmin sign-in) and the Intervals.icu API key (owner-only file) | `…/dev.steffenr.zwotrainer/secrets.json` (never synced) |
 | Ride files | `…/dev.steffenr.zwotrainer/activities/<rider>/*.fit` (plus `*.garmin.fit`); rides started in the same minute get separate files (`…-2.fit`), and nothing ever replaces an existing ride file |
 | Workouts | your workouts folder; zwoTrainer only reads it, except *Move to Trash* |
 

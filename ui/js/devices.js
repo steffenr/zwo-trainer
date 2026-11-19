@@ -116,7 +116,7 @@ function refreshDevicesMenu() {
 
 function setDev(kind, s) {
   const was = devState[kind] || {};
-  devState[kind] = { connected: !!s.connected, reconnecting: !!s.reconnecting, name: s.name || '' };
+  devState[kind] = { connected: !!s.connected, reconnecting: !!s.reconnecting, sim: !!s.sim, name: s.name || '' };
   // a device that is gone has no battery; with several controllers keep only the ones still connected
   if (!s.connected) battery[kind] = {};
   else if (kind === 'controller' && s.ids) battery[kind] = Object.fromEntries(Object.entries(battery[kind]).filter(([id]) => s.ids.includes(id)));
@@ -142,9 +142,10 @@ function renderDevicesMenu(pop) {
     const d = devState[k];
     const level = d.connected ? lowestLevel(battery[k]) : null;
     const batt = raw(batteryBadge(level, t('batteryPct', { n: level }), pct));
+    const name = d.sim ? t('simulator') : d.name; // translated now, so a language switch shows at once
     const savedName = k === 'controller' ? (saved.controllers || []).map((c) => c.name).join(' + ') : saved[k]?.name;
-    const status = d.connected ? html`<span class="ok-text">${d.name || tHtml('connected')}</span>`
-      : d.reconnecting ? html`<span class="warn-text">${d.name ? tHtml('connectingName', { name: d.name }) : tHtml('connectingDots')}</span>`
+    const status = d.connected ? html`<span class="ok-text">${name || tHtml('connected')}</span>`
+      : d.reconnecting ? html`<span class="warn-text">${name ? tHtml('connectingName', { name }) : tHtml('connectingDots')}</span>`
         : html`<span class="muted">${savedName ? tHtml('savedOff', { name: savedName }) : tHtml('notPaired')}</span>`;
     return html`<button class="dev-row" data-dev="${k}"><span class="dev-ico ${d.connected ? 'on' : d.reconnecting ? 'warn' : ''}">${raw(icon)}</span><span class="dev-txt"><span class="dev-head"><b>${tHtml(label)}</b>${batt}</span>${status}</span><span class="dev-act">${tHtml(d.connected ? 'change' : 'connect')}</span></button>`;
   };

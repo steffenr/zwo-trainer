@@ -819,6 +819,11 @@ pub struct CrankState {
 
 /// Cycling Power Measurement (0x2A63), cadence derived from crank revolution data.
 pub fn parse_power(v: &[u8], crank: &mut Option<CrankState>) -> Option<Map<String, Value>> {
+    parse_power_at(v, crank, std::time::Instant::now())
+}
+
+/// `parse_power` with the arrival time passed in, so tests can control the zero-cadence timeout.
+fn parse_power_at(v: &[u8], crank: &mut Option<CrankState>, now: std::time::Instant) -> Option<Map<String, Value>> {
     let flags = u16le(v, 0)?;
     let mut out = Map::new();
     out.insert("power".into(), json!(i16le(v, 2)?));
@@ -828,7 +833,6 @@ pub fn parse_power(v: &[u8], crank: &mut Option<CrankState>) -> Option<Map<Strin
     if flags & 0x10 != 0 { o += 6; }
     if flags & 0x20 != 0 {
         let (revs, time) = (u16le(v, o)?, u16le(v, o + 2)?);
-        let now = std::time::Instant::now();
         match crank {
             Some(c) => {
                 let dr = revs.wrapping_sub(c.revs);
@@ -1000,6 +1004,127 @@ mod tests {
         assert_eq!(o["power"], json!(215));
     }
 
+    /// Indoor Bike Data fields in packet order: (flag bit, size, key we read or None if skipped).
+    /// Speed is present when bit 0 ("more data") is *clear*.
+    const BIKE_FIELDS: [(u16, usize, Option<&str>); 10] = [
+        (0x0001, 2, Some("speed")),
+        (0x0002, 2, None),         // average speed
+        (0x0004, 2, Some("cadence")),
+        (0x0008, 2, None),         // average cadence
+        (0x0010, 3, None),         // total distance (uint24)
+        (0x0020, 2, None),         // resistance level
+        (0x0040, 2, Some("power")),
+        (0x0080, 2, None),         // average power
+        (0x0100, 5, None),         // expended energy: total (2), per hour (2), per minute (1)
+        (0x0200, 1, Some("hr")),
+    ];
+
+    fn bike_field_present(flags: u16, bit: u16) -> bool {
+        if bit == 0x0001 { flags & bit == 0 } else { flags & bit != 0 }
+    }
+
+    /// A packet for `flags` with distinct values in the fields we read and 0xEE filler in the
+    /// skipped ones (so a wrong offset reads garbage), plus the expected result.
+    fn bike_packet(flags: u16) -> (Vec<u8>, Map<String, Value>) {
+        let mut v = flags.to_le_bytes().to_vec();
+        let mut want = Map::new();
+        for (bit, size, key) in BIKE_FIELDS {
+            if !bike_field_present(flags, bit) {
+                continue;
+            }
+            match key {
+                Some("speed") => { v.extend(2850u16.to_le_bytes()); want.insert("speed".into(), json!(28.5)); }
+                Some("cadence") => { v.extend(181u16.to_le_bytes()); want.insert("cadence".into(), json!(90.5)); }
+                Some("power") => { v.extend(215i16.to_le_bytes()); want.insert("power".into(), json!(215)); }
+                Some("hr") => { v.push(142); want.insert("hr".into(), json!(142)); }
+                _ => v.extend(std::iter::repeat_n(0xEE, size)),
+            }
+        }
+        (v, want)
+    }
+
+    /// What `parse_bike_data` promises for the first `n` bytes of `bike_packet(flags)`: None when
+    /// the flags or a field we read (speed, cadence, power) is cut; a cut heart rate is left out.
+    fn bike_expected(flags: u16, n: usize, full: &Map<String, Value>) -> Option<Map<String, Value>> {
+        if n < 2 {
+            return None;
+        }
+        let mut o = 2;
+        let mut want = Map::new();
+        for (bit, size, key) in BIKE_FIELDS {
+            if !bike_field_present(flags, bit) {
+                continue;
+            }
+            match key {
+                Some("hr") => {
+                    if o < n {
+                        want.insert("hr".into(), full["hr"].clone());
+                    }
+                }
+                Some(k) => {
+                    if o + size > n {
+                        return None;
+                    }
+                    want.insert(k.into(), full[k].clone());
+                }
+                None => {}
+            }
+            o += size;
+        }
+        Some(want)
+    }
+
+    #[test]
+    fn bike_data_every_flag_combination() {
+        for flags in 0..0x0400u16 {
+            let (v, want) = bike_packet(flags);
+            assert_eq!(parse_bike_data(&v).as_ref(), Some(&want), "flags {flags:#06x}");
+            // reserved bits above the heart rate don't change anything
+            let mut hi = v.clone();
+            hi[1] |= 0xFC;
+            assert_eq!(parse_bike_data(&hi).as_ref(), Some(&want), "flags {flags:#06x} + reserved bits");
+        }
+    }
+
+    #[test]
+    fn bike_data_truncated_at_every_byte() {
+        for flags in 0..0x0400u16 {
+            let (v, want) = bike_packet(flags);
+            for n in 0..v.len() {
+                assert_eq!(parse_bike_data(&v[..n]), bike_expected(flags, n, &want), "flags {flags:#06x}, {n} of {} bytes", v.len());
+            }
+        }
+    }
+
+    #[test]
+    fn bike_data_examples() {
+        // no speed (bit 0), everything else: avg speed, cadence, avg cadence, distance, resistance,
+        // power, avg power, energy, heart rate
+        let mut v = 0x03FFu16.to_le_bytes().to_vec();
+        v.extend([0x10, 0x27]); // avg speed
+        v.extend(170u16.to_le_bytes()); // 85 rpm
+        v.extend([0x00, 0x01]); // avg cadence
+        v.extend([0x01, 0x02, 0x03]); // distance
+        v.extend([0x05, 0x00]); // resistance
+        v.extend((-12i16).to_le_bytes()); // backpedalling: negative power is kept
+        v.extend([0xc8, 0x00]); // avg power
+        v.extend([1, 2, 3, 4, 5]); // energy
+        v.push(155);
+        let o = parse_bike_data(&v).unwrap();
+        assert_eq!(Value::Object(o), json!({ "cadence": 85.0, "power": -12, "hr": 155 }));
+
+        // only the flags: speed is expected but missing
+        assert_eq!(parse_bike_data(&[0x00, 0x00]), None);
+        // "more data" set and nothing else: a valid, empty packet
+        assert_eq!(parse_bike_data(&[0x01, 0x00]), Some(Map::new()));
+        assert_eq!(parse_bike_data(&[0x01]), None);
+        assert_eq!(parse_bike_data(&[]), None);
+
+        // heart rate 0 (no strap contact) is ignored, the rest stays
+        let o = parse_bike_data(&[0x41, 0x02, 0x64, 0x00, 0x00]).unwrap();
+        assert_eq!(Value::Object(o), json!({ "power": 100 }));
+    }
+
     #[test]
     fn heart_rate() {
         assert_eq!(parse_hr(&[0x00, 142]).unwrap()["hr"], json!(142));
@@ -1007,6 +1132,36 @@ mod tests {
         // poor strap contact: no value rather than 0 bpm (same as Indoor Bike Data)
         assert!(parse_hr(&[0x00, 0]).unwrap().is_empty());
         assert!(parse_hr(&[0x01, 0, 0]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn heart_rate_optional_fields_follow_the_value() {
+        // sensor contact supported + detected (bits 1–2), 8-bit
+        assert_eq!(Value::Object(parse_hr(&[0x06, 72]).unwrap()), json!({ "hr": 72 }));
+        // contact supported but not detected: the strap still reports its value as it is
+        assert_eq!(parse_hr(&[0x04, 72]).unwrap()["hr"], json!(72));
+        assert!(parse_hr(&[0x04, 0]).unwrap().is_empty());
+        // energy expended (bit 3) and RR intervals (bit 4) come after the value
+        assert_eq!(parse_hr(&[0x18, 128, 0x34, 0x12, 0x00, 0x04, 0x10, 0x04]).unwrap()["hr"], json!(128));
+        // 16-bit value with everything: 0x1f
+        assert_eq!(Value::Object(parse_hr(&[0x1f, 0xb4, 0x00, 0x34, 0x12, 0x00, 0x04]).unwrap()), json!({ "hr": 180 }));
+        // energy / RR flags set but their data missing: the value is still read
+        assert_eq!(parse_hr(&[0x18, 128]).unwrap()["hr"], json!(128));
+        assert_eq!(parse_hr(&[0x19, 0x80, 0x00]).unwrap()["hr"], json!(128));
+        // reserved bits are ignored
+        assert_eq!(parse_hr(&[0xe0, 60]).unwrap()["hr"], json!(60));
+        // the 16-bit high byte counts
+        assert_eq!(parse_hr(&[0x01, 0xff, 0xff]).unwrap()["hr"], json!(65535));
+    }
+
+    #[test]
+    fn heart_rate_truncated() {
+        assert_eq!(parse_hr(&[]), None);
+        assert_eq!(parse_hr(&[0x00]), None);
+        assert_eq!(parse_hr(&[0x06]), None);
+        assert_eq!(parse_hr(&[0x01]), None);
+        assert_eq!(parse_hr(&[0x01, 0x48]), None, "16-bit value cut after one byte");
+        assert_eq!(parse_hr(&[0x1f, 0x48]), None);
     }
 
     #[test]
@@ -1023,5 +1178,133 @@ mod tests {
         let o = parse_power(&mk(11, 683), &mut st).unwrap(); // 1 rev in 0.667 s ≈ 90 rpm
         assert_eq!(o["power"], json!(250));
         assert_eq!(o["cadence"], json!(90.0));
+    }
+
+    /// Cycling Power Measurement with `flags`, 250 W, 0xEE filler in the optional fields before
+    /// the crank data (pedal balance 1, accumulated torque 2, wheel revolutions 6) and, with
+    /// 0x20, the crank revolutions and last event time.
+    fn cp_packet(flags: u16, revs: u16, time: u16) -> Vec<u8> {
+        let mut v = flags.to_le_bytes().to_vec();
+        v.extend(250i16.to_le_bytes());
+        for (bit, size) in [(0x01, 1), (0x04, 2), (0x10, 6)] {
+            if flags & bit != 0 {
+                v.extend(std::iter::repeat_n(0xEE, size));
+            }
+        }
+        if flags & 0x20 != 0 {
+            v.extend(revs.to_le_bytes());
+            v.extend(time.to_le_bytes());
+        }
+        v
+    }
+
+    #[test]
+    fn power_offsets_before_crank_data() {
+        // every combination of the fields before the crank data; 0x02 (balance reference) and
+        // 0x08 (torque source) are plain flags without data and must not move anything
+        for extra in 0..0x20u16 {
+            let flags = extra | 0x20;
+            let mut st = None;
+            let t0 = std::time::Instant::now();
+            let first = parse_power_at(&cp_packet(flags, 100, 1000), &mut st, t0).unwrap();
+            assert_eq!(Value::Object(first), json!({ "power": 250 }), "flags {flags:#04x}: first crank reading only sets the state");
+            let o = parse_power_at(&cp_packet(flags, 101, 1683), &mut st, t0).unwrap();
+            assert_eq!(Value::Object(o), json!({ "power": 250, "cadence": 90.0 }), "flags {flags:#04x}");
+            // without crank data: power only, the state stays
+            let o = parse_power_at(&cp_packet(extra, 0, 0), &mut st, t0).unwrap();
+            assert_eq!(Value::Object(o), json!({ "power": 250 }), "flags {extra:#04x}");
+            let c = st.as_ref().unwrap();
+            assert_eq!((c.revs, c.time), (101, 1683));
+        }
+        // trailing extra fields (extreme force/torque, angles, …) after the crank data are ignored
+        let mut v = cp_packet(0x20 | 0x40 | 0x80, 5, 0);
+        v.extend([1, 2, 3, 4, 5, 6]);
+        let mut st = None;
+        assert!(parse_power(&v, &mut st).is_some() && st.is_some());
+        // negative power is passed on as it is
+        let o = parse_power(&[0x00, 0x00, 0xf6, 0xff], &mut None).unwrap();
+        assert_eq!(o["power"], json!(-10));
+    }
+
+    #[test]
+    fn power_crank_wraps_at_u16() {
+        let t0 = std::time::Instant::now();
+        let mut st = None;
+        parse_power_at(&cp_packet(0x20, 65535, 65000), &mut st, t0).unwrap();
+        // revolutions 65535 → 0 and event time 65000 → 147 (683 ticks = 0.667 s): still 90 rpm
+        let o = parse_power_at(&cp_packet(0x20, 0, 147), &mut st, t0).unwrap();
+        assert_eq!(o["cadence"], json!(90.0));
+        // both wrap again in later packets: 2 revs in 1366 ticks
+        let o = parse_power_at(&cp_packet(0x20, 2, 1513), &mut st, t0).unwrap();
+        assert_eq!(o["cadence"], json!(90.0));
+        // only the time wraps
+        let mut st = None;
+        parse_power_at(&cp_packet(0x20, 500, 65535), &mut st, t0).unwrap();
+        let o = parse_power_at(&cp_packet(0x20, 501, 682), &mut st, t0).unwrap();
+        assert_eq!(o["cadence"], json!(90.0));
+    }
+
+    #[test]
+    fn power_rejects_implausible_crank_jumps() {
+        let t0 = std::time::Instant::now();
+        let mut st = None;
+        parse_power_at(&cp_packet(0x20, 10, 0), &mut st, t0).unwrap();
+        // 20 revolutions at once (a reset or a counter jump): no cadence, but the state moves on
+        let o = parse_power_at(&cp_packet(0x20, 30, 1024), &mut st, t0).unwrap();
+        assert!(!o.contains_key("cadence"), "{o:?}");
+        assert_eq!(st.as_ref().map(|c| (c.revs, c.time)), Some((30, 1024)));
+        // so the next normal packet is measured from there
+        let o = parse_power_at(&cp_packet(0x20, 31, 1707), &mut st, t0).unwrap();
+        assert_eq!(o["cadence"], json!(90.0));
+        // a counter going backwards wraps to a huge difference: rejected the same way
+        let o = parse_power_at(&cp_packet(0x20, 25, 2390), &mut st, t0).unwrap();
+        assert!(!o.contains_key("cadence"), "{o:?}");
+        // 19 is still accepted
+        let o = parse_power_at(&cp_packet(0x20, 44, 3414), &mut st, t0).unwrap();
+        assert_eq!(o["cadence"], json!(1140.0));
+    }
+
+    #[test]
+    fn power_cadence_drops_to_zero_after_three_seconds() {
+        let t0 = std::time::Instant::now();
+        let at = |ms: u64| t0 + Duration::from_millis(ms);
+        let mut st = None;
+        parse_power_at(&cp_packet(0x20, 10, 0), &mut st, at(0)).unwrap();
+        assert_eq!(parse_power_at(&cp_packet(0x20, 11, 683), &mut st, at(700)).unwrap()["cadence"], json!(90.0));
+        // the rider stops pedalling: the same crank event is repeated
+        for ms in [1000, 2500, 3600] {
+            let o = parse_power_at(&cp_packet(0x20, 11, 683), &mut st, at(ms)).unwrap();
+            assert!(!o.contains_key("cadence"), "{ms} ms: no value yet, the last one stays");
+        }
+        // exactly 3 s after the last change is not "more than 3 s"
+        assert!(!parse_power_at(&cp_packet(0x20, 11, 683), &mut st, at(3700)).unwrap().contains_key("cadence"));
+        let o = parse_power_at(&cp_packet(0x20, 11, 683), &mut st, at(3701)).unwrap();
+        assert_eq!(o["cadence"], json!(0));
+        // and stays 0 while nothing changes
+        assert_eq!(parse_power_at(&cp_packet(0x20, 11, 683), &mut st, at(9000)).unwrap()["cadence"], json!(0));
+        // pedalling again gives a cadence at once, and resets the timeout
+        assert_eq!(parse_power_at(&cp_packet(0x20, 12, 1366), &mut st, at(9500)).unwrap()["cadence"], json!(90.0));
+        assert!(!parse_power_at(&cp_packet(0x20, 12, 1366), &mut st, at(12_000)).unwrap().contains_key("cadence"));
+        // rejected jumps don't count as a change either
+        parse_power_at(&cp_packet(0x20, 100, 2000), &mut st, at(12_400)).unwrap();
+        assert_eq!(parse_power_at(&cp_packet(0x20, 100, 2000), &mut st, at(12_600)).unwrap()["cadence"], json!(0));
+    }
+
+    #[test]
+    fn power_truncated() {
+        assert_eq!(parse_power(&[], &mut None), None);
+        assert_eq!(parse_power(&[0x00, 0x00, 0xfa], &mut None), None, "power cut");
+        for flags in [0x20u16, 0x21, 0x25, 0x35, 0x3f] {
+            let v = cp_packet(flags, 7, 99);
+            for n in 0..v.len() {
+                let mut st = Some(CrankState { revs: 1, time: 2, last_change: std::time::Instant::now() });
+                assert_eq!(parse_power(&v[..n], &mut st), None, "flags {flags:#04x}, {n} of {} bytes", v.len());
+                assert_eq!(st.as_ref().map(|c| (c.revs, c.time)), Some((1, 2)), "a cut packet leaves the state alone");
+            }
+            let mut st = None;
+            assert!(parse_power(&v, &mut st).is_some());
+        }
+        // without the crank flag the optional fields are never read: a short packet still gives power
+        assert_eq!(Value::Object(parse_power(&[0x15, 0x00, 0x64, 0x00], &mut None).unwrap()), json!({ "power": 100 }));
     }
 }

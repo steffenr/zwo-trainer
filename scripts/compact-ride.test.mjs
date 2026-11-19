@@ -83,6 +83,30 @@ test('failed exit keeps the compact view available for retry', async () => {
   assert.equal(f.view.active, false);
 });
 
+test('leaving asks the native side to leave and applies the full view even when it fails', async () => {
+  let fail = false;
+  const requests = [];
+  const f = fixture(async (...args) => { requests.push(args); if (fail) throw new Error('Cannot restore'); });
+  await f.view.set(true);
+  fail = true;
+  assert.equal(await f.view.leave(), false);
+  assert.deepEqual(requests, [[true], [false, true]]);
+  assert.equal(f.view.active, false);
+  assert.deepEqual(f.applied, [true, false]);
+  assert.equal(f.errors.length, 1);
+  fail = false;
+  assert.equal(await f.view.set(true), true);
+  assert.deepEqual(requests.at(-1), [true]);
+});
+
+test('leaving the full view does not touch the window', async () => {
+  const requests = [];
+  const f = fixture(async (...args) => requests.push(args));
+  assert.equal(await f.view.leave(), true);
+  assert.deepEqual(requests, []);
+  assert.deepEqual(f.applied, []);
+});
+
 import { compactMode } from '../ui/js/compact.js';
 
 test('compactMode: wide tiers', () => {
