@@ -592,9 +592,7 @@ function devicesMenu(anchor) {
   const r = anchor.getBoundingClientRect();
   pop.style.top = `${r.bottom + 8}px`;
   pop.style.left = `${Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r.right - pop.offsetWidth))}px`;
-  const close = () => { pop.remove(); document.removeEventListener('click', outside, true); };
-  const outside = (e) => { if (!pop.contains(e.target) && !anchor.contains(e.target)) close(); };
-  setTimeout(() => document.addEventListener('click', outside, true));
+  const close = popoverOpen(pop, anchor);
   pop.onclick = (e) => {
     // retry keeps the popover open, so the rows show "Connecting…" and then the result
     if (e.target.closest('[data-retry]')) return connectSaved(retryable());
@@ -1312,8 +1310,46 @@ function refreshView() {
   window.scrollTo(0, y);
 }
 
-/** A quiet "⋯" button whose items (regular data-act buttons) open in a popover. */
+/** Shared behaviour of every popover (#popover): the first item gets focus, ↑/↓/Home/End move between
+ *  items, Esc or Tab closes it and returns focus to the anchor, a click outside closes it, and the anchor
+ *  carries aria-haspopup / aria-expanded. Keys are caught on document in the capture phase, so the
+ *  ride's shortcuts (Esc = stop) never see them; Ride.onKey also ignores keys while a popover is open.
+ *  Removing the popover in any other way (opening another one) also cleans up. Returns close(refocus). */
+function popoverOpen(pop, anchor) {
+  const items = () => [...pop.querySelectorAll('button:not([disabled]), a[href]')];
+  anchor?.setAttribute('aria-haspopup', 'true');
+  anchor?.setAttribute('aria-expanded', 'true');
+  let closed = false;
+  const close = (refocus = false) => {
+    if (closed) return;
+    closed = true;
+    obs.disconnect();
+    pop.remove();
+    document.removeEventListener('click', outside, true);
+    document.removeEventListener('keydown', key, true);
+    anchor?.setAttribute('aria-expanded', 'false');
+    if (refocus && anchor?.isConnected) anchor.focus();
+  };
+  const outside = (e) => { if (!pop.contains(e.target) && !anchor?.contains(e.target)) close(); };
+  const key = (e) => {
+    if (!pop.isConnected) return close();
+    if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); return close(true); }
+    const list = items();
+    const i = list.indexOf(document.activeElement);
+    const to = { ArrowDown: i + 1, ArrowUp: i < 0 ? -1 : i - 1, Home: 0, End: -1 }[e.key];
+    if (to == null || !list.length) return;
+    e.preventDefault(); e.stopPropagation();
+    list[(to + list.length) % list.length].focus();
+  };
+  const obs = new MutationObserver(() => { if (!pop.isConnected) close(); });
+  obs.observe(document.body, { childList: true });
+  setTimeout(() => { if (!closed) document.addEventListener('click', outside, true); });
+  document.addEventListener('keydown', key, true);
+  items()[0]?.focus({ preventScroll: true });
+  return close;
+}
 
+/** A quiet "⋯" button whose items (regular data-act buttons) open in a popover. */
 function openMenu(anchor) {
   $('#popover')?.remove();
   const tpl = anchor.parentElement.querySelector('template');
@@ -1325,9 +1361,7 @@ function openMenu(anchor) {
   document.body.appendChild(pop);
   pop.style.top = `${Math.min(r.bottom + 6, window.innerHeight - pop.offsetHeight - 8)}px`;
   pop.style.left = `${Math.max(8, r.right - pop.offsetWidth)}px`;
-  const close = () => { pop.remove(); document.removeEventListener('click', outside, true); };
-  const outside = (e) => { if (!pop.contains(e.target)) close(); };
-  setTimeout(() => document.addEventListener('click', outside, true));
+  const close = popoverOpen(pop, anchor);
   bindActions(pop);
   pop.addEventListener('click', (e) => { if (e.target.closest('[data-act]')) setTimeout(close); });
 }
@@ -1347,9 +1381,7 @@ function moreMenu(anchor, file) {
   document.body.appendChild(pop);
   pop.style.top = `${Math.min(r.bottom + 6, window.innerHeight - pop.offsetHeight - 8)}px`;
   pop.style.left = `${Math.max(8, r.right - pop.offsetWidth)}px`;
-  const close = () => { pop.remove(); document.removeEventListener('click', outside, true); };
-  const outside = (e) => { if (!pop.contains(e.target)) close(); };
-  setTimeout(() => document.addEventListener('click', outside, true));
+  const close = popoverOpen(pop, anchor);
   // every item closes the menu first, then acts on this workout
   const act = (fn) => async () => { close(); await fn(); };
   bindActions(pop, {
@@ -2711,7 +2743,8 @@ class Ride {
 
   /** Keyboard shortcuts while riding (space, arrows, +/−); ignored in dialogs, inputs, or when switched off in Settings. */
   onKey(e) {
-    if (this.ending || modal.open || e.target.matches('input') || state.settings.keyboardShortcuts === false) return;
+    // an open popover menu owns the keyboard (Esc closes it, never stops the ride)
+    if (this.ending || modal.open || $('#popover') || e.target.matches('input') || state.settings.keyboardShortcuts === false) return;
     // Space / Enter on a focused radio (free-ride choice) selects it instead of play/pause. Plain buttons
     // keep the shortcut: after clicking "next", Space should still pause, not skip again.
     if ((e.key === ' ' || e.key === 'Enter') && e.target.closest?.('[role=radio], [role=tab]')) return;

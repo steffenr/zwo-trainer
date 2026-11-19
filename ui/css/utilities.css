@@ -4,6 +4,15 @@
 .warn-text { color: var(--danger) !important; }
 .danger-text { color: var(--danger) !important; }
 
+/* keyboard focus, one rule for every control: many buttons are styled with `all: unset`, which also
+   removes the outline, so it lives here in the last layer where no component or view can undo it.
+   Inputs and selects keep their own border + ring (base.css). */
+:where(button, a[href], summary, [tabindex]:not([tabindex="-1"]), [role="button"], [role="radio"], [role="tab"], [role="menuitem"]):focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+/* inside a popover the ring sits inside the item, so the menu's edge never clips it */
+.popover :where(button, a[href]):focus-visible { outline-offset: -2px; }
+
 /* the system's "Reduce motion": no animations or transitions anywhere */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; transition-duration: .01ms !important; }

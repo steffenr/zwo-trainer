@@ -274,7 +274,8 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
   - Icon-only buttons need a `title` and an `aria-label`.
   - Status is never shown by colour alone: dots are paired with text in the devices menu and tooltips.
   - Contrast is ≥ 4.5:1 for text (use the zone *ink* tokens for coloured text).
-  - Everything should be reachable by keyboard, and rows are focusable (`tabindex="0"`, Enter opens). Controls styled with `all: unset` need their own `:focus-visible` outline (2 px `--accent`, offset 2).
+  - Everything should be reachable by keyboard, and rows are focusable (`tabindex="0"`, Enter opens). Keyboard focus is one shared rule in `utilities.css` (`:focus-visible` on buttons, links, `[tabindex]`, `summary`, `[role=…]` → 2 px `--accent` outline, offset 2; inset −2 inside popovers), so `all: unset` controls get it too. It sits in the last layer on purpose; don't remove focus outlines in a view (`outline: none` there has no effect).
+  - Popover menus (`popoverOpen()` in app.js): opening focuses the first item, ↑/↓/Home/End move, Esc or Tab closes and returns focus to the anchor, the anchor carries `aria-haspopup` / `aria-expanded`. While a popover is open the ride shortcuts are off, so Esc never stops the workout.
   - Every input has an accessible name: a `<label>`, or an `aria-label` when the visible text isn't a label (zone limits, the two gear-range fields).
   - Text is at least 12 px.
 

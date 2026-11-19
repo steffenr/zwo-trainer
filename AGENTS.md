@@ -243,6 +243,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 - **ZWO limits:** `MAX_ELEMENT_SECS` (1 day, durations clamp), `MAX_REPS` (1000, repeats clamp) and `MAX_WORKOUT_SECS` (48 h; longer is a parse error, the scan skips the file). They exist in `zwo.rs` and `zwo.js`; keep both equal.
 - **Ending a ride:** `this.ending` makes `finish()` run once; while it is set, buttons, keys, controllers and new ERG targets are ignored. Both `finish()` and `close()` release ERG (`trainer.setFreeRide()`; Discard skips `finish()`).
 - **Recording:** `Ride.tick` fills every second since `lastSec` (a late tick from a throttled or hidden webview must not leave gaps in the FIT file or test efforts). `seek()` sets `lastSec = floor(t) - 1`, so jumps never create samples. `backgroundThrottling: "disabled"` in tauri.conf.json only works on macOS 14+; elsewhere the fill is what keeps recordings complete.
+- **Popovers:** open them through `popoverOpen(pop, anchor)` (focus, arrow keys, Esc/Tab close and return focus, `aria-expanded`). `Ride.onKey` ignores keys while `#popover` exists, so Esc never stops a ride. The focus ring is one rule in `utilities.css`; don't add per-component focus outlines or `outline: none`.
 - **Other platforms (`services.rs`):**
   - Only platforms with **automatic upload for everyone** (Intervals.icu) plus COROS's manual import are supported, to keep the app simple.
   - Wahoo, TrainingPeaks and Suunto need approved partner apps and were removed on purpose; don't re-add them. **Never copy another app's client ids or secrets.**
