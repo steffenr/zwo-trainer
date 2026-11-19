@@ -358,13 +358,28 @@ impl Drop for Claim<'_> {
 }
 
 /// Wait until the adapter reports `id` as disconnected (never returns if the channel stays quiet).
-pub(crate) async fn wait_dropped(rx: &mut broadcast::Receiver<String>, id: &str) {
+/// A lagged receiver may have missed exactly that report, so it then asks `alive()` instead.
+pub(crate) async fn wait_dropped<F, Fut>(rx: &mut broadcast::Receiver<String>, id: &str, alive: F)
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = bool>,
+{
     loop {
         match rx.recv().await {
             Ok(got) if got == id => return,
             Err(broadcast::error::RecvError::Closed) => return,
+            Err(broadcast::error::RecvError::Lagged(_)) if !alive().await => return,
             _ => {}
         }
+    }
+}
+
+/// `alive` for `wait_dropped`: whether the link of `p` is still up.
+pub(crate) fn link_up(p: &Peripheral) -> impl Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = bool> + Send>> {
+    let p = p.clone();
+    move || {
+        let p = p.clone();
+        Box::pin(async move { p.is_connected().await.unwrap_or(false) })
     }
 }
 
@@ -944,11 +959,28 @@ mod tests {
         let (tx, mut rx) = broadcast::channel(16);
         tx.send("other".to_string()).unwrap();
         tx.send("mine".to_string()).unwrap();
-        tokio::time::timeout(Duration::from_secs(1), wait_dropped(&mut rx, "mine")).await.expect("returns once its id is reported");
+        let up = || async { true };
+        tokio::time::timeout(Duration::from_secs(1), wait_dropped(&mut rx, "mine", up)).await.expect("returns once its id is reported");
 
         let (tx2, mut rx2) = broadcast::channel(16);
         tx2.send("other".to_string()).unwrap();
-        assert!(tokio::time::timeout(Duration::from_millis(100), wait_dropped(&mut rx2, "mine")).await.is_err(), "other ids don't end the watch");
+        assert!(tokio::time::timeout(Duration::from_millis(100), wait_dropped(&mut rx2, "mine", up)).await.is_err(), "other ids don't end the watch");
+    }
+
+    #[tokio::test]
+    async fn wait_dropped_checks_the_link_after_lagging() {
+        // more reports than the channel holds: our own may be among the lost ones
+        let lagged = || {
+            let (tx, rx) = broadcast::channel(2);
+            for i in 0..5 {
+                tx.send(format!("other{i}")).unwrap();
+            }
+            (tx, rx)
+        };
+        let (_tx, mut rx) = lagged();
+        tokio::time::timeout(Duration::from_secs(1), wait_dropped(&mut rx, "mine", || async { false })).await.expect("link down → returns");
+        let (_tx, mut rx) = lagged();
+        assert!(tokio::time::timeout(Duration::from_millis(100), wait_dropped(&mut rx, "mine", || async { true })).await.is_err(), "link up → keeps watching");
     }
 
     #[test]

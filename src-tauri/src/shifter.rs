@@ -343,6 +343,7 @@ impl Controllers {
         let me = self.clone();
         let pid = id.to_string();
         let mut gone = self.ble.subscribe_dropped();
+        let up = crate::ble::link_up(&periph);
         // Held until the Conn is registered (see connect_obc).
         let mut conns = self.conns.lock().await;
         let task = tokio::spawn(async move {
@@ -351,7 +352,7 @@ impl Controllers {
                 // the stream may never end when the controller is switched off: also watch the adapter
                 let n = tokio::select! {
                     n = stream.next() => match n { Some(n) => n, None => break },
-                    _ = crate::ble::wait_dropped(&mut gone, &pid) => break,
+                    _ = crate::ble::wait_dropped(&mut gone, &pid, &up) => break,
                 };
                 if n.uuid == ASYNC || n.uuid == SYNC_TX {
                     let hex: String = n.value.iter().map(|b| format!("{b:02x}")).collect();
@@ -406,6 +407,7 @@ impl Controllers {
         // Held until the Conn is registered: if the link drops right away, the task's cleanup
         // waits for the lock instead of running on a list that doesn't have the Conn yet.
         let mut gone = self.ble.subscribe_dropped();
+        let up = crate::ble::link_up(&periph);
         let mut conns = self.conns.lock().await;
         let task = tokio::spawn(async move {
             let mut tracker = obc::Tracker::default();
@@ -413,7 +415,7 @@ impl Controllers {
             loop {
                 let n = tokio::select! {
                     n = stream.next() => match n { Some(n) => n, None => break },
-                    _ = crate::ble::wait_dropped(&mut gone, &pid) => break,
+                    _ = crate::ble::wait_dropped(&mut gone, &pid, &up) => break,
                 };
                 if n.uuid != obc::BUTTON_STATE {
                     continue;
