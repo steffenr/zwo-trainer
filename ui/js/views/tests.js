@@ -4,13 +4,13 @@
 //
 // Import cycle with app.js (api, route, bindActions; app.js routes here). Safe because nothing from app.js is
 // used while this module is evaluated, only inside functions that run after boot.
-import { fmtDur, miniProfile, ZONES } from '../render.js';
-import { isTestWorkout, PROTOCOLS, classifyTest, protocolById } from '../tests.js';
+import { ZONES, fmtDur, miniProfile } from '../render.js';
+import { PROTOCOLS, protocolById, isTestWorkout, classifyTest } from '../tests.js';
 import { t, fmtLocale } from '../i18n/index.js';
-import { html, tText, raw, tHtml, mount } from '../html.js';
+import { html, raw, tHtml, tText, mount } from '../html.js';
 import { badge } from '../components/indicators.js';
-import { bounds, $, ftp, state, allWorkouts, relDate, weight, wkg, toast } from '../core.js';
-import { bindActions, api, route } from '../app.js';
+import { $, state, bounds, ftp, weight, wkg, allWorkouts, relDate, toast } from '../core.js';
+import { api, route, bindActions } from '../app.js';
 import { workoutRow } from './parts.js';
 import { openSettings } from './settings.js';
 import { startTest } from '../ride/ride.js';

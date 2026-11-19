@@ -7,7 +7,7 @@
 // evaluated, only inside functions that run after boot.
 import { invoke } from './ble.js';
 import { t } from './i18n/index.js';
-import { state, toast, planById, workoutInfo } from './core.js';
+import { state, planById, workoutInfo, toast } from './core.js';
 import { api } from './app.js';
 import { showWeekDay } from './views/parts.js';
 

@@ -2,12 +2,12 @@
 // (isPlan, planMeta, showWeekDay), the plan description block, favourites (favs, isFav, starBtn), the plan
 // progress bar, the "W3 D2" tag, one workout row (workoutRow) and one segment in words (segmentText, also
 // the ride chart's tooltip). Imports only core.js and leaf modules, so it is not part of an import cycle.
-import { fmtDur, miniProfile, zoneOf, fmtTime } from '../render.js';
-import { smartTrim, markdownPlain, renderMarkdown } from '../markdown.js';
+import { zoneOf, fmtTime, fmtDur, miniProfile } from '../render.js';
+import { renderMarkdown, markdownPlain, smartTrim } from '../markdown.js';
 import { t, pct } from '../i18n/index.js';
 import { html, raw, tHtml, tText } from '../html.js';
 import { wdTag, zoneTag } from '../components/indicators.js';
-import { state, planById, folderOf, justDone, lastRidden, lastRiddenText, bounds, ftp } from '../core.js';
+import { state, bounds, ftp, planById, folderOf, lastRidden, lastRiddenText, justDone } from '../core.js';
 
 export {
   isPlan, planWeeks, planMeta, showWeekDay, descriptionBlock, favs, isFav, starBtn, progressBar, weekDay,

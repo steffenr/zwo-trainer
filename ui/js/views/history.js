@@ -7,7 +7,7 @@ import { fmtTime } from '../render.js';
 import { fmtLocale } from '../i18n/index.js';
 import { html, tHtml, tText, mount } from '../html.js';
 import { menuBtn } from '../components/buttons.js';
-import { planById, $, state } from '../core.js';
+import { $, state, planById } from '../core.js';
 import { bindActions } from '../app.js';
 import { svcCache, svcRoute } from '../connections.js';
 

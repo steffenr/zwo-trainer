@@ -13,8 +13,8 @@ import { badge } from '../components/indicators.js';
 import { closeBtn } from '../components/dialog.js';
 import { segCtl, selectSeg, menuBtn } from '../components/buttons.js';
 import {
-  PLAT, $, $$, library, state, lastRidden, lastRiddenText, bounds, ftp, mode, planById, allWorkouts,
-  workoutInfo, folderOf, planProgress, restartAnim, modal, openModal, closeModal, confirmDialog, rovingKey,
+  PLAT, $, $$, library, state, bounds, ftp, mode, planById, allWorkouts, workoutInfo, folderOf, planProgress,
+  restartAnim, modal, openModal, closeModal, confirmDialog, rovingKey, lastRidden, lastRiddenText,
 } from '../core.js';
 import { api, bindActions, markEntry, toggleFav, setMode, refreshView, moreMenu } from '../app.js';
 import { isPlan, showWeekDay, descriptionBlock, favs, starBtn, workoutRow, segmentText } from './parts.js';
