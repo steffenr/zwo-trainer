@@ -1,7 +1,8 @@
 /* Optional compact ride presentation (compact.js): same Ride, small native window.
    Three mini panels LIVE | CURRENT | NEXT. Tiers come from compactMode() as data-* on .compact-ride:
    ws wide+short, wt wide+tall, nt narrow+tall (stacked), ns narrow+short (tiny columns);
-   data-short / data-tiny / data-narrow / data-xs drop text first, the gauges stay. */
+   data-short / data-tiny / data-narrow / data-xs drop text first, the gauges stay.
+   Text uses the type scale only, never below --fs-2xs (11 px): what doesn't fit at that size is hidden, not shrunk. */
 
 .compact-ride { display: none; }
 body.compact-riding {
@@ -41,7 +42,7 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
 }
 .cmp-wl {
   display: flex; align-items: baseline; gap: 6px; color: var(--text-2); white-space: nowrap;
-  & small { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  & small { font-size: var(--fs-2xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
   & b { font: 700 var(--fs-md) var(--num); font-variant-numeric: tabular-nums; color: var(--text); }
 }
 .compact-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; }
@@ -51,7 +52,7 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
 .compact-ride[data-mode="nt"] .compact-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.25fr) minmax(0, 1.25fr) minmax(0, .75fr); }
 .cp { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; padding: 6px 8px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
 .cp-ph {
-  display: flex; align-items: center; gap: 6px; flex: none; margin-bottom: 2px; font-size: 10px; font-weight: 700; letter-spacing: .09em;
+  display: flex; align-items: center; gap: 6px; flex: none; margin-bottom: 2px; font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .09em;
   text-transform: uppercase; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   & i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
 }
@@ -68,13 +69,13 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
 }
 .cp-cur .cp-center b { font-size: min(19cqw, 19cqh); }
 .cp-center small {
-  font-size: max(9px, min(9cqw, 9cqh)); color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap;
-  @container (max-height: 84px) { display: none; }
+  font-size: max(var(--fs-2xs), min(9cqw, 9cqh)); color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap;
+  @container (max-height: 84px) or (max-width: 84px) { display: none; }
 }
 .cp-meta {
   display: flex; justify-content: center; gap: 12px; flex: none;
   & span { display: flex; align-items: baseline; gap: 5px; }
-  & small { font-size: 10px; font-weight: 600; letter-spacing: .06em; color: var(--text-2); text-transform: uppercase; }
+  & small { font-size: var(--fs-2xs); font-weight: 600; letter-spacing: .06em; color: var(--text-2); text-transform: uppercase; }
   & b {
     font: 700 var(--fs-base) var(--num); font-variant-numeric: tabular-nums;
     &.off-target { color: var(--danger); }
@@ -104,14 +105,16 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
   & .cp-meta { flex-direction: column; gap: 3px; justify-content: center; align-items: flex-start; flex: 1; }
   & .cp-info { flex: 1; justify-content: center; }
 }
+/* stacked: NEXT is the low third row, so its values sit on one line (wrapping) instead of a column that would run under the header */
+.compact-ride[data-mode="nt"] .cp-nx .nc-txt { flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 10px; row-gap: 2px; }
 /* narrow + short: three small columns, gauges and numbers only */
 .compact-ride[data-mode="ns"] {
   & .compact-main { gap: 5px; }
   & .cp { padding: 4px 5px 5px; }
-  & .cp-ph { font-size: 9px; letter-spacing: .05em; }
+  & .cp-ph { letter-spacing: .05em; }
   & .cp-nx { padding-left: 10px; }
   & .cp-nx .nc-txt b { font-size: var(--fs-lg); }
-  & .cp-nx .nc-v { font-size: 10px; }
+  & .cp-nx .nc-v { font-size: var(--fs-2xs); }
 }
 .compact-ride[data-mode="ns"] .cp-opt, .compact-ride[data-tiny="1"] .cp-opt { display: none; }
 .compact-ride[data-short="1"] {

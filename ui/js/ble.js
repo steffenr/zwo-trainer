@@ -1,5 +1,6 @@
 // Device layer. Real devices live in Rust (btleplug) and talk to us via Tauri commands/events;
 // the simulator runs here so the app can be tried without hardware.
+import { t } from './i18n/index.js';
 
 /** Tauri globals (withGlobalTauri); the browser mock provides the same shape. */
 const T = () => window.__TAURI__;
@@ -110,7 +111,7 @@ export class Trainer extends Device {
   startSim() {
     this.stopSim();
     if (this.mode === 'ble') invoke('ble_disconnect', { kind: 'trainer' }).catch(() => {});
-    this.mode = 'sim'; this.name = 'Simulator'; this.erg = true; this.reconnecting = false;
+    this.mode = 'sim'; this.name = t('simulator'); this.erg = true; this.reconnecting = false;
     let cad = 88;
     this.simTimer = setInterval(() => {
       const base = this.simTarget ?? 160;
@@ -129,7 +130,7 @@ export class HeartRate extends Device {
   startSim() {
     this.stopSim();
     if (this.mode === 'ble') invoke('ble_disconnect', { kind: 'hr' }).catch(() => {});
-    this.mode = 'sim'; this.name = 'Simulator'; this.reconnecting = false;
+    this.mode = 'sim'; this.name = t('simulator'); this.reconnecting = false;
     let hr = 110;
     this.simTimer = setInterval(() => { hr += (Math.random() - 0.45) * 2; hr = Math.max(95, Math.min(175, hr)); this.emit('data', { hr: Math.round(hr) }); }, 1000);
     this.emitStatus();

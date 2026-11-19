@@ -26,7 +26,7 @@ body.riding {
   & .badge {
     flex: none; border-radius: var(--r-pill); padding: 3px 11px; font-size: var(--fs-xs); font-weight: 600;
     background: var(--surface-2); color: var(--text-2); border: 1px solid var(--line);
-    &.test { background: var(--z4-ink); color: #000; border-color: transparent; }
+    &.test { background: var(--z4-soft); color: var(--text); border-color: transparent; }
   }
   & .erg {
     flex: none; border-radius: var(--r-pill); border: 1px solid currentColor; padding: 3px 11px;

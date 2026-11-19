@@ -12,7 +12,7 @@ Plain CSS, no build step. `styles.css` declares the cascade layers and imports t
 | `base` | `base.css` | elements, native inputs and their focus/invalid states, text helpers (`.muted`, `.small`, `.eyebrow`, `.meta`, `.k`, `.ic`), shared keyframes |
 | `components` | `components/*.css`, one family per file | `buttons` (button, icon button, link, segmented control, tabs, star/⋯) · `card` (card, hero, card header row, section head, back link) · `indicators` (progress bar, badge, week/day tag, zone tag, spinner) · `dialog` · `popover` (+ ⋯ menus) · `notice` (toast, update card) · `list` (history-style table, sync list, service logo) · `forms` · `avatar` · `charts` (chart, mini profile, zone bar, gauge, ring) · `markdown` |
 | `views` | `views/*.css` | one file per screen or dialog: top bar, home, plan + workouts lists, history, FTP tests, dialogs, settings, ride, compact ride |
-| `utilities` | `utilities.css` | `[hidden]`, forced text colours, the global "Reduce motion" switch |
+| `utilities` | `utilities.css` | `[hidden]`, `.sr-only`, forced text colours, the global "Reduce motion" switch |
 
 - **Component or view?** If it appears on more than one screen, it is a component. A component file never refers to a view (`check-css.mjs` fails on `body.riding`, `.ride`, `dialog.settings` … in `components/`); a view adapts a component in its own file (e.g. `.ride-title .badge` lives in `views/ride.css`). Screen-only pieces stay in their view even when they look generic (zone limits and folder row in `settings.css`, overlay toggles in `ride.css`).
 - **Markup helpers mirror the CSS:** `ui/js/components/<family>.js` renders what `css/components/<family>.css` styles (e.g. `badge()` in `indicators.js`, `dialogHead()` in `dialog.js`, `segCtl()` in `buttons.js`). Use the helper instead of writing the markup again; they build with `html```, so text is escaped. New component: add both files.
@@ -50,8 +50,10 @@ Always use tokens (`var(--…)`), never raw hex in components. Dark values apply
 | `--accent-hover` | `#00657b` | `#44d2ee` | hover of accent fills (light: white on it 6.67:1) |
 | `--accent-soft` | 10 % accent | 14 % accent | selected backgrounds |
 | `--ok` / `--ok-soft` | `#2e9e4f` | `#4cd07a` | connected, success, ERG on |
-| `--warn` / `--warn-soft` | `#b7791f` | `#f2c14e` | connecting, ERG off, changed intensity |
-| `--danger` | `#e0352b` | `#ff5a4f` | destructive text and buttons |
+| `--warn` / `--warn-soft` | `#8a5a12` | `#f2c14e` | connecting, ERG off, changed intensity (`.warn-text`); light value ≥ 4.5:1 as text, also on `--warn-soft` |
+| `--danger` | `#c62f26` | `#ff5a4f` | destructive text and buttons, errors (`.danger-text`: failed actions, sync errors); light value ≥ 4.5:1 as text and under white |
+| `--danger-ink` | `#ffffff` | `#000000` | label on a `--danger` fill (`.btn.danger`): 5.47:1 on the light `#c62f26`, 6.83:1 on the dark red, where white would be only 3.08:1 |
+| `--z4-soft` | 28 % Z4 fill | 18 % Z4 fill | FTP-test badge background; `--text` on it ≥ 12.5:1 light, ≥ 9.7:1 dark |
 | `--pos`, `--trace`, `--ftp` | text colour | white | chart position line, power trace, FTP line |
 | `--done` | `#00a3c4` (brand cyan) | accent | completed part of the workout; graphic only, never text |
 | `--cad` / `--hrline` | `#8b3dff` / `#e0004d` | `#b98bff` / `#ff4d7d` | cadence and heart-rate traces |
@@ -68,6 +70,7 @@ Always use tokens (`var(--…)`), never raw hex in components. Dark values apply
 | Free ride | `#b4bac2` | — |
 
 - **Fills** are used for bars, chips, tags and filter dots. Text on a fill is black (`.ztag`).
+- **Text on a coloured fill** always uses its ink token (`--accent-ink`, `--danger-ink`, `--garmin-ink`), never a literal `#fff`: the dark theme's fills are light, and white on the dark accent is only 2.08:1.
 - **Inks** (`--zN-ink`) are for coloured text on the page background, such as target % and upcoming watts.
 - **Never** use zone colours for buttons, status or decoration.
 
@@ -143,7 +146,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 └──────────────────────────────────────────────────────────────────────────────────┘
 #view  (max 1120 px, centred) — home / plan / workouts / tests / history
 #ride  (fixed below the top bar while riding)
-<dialog id="modal"> · #toast · #popover
+<dialog id="modal"> (+ #modal-live) · #toast · #live · #popover
 ```
 
 - **Left padding:** 92 px on macOS (`:root[data-os="mac"]`), leaving room for the traffic lights of the overlay title bar; 24 px on Windows and Linux, which have a normal title bar.
@@ -199,7 +202,8 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 - Optional compact-view icon button (`#btn-compact`, arrows pointing inward, no text) in the top bar just before the rider avatar, shown only during a ride; a compact presentation of the same Ride and native window, not another dashboard or another ride. It shows **LIVE · CURRENT · NEXT** as three mini panels (`.cp`) with the same `Gauge` / `ProgressRing` drawing as the full view. `compactMode()` picks one of four tiers (`data-mode` `ws` wide+short, `wt` wide+tall, `nt` narrow+tall stacked, `ns` narrow+short) plus `short` / `tiny` / `narrow` / `xs` flags; gauges and ring never hide, text drops out first (heart rate and cadence, segment bar, NEXT details, workout time left). Panels are built once with the ride; no DOM is rebuilt on resize.
 - Hide the normal toolbar, panels, chart and ready overlay only in this view. Keep a 32 px draggable heading (workout title, readable run/pause state with connection dot and tooltip, expand) and a 36 px primary control row. On macOS, reserve the existing traffic-light space.
 - Initial inner size **960 × 200**, minimum **320 × 200** logical pixels. Four flat readouts: power, target, segment left, workout left. ≤ 639 px wraps to two columns; taller narrow panels make power/target more prominent, with cadence/HR from 460 px height. Bars ≥ 1100 px show all six readouts. No decorative gauge or nested panels.
-- Values are tabular HTML text (28–68 px depending on context); labels use `--text-2`, target uses zone ink. Missing sensors show a dash. Free/all-out targets use text without a W unit. Keep virtual gear controls in free-like segments.
+- Values are tabular HTML text (28–68 px depending on context); labels use `--text-2`, target uses zone ink.
+- **Text sizes** come from the type scale like everywhere else: panel headers, uppercase labels, the dial sub-line and NEXT details never go below `--fs-2xs` (11 px), and no fractional sizes. What doesn't fit at 11 px is hidden by the tiers instead of shrunk: the dial sub-line (`239 W`) drops when its dial is ≤ 84 px wide or tall (at 320 × 200 only the big number stays), cadence/HR and NEXT duration go in `ns` / `tiny`. In the stacked `nt` tier NEXT puts its values on one wrapping line, so they never run under the panel header. Missing sensors show a dash. Free/all-out targets use text without a W unit. Keep virtual gear controls in free-like segments.
 - Pause/resume and stop have accessible names; expand restores full-view geometry without rebuilding Ride. Stop/results expand before opening their dialogs. Use a short auto-pause label, with the pedalling hint retained in its accessible name/tooltip.
 - Full-view geometry is machine-local and temporary; position restoration is best-effort on compositors that restrict it. Native fullscreen must be exited before switching. Resizing failures leave the current presentation available for retry.
 
@@ -207,7 +211,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 
 - **Normal minimum window:** 900 × 640; Compact ride view: 320 × 200.
 - **≤ 1100 px:** the workout rows drop the mini profile.
-- **≤ 980 px:** the ride panels wrap 2 + 1 and the rows drop the duration.
+- **≤ 980 px:** the ride panels wrap 2 + 1 and the rows drop the duration. Every row keeps its actions (☆, ⋯, *Ride* / *Start* + *Skip*): at the 900 px minimum, next to the Workouts sidebar, the title still gets ~170 px with the widest translated action cell (German favourites: ↑ ↓ ☆ ⋯ *Fahren*). Never hide the actions to make room; the title ellipsizes first.
 - **Above 1400 px:** ride readouts scale up (see Typography).
 
 ## Components
@@ -216,12 +220,12 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 |---|---|
 | **Button** `.btn` | 1 px `--line-strong` border, `--surface`, 600 14 px, radius 10, padding 9 × 16. Variants: `.primary` (accent fill), `.ghost` (transparent), `.danger` (red fill), `.sm` (13 px, radius 8), `.big`, `.round` (34 px circle). One primary per view or dialog, placed last (right). |
 | **Icon button** `.icon-btn` | 36 × 36, transparent, muted icon, `--surface-2` on hover. |
-| **Segmented control** `.seg-ctl` | `--surface-2` track, radius 10, 3 px padding; the selected item is a raised `--surface` pill. Used for the mode switch, duration filter, theme, upload mode and shifting. In dialogs build it with `segRow()`: a `radiogroup` labelled by its row text, buttons are `role="radio"` with `aria-checked`, one tab stop, arrow keys / Home / End move and select (`rovingKey`). Focus shows a 2 px accent outline. |
+| **Segmented control** `.seg-ctl` | `--surface-2` track, radius 10, 3 px padding; the selected item is a raised `--surface` pill. Used for the mode switch, duration filter, theme, upload mode and shifting. The top-bar mode switch is a `role="group"` labelled "Mode" whose buttons carry `aria-pressed` (plain Tab between them; they switch the whole view, so they are not tabs). In dialogs build it with `segRow()`: a `radiogroup` labelled by its row text, buttons are `role="radio"` with `aria-checked`, one tab stop, arrow keys / Home / End move and select (`rovingKey`). Focus shows a 2 px accent outline. |
 | **Card / panel** `.card` `.panel` | `--surface`, 1 px `--line`, radius 14, padding 20 / 16, `--shadow`. |
-| **Workout row** `.wrow` | grid: status · title (+ meta) · mini profile 200 × 28 · duration · intensity tag + TSS · actions (☆, ⋯, primary action), left-aligned so ☆ and ⋯ line up on every row. All rows of a list (all weeks of a plan) share one column grid (`.wlist` / `.weeks`, rows are subgrids): the action column is at least 150 px and grows to the widest row, so longer labels ("Démarrer" + "Sauter", "Überspringen") never overlap the TSS. Radius 11, hover border `--line-strong`. The next workout in a plan gets the accent border and a soft gradient. |
+| **Workout row** `.wrow` | grid: status · title (+ meta) · mini profile 200 × 28 · duration · intensity tag + TSS · actions (☆, ⋯, primary action), left-aligned so ☆ and ⋯ line up on every row. All rows of a list (all weeks of a plan) share one column grid (`.wlist` / `.weeks`, rows are subgrids): the action column is at least 150 px and grows to the widest row, so longer labels ("Démarrer" + "Sauter", "Überspringen") never overlap the TSS. The mini profile goes at ≤ 1100 px and the duration at ≤ 980 px; the actions stay at every width. Radius 11, hover border `--line-strong`. The next workout in a plan gets the accent border and a soft gradient. |
 | **Intensity tag** `.ztag` | zone fill, black 11 px 650 text "Z1–Z5", radius 5, min-width 26. |
 | **Zone filter** `.zone-filter` | outlined chips with a 9 px zone dot; when active the border is the zone colour, the background is 16 % zone colour, and the zone name is shown. |
-| **Badge** `.badge` | 11 px 700, radius 6. Default is accent; `.ok`, `.warn` (e.g. *Not completed* in the test history), `.muted` and `.test` (Z4 ink) variants. |
+| **Badge** `.badge` | 11 px 700, radius 6. Default is accent; `.ok`, `.warn` (e.g. *Not completed* in the test history), `.muted` and `.test` (`--z4-soft` fill with `--text`) variants. A badge fill is always a fill or soft token, never an ink token; its text is ≥ 4.5:1 on it in both themes. |
 | **Plausibility note** `.ftp-check` | inside the FTP result box, above the buttons, when the new FTP differs > 15 % from the current one: `--warn-soft` background, thin warn border, 13.5 px text. |
 | **FTP result box** `.ftp-result` | accent border + `--accent-soft` for a new FTP; `.incomplete` switches to `--warn` / `--warn-soft` with an "Effort not completed" heading, an explanation and the effort details. |
 | **ERG pill** `.erg` | 11.5 px 700 uppercase-ish, radius 6: `.on` ok, `.off` warn, `.vs` virtual gears. |
@@ -230,8 +234,8 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 | **Popover / menu** `.popover` | radius 12, `--shadow-lg`, 6 px padding, 220 px minimum. Items are full-width rows with radius 8 and hover `--surface-2`; separate destructive items with `<hr>` and mark them `.danger-text` with a trailing "…". |
 | **"⋯" menu** | `menuBtn(items)` gives a quiet 28–34 px button. Use it for every secondary or destructive action: Finder, Trash, Reset progress, … |
 | **Devices menu** | 300 px popover with the title "DEVICES" and one row per device kind: 34 px icon tile (`.dev-ico`, ok-tinted when connected) · name and status · action text ("Connect" / "Change"). Connected devices that report a battery show a **battery badge** (`.batt`) after the name: a 20 × 12 icon filled to the level plus the percentage. State colours: `ok` (≥ 40 %, `--ok`), `low` (16–39 %, `--warn`), `critical` (≤ 15 %, `--danger`); never colour alone, the percentage and an accessible label always accompany it. With several controllers the lowest level is shown. Battery appears only in this menu, not in the top bar. |
-| **Avatar** `.avatar` | circle with `--av` background and white 700 initials. With an emoji, the background is 22 % `--av` mixed with the surface, plus an inset 1.5 px `--av` ring. Sizes: 28 (lists), 32 (top bar), 72–84 (`.xl`: who's riding, editor). |
-| **Toast** `.toast` | inverted (text-colour background), radius 12, bottom centre, 3.2 s. Short and plain. |
+| **Avatar** `.avatar` | circle with `--av` background and 700 initials in white, or black (`.ink-dark`) when black contrasts more with the fill (`avatarInk()` in `js/components/avatar.js`, WCAG luminance > ≈ 0.18). All preset colours get black initials (6.3–9.8:1; white was 2.2–4.0:1); dark custom colours keep white. With an emoji, the background is 22 % `--av` mixed with the surface, plus an inset 1.5 px `--av` ring. Sizes: 28 (lists), 32 (top bar), 72–84 (`.xl`: who's riding, editor). |
+| **Toast** `.toast` | inverted (text-colour background), radius 12, bottom centre, 3.2 s. Short and plain. Screen readers hear it through `announce()` (see Accessibility). |
 | **Update card** `.update-card` | the only persistent notice: fixed bottom-right (24 px), 340 px, `--surface`, `--line` border, radius 14, `--shadow-lg`. 30 px accent-soft download tile · "zwoTrainer X is available" / muted "You have Y" · actions *What's new* (ghost, left), *Later* (ghost) and *Install &amp; restart* (primary). While installing: status line and a `.pbar` with the download progress. Hidden while riding (`body.riding`), pops in like a popover. |
 | **Description** `.plan-desc` + `.md` | card under the plan header (and inside the Workouts folder header): rendered Markdown in `--text-2`, 14.5 px / 1.6, max 78 ch, accent underlined links, selectable text. Longer than 300 characters → a plain-text preview, smart-trimmed at the last sentence end after ~180 characters (else at a word boundary with “…”), followed by an inline accent *Show more* link; expanded shows the full Markdown with *Show less* at the end (`smartTrim`, `markdownPlain`). Plan cards show the first sentence (2-line clamp, `.pc-desc`). |
 | **Plan / Collection badge** | muted `.badge` next to the folder title in Workouts; the sidebar groups folders under PLANS and COLLECTIONS. |
@@ -271,7 +275,8 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 - **Platform wording:** labels follow the OS via `PLAT` in app.js: *Show in Finder / Explorer / Files*, *Trash / Recycle Bin*, *this Mac / PC / computer*. Never hard-code the macOS terms.
 - **Text:** plain, friendly wording in sentence case, in English, German and French (`ui/js/i18n/`; German "du", French "vous"). Leave room for German, the longest of the three: labels in segmented controls and buttons must still fit at 900 px. Units use a thin space in tables ("250 W", "90 %"), and durations are `m:ss` / `h:mm:ss` (`fmtTime`) or "1h 05m" (`fmtDur`).
 - **Accessibility:**
-  - Icon-only buttons need a `title` and an `aria-label`.
+  - Icon-only buttons need a `title` and an `aria-label` (`tText()`), and their SVG is `aria-hidden="true"`. A button whose action changes names the action it will do now: the ride play button is *Start*, then *Pause* / *Resume*. Toggles that keep their name carry `aria-pressed` (chart overlay toggles, the power gauge for watts ↔ % FTP, the mode switch). Keyboard shortcuts go in `aria-keyshortcuts` as well as the title.
+  - Transient messages (toasts, ride hints) are announced with `announce()` in app.js through a polite live region that exists in index.html from the start: `#live` on the page, `#modal-live` inside the dialog (an open modal makes the rest of the page inert). Both are `.sr-only` (utilities.css). Never create a live region together with its text; it is often not read.
   - Status is never shown by colour alone: dots are paired with text in the devices menu and tooltips.
   - Contrast is ≥ 4.5:1 for text (use the zone *ink* tokens for coloured text).
   - Everything should be reachable by keyboard, and rows are focusable (`tabindex="0"`, Enter opens). Keyboard focus is one shared rule in `utilities.css` (`:focus-visible` on buttons, links, `[tabindex]`, `summary`, `[role=…]` → 2 px `--accent` outline, offset 2; inset −2 inside popovers), so `all: unset` controls get it too. It sits in the last layer on purpose; don't remove focus outlines in a view (`outline: none` there has no effect).

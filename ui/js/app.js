@@ -14,13 +14,14 @@ import { batteryBadge, lowestLevel } from './battery.js';
 import { renderMarkdown, markdownSummary, markdownPlain, smartTrim } from './markdown.js';
 import { DEFAULT_SHIFTING, gearTable, virtualSpeed, targetWatts } from './vshift.js';
 import { PROTOCOLS, protocolById, isTestWorkout, evaluateGeneric, classifyTest, prepareTestWorkout, vo2max } from './tests.js';
-import { t, LOCALES, setLocale, systemLocale, coerceLocale, fmtLocale, translateDom } from './i18n/index.js';
+import { t, pct, LOCALES, setLocale, systemLocale, coerceLocale, fmtLocale, translateDom } from './i18n/index.js';
 import { loadSounds, countdown, endChime } from './sound.js';
 import { html, raw, tHtml, tText, mount } from './html.js';
 import { IC } from './components/icons.js';
 import { badge, wdTag, zoneTag } from './components/indicators.js';
 import { dialogHead, closeBtn } from './components/dialog.js';
 import { segCtl, segRow, selectSeg, menuBtn } from './components/buttons.js';
+import { avatarInk } from './components/avatar.js';
 
 // Platform wording: zwoTrainer runs on macOS, Windows and Linux; only labels differ.
 const OS = (() => {
@@ -43,6 +44,12 @@ const setText = (el, v) => {
   if (!el) return;
   const s = String(v ?? '');
   if (el.textContent !== s) el.textContent = s;
+};
+/** Same for an attribute: written only when the value changed (aria-label, aria-pressed, title in render()). */
+const setAttr = (el, name, v) => {
+  if (!el) return;
+  const s = String(v ?? '');
+  if (el.getAttribute(name) !== s) el.setAttribute(name, s);
 };
 /**
  * Same for an html`` fragment, written through mount(). Compares with the fragment written last by
@@ -386,16 +393,15 @@ const AVATAR_EMOJI = ['🚴', '🚵', '🏃', '🏊', '⚡', '🔥', '🚀', '�
 /** Only a #rrggbb colour may reach markup or CSS (same rule as clean_avatar in state.rs). */
 const safeColor = (c) => (typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c) ? c : null);
 const avatarBg = (p) => safeColor(p.avatar?.color) || avatarColor(p.id);
+/** Classes of an avatar: emoji on a tint, or initials in black or white, whichever contrasts more with the fill. */
+const avatarCls = (p, cls) => `avatar ${cls} ${p.avatar?.emoji ? 'emoji' : avatarInk(avatarBg(p)) === 'dark' ? 'ink-dark' : ''}`.replace(/\s+/g, ' ').trim();
 /** Rider avatar: emoji on a tint, or the initials on the rider's colour (only a #rrggbb colour reaches CSS). */
-const avatar = (p, cls = '') => {
-  const e = p.avatar?.emoji;
-  return html`<span class="avatar ${cls} ${e ? 'emoji' : ''}" style="--av:${avatarBg(p)}">${e || initials(p.name)}</span>`;
-};
+const avatar = (p, cls = '') => html`<span class="${avatarCls(p, cls)}" style="--av:${avatarBg(p)}">${p.avatar?.emoji || initials(p.name)}</span>`;
 /** DOM version of avatar() for live previews: user input is only ever set as text, never parsed as HTML. */
 const avatarNode = (p, cls = '') => {
   const e = p.avatar?.emoji;
   const s = document.createElement('span');
-  s.className = `avatar ${cls} ${e ? 'emoji' : ''}`.trim();
+  s.className = avatarCls(p, cls);
   s.style.setProperty('--av', avatarBg(p));
   s.textContent = e || initials(p.name);
   return s;
@@ -410,7 +416,8 @@ function renderProfileChip() {
 
 function renderModeSwitch() {
   const m = mode();
-  $$('#mode-switch button').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
+  // toggle buttons in a labelled group (not tabs: there is no tab panel, each click switches the whole view)
+  $$('#mode-switch button').forEach((b) => { const on = b.dataset.mode === m; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
 }
 
 async function setMode(m) {
@@ -561,7 +568,9 @@ function setDev(kind, s) {
 
 function devicesTitle() {
   const on = Object.values(devState).filter((d) => d.connected).length;
-  $('#btn-devices').title = on ? t('devicesOn', { n: on }) : t('devicesNone');
+  const btn = $('#btn-devices'), label = on ? t('devicesOn', { n: on }) : t('devicesNone');
+  btn.title = label;
+  btn.setAttribute('aria-label', label);   // the dots are aria-hidden, so the label carries the state
 }
 
 /** Content of the devices popover: one row per device kind (state, battery, Change / Connect), then "Retry auto-connect" when saved devices are missing. */
@@ -570,7 +579,7 @@ function renderDevicesMenu(pop) {
   const row = ([k, label, icon]) => {
     const d = devState[k];
     const level = d.connected ? lowestLevel(battery[k]) : null;
-    const batt = raw(batteryBadge(level, t('batteryPct', { n: level })));
+    const batt = raw(batteryBadge(level, t('batteryPct', { n: level }), pct));
     const savedName = k === 'controller' ? (saved.controllers || []).map((c) => c.name).join(' + ') : saved[k]?.name;
     const status = d.connected ? html`<span class="ok-text">${d.name || tHtml('connected')}</span>`
       : d.reconnecting ? html`<span class="warn-text">${d.name ? tHtml('connectingName', { name: d.name }) : tHtml('connectingDots')}</span>`
@@ -1458,6 +1467,9 @@ function openModal(markup, cls = '') {
   modal.className = cls;
   modal.onclick = null;   // the previous dialog's action delegation must not handle this one's buttons
   mount($('.modal-body', modal), markup);
+  // name the dialog after its heading (dialogHead() or a plain <h2>); no heading, no reference
+  const head = $('.modal-body h2', modal);
+  if (head) { head.id ||= 'modal-title'; modal.setAttribute('aria-labelledby', head.id); } else modal.removeAttribute('aria-labelledby');
   if (!modal.open) modal.showModal();
   return modal;
 }
@@ -1475,7 +1487,7 @@ let onModalClose = null;
 modal.addEventListener('close', () => { const fn = onModalClose; onModalClose = null; fn?.(); });
 
 /** Yes/no dialog; resolves true when confirmed. Texts are plain text (escaped here). */
-function confirmDialog(title, text, ok = 'OK', danger = false) {
+function confirmDialog(title, text, ok = t('ok'), danger = false) {
   return new Promise((resolve) => {
     openModal(html`<h2>${title}</h2><p>${text}</p><div class="modal-actions"><button class="btn ghost" data-r="0">${tHtml('cancel')}</button><button class="btn ${danger ? 'danger' : 'primary'}" data-r="1">${ok}</button></div>`, 'small');
     const done = (r) => { modal.removeEventListener('close', onClose); closeModal(); resolve(r); };
@@ -1498,11 +1510,27 @@ function promptDialog(title, value = '') {
   });
 }
 
+/**
+ * Read a short message out to screen readers. The polite live regions exist in index.html from the start
+ * (a region created together with its text is often not announced): #live for the page, #modal-live
+ * inside the dialog, because an open modal dialog makes everything outside it inert. The region is
+ * emptied first so the same message twice is announced twice; play/skip symbols are left out.
+ */
+let liveTimer;
+function announce(msg) {
+  const el = modal.open ? $('#modal-live') : $('#live');
+  const text = String(msg).replace(/[⏩-⏯⏸-⏺▶]️?/gu, '').trim();
+  el.textContent = '';
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(() => { el.textContent = text; }, 60);
+}
+
 let toastTimer;
-/** Short plain-text notice at the bottom (3.2 s). */
+/** Short plain-text notice at the bottom (3.2 s), also announced to screen readers. */
 function toast(msg) {
   const el = $('#toast');
   el.textContent = msg;
+  announce(msg);
   if (el.hidden || el.classList.contains('out')) { el.classList.remove('out'); el.hidden = false; if (motionOK()) restartAnim(el, 'in'); }
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
@@ -1579,14 +1607,14 @@ function zoneBreakdown(workout) {
   }
   const total = workout.duration || 1;
   return `<div class="zones-bar">${ZONES.map((z, i) => secs[i] ? `<i style="flex:${secs[i]};background:${z.color}" title="${z.short} ${z.name}: ${fmtTime(secs[i])}"></i>` : '').join('')}${free ? `<i style="flex:${free};background:${FREE_COLOR}" title="${t('freeRide')} ${fmtTime(free)}"></i>` : ''}</div>
-  <div class="zones-legend">${ZONES.map((z, i) => `<span><i style="background:${z.color}"></i>${z.short} ${z.name} <b>${Math.round((secs[i] / total) * 100)}%</b></span>`).join('')}</div>`;
+  <div class="zones-legend">${ZONES.map((z, i) => `<span><i style="background:${z.color}"></i>${z.short} ${z.name} <b>${pct(Math.round((secs[i] / total) * 100))}</b></span>`).join('')}</div>`;
 }
 
 function targetText(s, mult = 1) {
   if (s.p0 === null) return s.type === 'maxeffort' ? t('maxEffort') : t('freeRide');
   const a = Math.round(s.p0 * 100 * mult), b = Math.round(s.p1 * 100 * mult);
   const wa = Math.round(s.p0 * ftp() * mult), wb = Math.round(s.p1 * ftp() * mult);
-  return a === b ? `${a}% · ${wa} W` : `${a}–${b}% · ${wa}–${wb} W`;
+  return a === b ? `${pct(a)} · ${wa} W` : `${pct(`${a}–${b}`)} · ${wa}–${wb} W`;
 }
 
 /** One segment in words (name, type, duration, target, cadence, zone): chart tooltip and preview line. */
@@ -1713,7 +1741,7 @@ function settingsSyncTab(s, { garmin, targets, svcs }) {
   const sp = syncOn() ? syncCfg.provider : 'off';
   const where = PLAT.onThisMachine;
   const syncRow = (id, label, path, found, extra = null) => html`<label class="sync-opt ${found ? '' : 'na'}"><input type="radio" name="syncp" value="${id}" ${sp === id ? 'checked' : ''} ${found ? '' : 'disabled'}><span><b>${label}</b><small class="muted">${extra || (path ? path.replace(/^\/Users\/[^/]+/, '~') : tHtml('syncNotFound', { where }))}</small></span></label>`;
-  const syncState = syncCfg.lastError ? html`<span class="warn-text">${syncCfg.lastError}</span>` : syncCfg.lastSync ? tHtml('lastSynced', { when: agoText(syncCfg.lastSync) }) : tHtml('notSyncedYet');
+  const syncState = syncCfg.lastError ? html`<span class="danger-text">${syncCfg.lastError}</span>` : syncCfg.lastSync ? tHtml('lastSynced', { when: agoText(syncCfg.lastSync) }) : tHtml('notSyncedYet');
   return html`
       <div class="svc">
         <div class="svc-head"><span class="svc-logo sync">${SYNC_ICON}</span>
@@ -2026,7 +2054,7 @@ async function controllerDialog() {
       const found = await ctrls.scan(5);
       if (!list.isConnected) return;
       mount(list, foundDevices(found, (f) => saved.some((x) => x.id === f.id), tHtml('noController')));
-    } catch (e) { mount(list, html`<p class="warn-text">${String(e)}</p>`); }
+    } catch (e) { mount(list, html`<p class="danger-text">${String(e)}</p>`); }
   };
   list.onclick = async (e) => {
     const b = e.target.closest('.dev[data-id]');
@@ -2039,7 +2067,7 @@ async function controllerDialog() {
       await api.saveState();
       toast(t('ctrlConnected', { name: info.name }));
       controllerDialog();
-    } catch (err) { mount(b, html`<span class="warn-text">${tHtml('failedE', { e: String(err) })}</span>`); }
+    } catch (err) { mount(b, html`<span class="danger-text">${tHtml('failedE', { e: String(err) })}</span>`); }
   };
   bindActions(modal, {
     rescan: search,
@@ -2097,7 +2125,7 @@ function deviceDialog(kind) {
       if (!modal.open || !list.isConnected) return;
       mount(list, foundDevices(found, (f) => saved?.id === f.id, tHtml('nothingFound')));
     } catch (e) {
-      mount(list, html`<p class="warn-text">${String(e)}</p><p class="muted small">${raw(PLAT.bt)}</p>`);
+      mount(list, html`<p class="danger-text">${String(e)}</p><p class="muted small">${raw(PLAT.bt)}</p>`);
     }
   };
   list.onclick = async (e) => {
@@ -2112,7 +2140,7 @@ function deviceDialog(kind) {
       if (kind === 'trainer' && info.ergDenied) toast(t('ergDenied'));
       else toast(`${t('nameConnected', { name: info.name })}${kind === 'trainer' ? ` · ${info.erg ? t('ergReady') : t('powerOnly')}` : ''}`);
     } catch (err) {
-      mount(list, html`<p class="warn-text">${tHtml('connectionFailed', { e: String(err) })}</p>`);
+      mount(list, html`<p class="danger-text">${tHtml('connectionFailed', { e: String(err) })}</p>`);
     }
   };
   bindActions(modal, { ...common, rescan: search });
@@ -2307,7 +2335,7 @@ function summaryTest(r) {
   if (r?.details) {
     return html`<div class="ftp-result"><div><span class="k">${tHtml('powerBestsSaved')}</span></div><dl>${detailRows(r.details)}${r.vo2est && html`<dt>${tHtml('vo2Estimate')}</dt><dd>${r.vo2est.rel} ml/kg/min</dd>`}</dl></div>`;
   }
-  return html`<p class="warn-text">${tHtml('notEnoughData')} — ${tHtml('powerSourceQ')}.</p>`;
+  return html`<p class="danger-text">${tHtml('notEnoughData')} — ${tHtml('powerSourceQ')}.</p>`;
 }
 
 /** The six ride numbers (time, average power, NP, HR, cadence, energy); '–' when not recorded. */
@@ -2410,7 +2438,7 @@ class Ride {
     const plan = this.planId && planById(this.planId);
     const ov = state.settings.overlay || { power: true };
     // compact view: play/stop and "workout left" appear twice (heading row when short, footer otherwise)
-    const cmpCtl = html`<span class="compact-ctl"><button class="ctl play" data-act="play" title="${tText('btnPlay')}" aria-label="${tText('btnPlay')}"><svg viewBox="0 0 24 24" class="i-play" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" class="i-pause" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg></button><button class="ctl" data-act="stop" title="${tText('endWorkout')}" aria-label="${tText('endWorkout')}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button></span>`;
+    const cmpCtl = html`<span class="compact-ctl"><button class="ctl play" data-act="play" title="${tText('start')} (${tText('spaceKey')})" aria-label="${tText('start')}" aria-keyshortcuts="Space"><svg viewBox="0 0 24 24" class="i-play" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" class="i-pause" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg></button><button class="ctl" data-act="stop" title="${tText('endWorkout')}" aria-label="${tText('endWorkout')}" aria-keyshortcuts="Escape"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button></span>`;
     const cmpWl = html`<span class="cmp-wl"><small>${tHtml('compactWorkoutLeft')}</small><b class="cmp-wleft">0:00</b></span>`;
     // the ride title lives in the regular top bar (in place of the mode switch)
     const rt = $('#ride-title');
@@ -2423,7 +2451,7 @@ class Ride {
         <section class="panel live">
           <header class="ph"><span class="ph-dot" id="live-dot"></span><b>${tHtml('live')}</b>${IC.pulse}<span class="ph-status" id="live-status"></span></header>
           <div class="live-body">
-            <button class="gauge" id="gauge" title="${tText('gaugeTitle')}">
+            <button class="gauge" id="gauge" title="${tText('gaugeTitle')}" aria-label="${tText('gaugeAria')}" aria-pressed="false">
               <div class="gauge-mount"></div>
               <div class="gauge-center"><span class="k" id="g-unit">${tHtml('watt')}</span><b id="v-pow">–</b><small id="t-pow">–</small></div>
             </button>
@@ -2447,7 +2475,7 @@ class Ride {
                 </div>
                 <svg class="ring-check" viewBox="0 0 100 100" aria-hidden="true"><path d="M27 52 L44 68 L74 34"/></svg>
               </div>
-              <div class="gearbox" id="gearbox" hidden><button class="btn round sm" data-shift="-1" title="${tText('shiftDownKey')}">−</button><span id="gear-lbl" class="gear-lbl">${tHtml('gear')}</span><button class="btn round sm" data-shift="1" title="${tText('shiftUpKey')}">+</button></div>
+              <div class="gearbox" id="gearbox" hidden><button class="btn round sm" data-shift="-1" title="${tText('shiftDownKey')}" aria-label="${tText('shiftDownKey')}">−</button><span id="gear-lbl" class="gear-lbl">${tHtml('gear')}</span><button class="btn round sm" data-shift="1" title="${tText('shiftUpKey')}" aria-label="${tText('shiftUpKey')}">+</button></div>
             </div>
             <div class="seg-stats">
               <div class="stat">${IC.bolt}<div><span class="k" id="s-tw-k">${tHtml('targetPower')}</span><b id="s-tw">–</b></div></div>
@@ -2466,21 +2494,21 @@ class Ride {
       <div class="ride-diagram panel">
         <div class="dg-times">
           <div class="wt-head"><span class="ph-mini">${IC.bars}<b>${tHtml('workout')}</b></span><div class="wt-time"><span class="k">${tHtml('elapsed')}</span><b id="d-el">0:00</b></div></div>
-          <span class="overlay-toggles" id="ov">${OVERLAY.map(([k, l]) => html`<button data-ov="${k}" class="ov ov-${k} ${ov[k] ? 'on' : ''}"><i></i>${tHtml(l)}</button>`)}</span>
+          <span class="overlay-toggles" id="ov" role="group" aria-label="${tText('chartLines')}">${OVERLAY.map(([k, l]) => html`<button data-ov="${k}" class="ov ov-${k} ${ov[k] ? 'on' : ''}" aria-pressed="${String(!!ov[k])}"><i aria-hidden="true"></i>${tHtml(l)}</button>`)}</span>
           <div class="wt-time rem"><span class="k">${tHtml('remainingLc')}</span><b id="d-rem">${fmtTime(this.w.duration)}</b><small id="d-tot">${tHtml('ofTime', { time: fmtTime(this.w.duration) })}</small></div>
         </div>
         <div class="dg-mount"></div>
         <div class="dg-tip" id="dg-tip" hidden></div>
       </div>
       <div class="ride-controls" data-msg="${tText('autoPaused')}">
-        <button class="ctl" data-act="prev" title="${tText('btnPrev')} (←)"><svg viewBox="0 0 24 24"><path d="M6 5v14M19 5l-9 7 9 7z"/></svg></button>
-        <button class="ctl" data-act="back" title="${tText('back1min')}"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4"/></svg></button>
-        <button class="ctl play" data-act="play" title="${tText('btnPlay')} (${tText('spaceKey')})" id="btn-play"><svg viewBox="0 0 24 24" class="i-play"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" class="i-pause"><path d="M8 5v14M16 5v14"/></svg></button>
-        <button class="ctl" data-act="stop" title="${tText('endWorkout')}"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
-        <button class="ctl" data-act="fwd" title="${tText('fwd1min')}"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v4h-4"/></svg></button>
-        <button class="ctl" data-act="next" title="${tText('btnNext')} (→)"><svg viewBox="0 0 24 24"><path d="M18 5v14M5 5l9 7-9 7z"/></svg></button>
+        <button class="ctl" data-act="prev" title="${tText('btnPrev')} (←)" aria-label="${tText('btnPrev')}" aria-keyshortcuts="ArrowLeft"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14M19 5l-9 7 9 7z"/></svg></button>
+        <button class="ctl" data-act="back" title="${tText('back1min')}" aria-label="${tText('back1min')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4"/></svg></button>
+        <button class="ctl play" data-act="play" title="${tText('start')} (${tText('spaceKey')})" aria-label="${tText('start')}" aria-keyshortcuts="Space" id="btn-play"><svg viewBox="0 0 24 24" aria-hidden="true" class="i-play"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" aria-hidden="true" class="i-pause"><path d="M8 5v14M16 5v14"/></svg></button>
+        <button class="ctl" data-act="stop" title="${tText('endWorkout')}" aria-label="${tText('endWorkout')}" aria-keyshortcuts="Escape"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
+        <button class="ctl" data-act="fwd" title="${tText('fwd1min')}" aria-label="${tText('fwd1min')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v4h-4"/></svg></button>
+        <button class="ctl" data-act="next" title="${tText('btnNext')} (→)" aria-label="${tText('btnNext')}" aria-keyshortcuts="ArrowRight"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14M5 5l9 7-9 7z"/></svg></button>
         <div class="int-group" title="${tText('intensityTitle')}">
-          <div class="int-read"><span class="k">${tHtml('intensity')}</span><b id="int-val" class="int-val">100%</b></div>
+          <div class="int-read"><span class="k">${tHtml('intensity')}</span><b id="int-val" class="int-val">${pct(100)}</b></div>
           <button class="ctl int-b" data-int="-1" title="${tText('intDownTitle')}" aria-label="${tText('btnIntDown')}">−</button>
           <button class="ctl int-b" data-int="1" title="${tText('intUpTitle')}" aria-label="${tText('btnIntUp')}">+</button>
         </div>
@@ -2569,6 +2597,7 @@ class Ride {
     ov[k] = !ov[k];
     state.settings.overlay = ov;
     btn.classList.toggle('on', ov[k]);
+    btn.setAttribute('aria-pressed', String(ov[k]));
     this.diagram.setOverlay(ov);
     this.diagram.update(this.t, this.samples);
     api.saveState();
@@ -2608,11 +2637,12 @@ class Ride {
     }
   }
 
-  /** Brief centred hint over the ride screen (controller / key actions). */
+  /** Brief centred hint over the ride screen (controller / key actions), also announced to screen readers. */
   hint(text) {
     let el = $('#ride-hint');
     if (!el) { el = document.createElement('div'); el.id = 'ride-hint'; el.className = 'ride-hint'; $('#ride').append(el); }
     el.textContent = text;
+    announce(text);
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
     clearTimeout(this.hintTimer);
     this.hintTimer = setTimeout(() => el.classList.remove('show'), 1400);
@@ -2943,12 +2973,12 @@ class Ride {
     setText(this.q('v-spd'), spd != null ? spd.toFixed(1) : '–');
     setBar(this.q('b-spd'), spd != null ? spd / 60 : 0, { color: 'var(--ok)' });
     setText(this.q('v-hr'), hr ?? '–');
-    setText(this.q('t-hr'), hr != null ? `${Math.round((hr / maxHr()) * 100)}%` : '');
+    setText(this.q('t-hr'), hr != null ? pct(Math.round((hr / maxHr()) * 100)) : '');
     setBar(this.q('b-hr'), hr != null ? hr / maxHr() : 0, { color: 'var(--hrline)' });
 
     setText(this.q('g-unit'), this.showPct ? '% FTP' : t('watt'));
-    setText(this.q('v-pow'), p == null ? '–' : this.showPct ? `${Math.round((p / F) * 100)}%` : p);
-    setText(this.q('t-pow'), gt == null ? t(s.type === 'maxeffort' ? 'gMax' : allOut ? 'gAllOut' : 'gFree') : this.showPct ? `${Math.round((gt / F) * 100)}%` : `${gt} W`);
+    setText(this.q('v-pow'), p == null ? '–' : this.showPct ? pct(Math.round((p / F) * 100)) : p);
+    setText(this.q('t-pow'), gt == null ? t(s.type === 'maxeffort' ? 'gMax' : allOut ? 'gAllOut' : 'gFree') : this.showPct ? pct(Math.round((gt / F) * 100)) : `${gt} W`);
     this.gauge.update({ target: gt, actual: p, ftp: F, bounds: bounds() });
     // on target: within ±5 % for 3 s -> soft glow in the zone colour around the gauge
     const onT = this.running && gt != null && p != null && Math.abs(p - gt) / gt <= 0.05;
@@ -2963,7 +2993,7 @@ class Ride {
     if (s.p0 === null) { this.q('s-target').classList.remove('range'); setText(this.q('s-target'), s.type === 'maxeffort' ? t('bigMax') : t('bigFree')); setText(this.q('s-watts'), vsActive ? t('virtualShiftingLc') : t('rideByFeel')); }
     else {
       const a = Math.round(s.p0 * 100 * this.mult()), b = Math.round(s.p1 * 100 * this.mult());
-      setText(this.q('s-target'), allOut ? t('bigAllOut') : a === b ? `${a}%` : `${a}–${b}%`);
+      setText(this.q('s-target'), allOut ? t('bigAllOut') : a === b ? pct(a) : pct(`${a}–${b}`));
       this.q('s-target').classList.toggle('range', a !== b || allOut);
       setText(this.q('s-watts'), allOut ? t('aimW', { w: tw, how: vsActive ? t('howShift') : t('howGears') }) : `${tw} W`);
     }
@@ -3012,7 +3042,7 @@ class Ride {
         const nf = n.p0 === null ? null : ((n.p0 + n.p1) / 2) * m;
         const pa = n.p0 === null ? null : Math.round(n.p0 * 100 * m), pb = n.p0 === null ? null : Math.round(n.p1 * 100 * m);
         const wa = n.p0 === null ? null : Math.round(n.p0 * F * m), wb = n.p0 === null ? null : Math.round(n.p1 * F * m);
-        const big = n.p0 === null ? tHtml(n.type === 'maxeffort' ? 'maxEffort' : 'freeRide') : n.erg === false ? tHtml('allOut') : pa === pb ? `${pa}%` : `${pa}% → ${pb}%`;
+        const big = n.p0 === null ? tHtml(n.type === 'maxeffort' ? 'maxEffort' : 'freeRide') : n.erg === false ? tHtml('allOut') : pa === pb ? pct(pa) : `${pct(pa)} → ${pct(pb)}`;
         const watts = n.p0 === null ? tHtml('rideByFeel') : wa === wb ? `${wa} W` : `${wa} → ${wb} W`;
         const nLo = n.cadenceLow ?? n.cadence, nHi = n.cadenceHigh ?? n.cadence;
         const rpm = nLo == null ? null : `${nLo === nHi ? nLo : `${nLo}–${nHi}`} rpm`;
@@ -3031,7 +3061,7 @@ class Ride {
       card.title = title;
       mount(card, body(false));
       mount(cn, body(true));
-      setText(this.q('int-val'), `${this.intensity}%`);
+      setText(this.q('int-val'), pct(this.intensity));
       this.q('int-val').classList.toggle('changed', this.intensity !== 100);
       this.diagram.highlight(idx);
       this.q('btn-play').classList.toggle('is-running', this.running);
@@ -3073,12 +3103,14 @@ class Ride {
     this.q('cmp-state').title = `${statusDetail} · ${connection}`;
     this.q('cmp-state').setAttribute('aria-label', `${statusDetail} · ${connection}`);
     this.q('cmp-dot').classList.toggle('on', trainer.connected);
+    // play button (full and compact view): Start before the ride, then Pause / Resume
+    const play = this.running ? t('btnPause') : this.started ? t('resume') : t('start');
     this.qsa('#ride [data-act="play"]').forEach((el) => {
       el.classList.toggle('is-running', this.running);
-      const label = this.running ? t('btnPause') : t('btnPlay');
-      el.title = `${label} (${t('spaceKey')})`;
-      el.setAttribute('aria-label', label);
+      setAttr(el, 'aria-label', play);
+      setAttr(el, 'title', `${play} (${t('spaceKey')})`);
     });
+    setAttr(this.q('gauge'), 'aria-pressed', String(this.showPct));
     if (!this.compact.active) this.diagram.update(this.t, this.samples);
   }
 
@@ -3304,13 +3336,13 @@ class Ride {
     const doGarmin = async () => {
       rowState('garmin-state', html`<span class="spinner"></span> ${tHtml('uploadingGarmin')}`);
       try { rowState('garmin-state', uploaded((await uploadToGarmin(entry)).url)); } catch (e) {
-        rowState('garmin-state', html`<span class="warn-text" title="${String(e)}">${tHtml('uploadFailed')}</span> <button class="btn ghost sm" data-act="garmin-up">${tHtml('retry')}</button> <button class="btn ghost sm" data-act="garmin">${tHtml('manual')}</button>`);
+        rowState('garmin-state', html`<span class="danger-text" title="${String(e)}">${tHtml('uploadFailed')}</span> <button class="btn ghost sm" data-act="garmin-up">${tHtml('retry')}</button> <button class="btn ghost sm" data-act="garmin">${tHtml('manual')}</button>`);
       }
     };
     const doSvc = async (id) => {
       rowState(`svc-${id}`, html`<span class="spinner"></span> ${tHtml('uploading')}`);
       try { rowState(`svc-${id}`, uploaded((await uploadToService(entry, id)).url)); } catch (err) {
-        rowState(`svc-${id}`, html`<span class="warn-text" title="${String(err)}">${tHtml('failed')}</span> <button class="btn ghost sm" data-act="svc-up" data-id="${id}">${tHtml('retry')}</button>`);
+        rowState(`svc-${id}`, html`<span class="danger-text" title="${String(err)}">${tHtml('failed')}</span> <button class="btn ghost sm" data-act="svc-up" data-id="${id}">${tHtml('retry')}</button>`);
       }
     };
     const leave = () => { closeModal(); this.close(); };

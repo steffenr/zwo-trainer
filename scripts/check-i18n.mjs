@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Checks the UI translations (ui/js/i18n): de.js and fr.js define exactly the keys of en.js, plural
 // entries keep their { one, other } shape, placeholders match en ({Label} counts as {label}), and every
-// t('key') / tHtml('key') / data-i18n="key" in ui/ exists in en.js. Run: node scripts/check-i18n.mjs (CI does too).
+// t('key') / tHtml('key') / data-i18n="key" in ui/ exists in en.js, and French values follow French spacing. Run: node scripts/check-i18n.mjs (CI does too).
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +23,17 @@ for (const [lang, dict] of Object.entries({ de, fr })) {
     for (const h of holes(b)) if (!want.has(h)) errors.push(`${lang}: "${k}" uses {${h}}, which en.js doesn't pass`);
   }
   for (const k of Object.keys(dict)) if (!(k in en)) errors.push(`${lang}: "${k}" is not in en.js`);
+}
+
+// French typography: a narrow no-break space (U+202F) before ? ! ; : and before % after a number or
+// placeholder, and inside « ». A plain or no-break space (U+0020 / U+00A0) there, or none before %, fails.
+const FR_SPACING = [
+  [/[ \u00a0][?!;:]/, 'a plain or no-break space before ? ! ; :'],
+  [/[\d}][ \u00a0]?%/, 'no narrow no-break space before %'],
+  [/«[^\u202f]|[^\u202f]»/, 'no narrow no-break space inside « »'],
+];
+for (const [k, v] of Object.entries(fr)) for (const s of forms(v)) {
+  for (const [re, what] of FR_SPACING) if (re.test(s)) errors.push(`fr: "${k}" has ${what} (use U+202F)`);
 }
 
 const jsFiles = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? (e.name === 'i18n' ? [] : jsFiles(join(d, e.name))) : e.name.endsWith('.js') ? [join(d, e.name)] : []));

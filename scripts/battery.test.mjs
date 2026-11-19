@@ -29,6 +29,7 @@ test('batteryBadge: colour class, percentage text and accessible label', () => {
   assert.match(ok, /class="batt ok"/);
   assert.match(ok, /78%/);
   assert.match(ok, /aria-label="Battery 78%"/);
+  assert.match(batteryBadge(78, 't', (n) => `${n}\u202f%`), /78\u202f%/);
   assert.match(batteryBadge(30, 't'), /class="batt low"/);
   assert.match(batteryBadge(10, 't'), /class="batt critical"/);
 });
