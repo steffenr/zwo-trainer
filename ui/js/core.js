@@ -1,4 +1,4 @@
-// Shared by the UI modules (app.js, ride.js, settings.js, sync.js, updates.js): platform wording, DOM
+// Shared by the UI modules (app.js, ride/ride.js, settings.js, sync.js, updates.js): platform wording, DOM
 // helpers, the active rider and library, devices and live sensor values, the current ride, and dialogs
 // and toasts. Imports only leaf modules, never one of the modules above, so it has no import cycles.
 // Reassigned bindings (state, library, ride) are live exports: read them from any module, change
@@ -114,7 +114,7 @@ function planProgress(plan) {
 // treat values older than 4 s as missing
 const fresh = (k) => (Date.now() - (live.at[k] || 0) < 4000 ? live[k] : null);
 
-// The ride on screen (a Ride from ride.js), or null.
+// The ride on screen (a Ride from ride/ride.js), or null.
 let ride = null;
 const setRide = (r) => { ride = r; };
 

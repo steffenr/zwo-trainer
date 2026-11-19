@@ -5,29 +5,29 @@
 // Import cycle with app.js (app.js imports startRide / startTest from here, this module uses app-level
 // actions such as route() and the upload helpers). It is safe because nothing from app.js is used while
 // this module is evaluated: only inside functions and methods that run after boot.
-import { CompactView, compactMode } from './compact.js';
-import { powerAt, segmentAt } from './zwo.js';
-import { zoneOf, zoneColor, zoneInk, fmtTime, fmtDur, miniProfile, Diagram, Gauge, ProgressRing, motionOK } from './render.js';
-import { invoke } from './ble.js';
-import { gearTable, virtualSpeed, targetWatts } from './vshift.js';
-import { protocolById, isTestWorkout, evaluateGeneric, classifyTest, prepareTestWorkout, vo2max } from './tests.js';
-import { t, pct } from './i18n/index.js';
-import { loadSounds, countdown, endChime } from './sound.js';
-import { html, raw, tHtml, tText, mount } from './html.js';
-import { IC } from './components/icons.js';
-import { badge } from './components/indicators.js';
-import { segCtl, selectSeg } from './components/buttons.js';
+import { CompactView, compactMode } from '../compact.js';
+import { powerAt, segmentAt } from '../zwo.js';
+import { zoneOf, zoneColor, zoneInk, fmtTime, fmtDur, miniProfile, Diagram, Gauge, ProgressRing, motionOK } from '../render.js';
+import { invoke } from '../ble.js';
+import { gearTable, virtualSpeed, targetWatts } from '../vshift.js';
+import { protocolById, isTestWorkout, evaluateGeneric, classifyTest, prepareTestWorkout, vo2max } from '../tests.js';
+import { t, pct } from '../i18n/index.js';
+import { loadSounds, countdown, endChime } from '../sound.js';
+import { html, raw, tHtml, tText, mount } from '../html.js';
+import { IC } from '../components/icons.js';
+import { badge } from '../components/indicators.js';
+import { segCtl, selectSeg } from '../components/buttons.js';
 import {
   OS, $, $$, setText, setAttr, setHtml, SPEED, state, live, fresh, trainer, ctrls,
   shifting, bounds, ftp, maxHr, weight, wkg, mode, planById, workoutInfo, planProgress, ride, setRide, restartAnim,
   modal, openModal, closeModal, confirmDialog, choiceDialog, announce, toast, rovingKey,
-} from './core.js';
+} from '../core.js';
 import {
   api, route, bindActions, openMenu, pointerFocused, weekDay, segmentText, markEntry, applyFtp,
   syncMode, svcMode, svcRoute, SVC_LOGO, refreshServices, uploadToService, manualImport,
   exportFit, garminImport, uploadToGarmin,
-} from './app.js';
-import { updFound, updLater, showUpdateCard } from './updates.js';
+} from '../app.js';
+import { updFound, updLater, showUpdateCard } from '../updates.js';
 
 export { startRide, startTest };
 
