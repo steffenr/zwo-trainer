@@ -23,6 +23,7 @@
 
 use btleplug::api::{Central, CharPropFlags, Characteristic, Peripheral as _, ScanFilter, WriteType};
 use btleplug::platform::Peripheral;
+use crate::ble::Claims;
 use futures::StreamExt;
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -220,11 +221,15 @@ pub struct Controllers {
     app: AppHandle,
     ble: Arc<Ble>,
     conns: Mutex<Vec<Conn>>,
+    /// Ids with a connect running. A second connect of the same controller (auto-connect retry
+    /// next to a manual connect) waits for it instead of opening a second link, which would
+    /// fire every press twice.
+    pending: Claims,
 }
 
 impl Controllers {
     pub fn new(app: AppHandle, ble: Arc<Ble>) -> Arc<Self> {
-        Arc::new(Self { app, ble, conns: Mutex::new(vec![]) })
+        Arc::new(Self { app, ble, conns: Mutex::new(vec![]), pending: Claims::default() })
     }
 
     async fn status(&self) {
@@ -269,7 +274,36 @@ impl Controllers {
         Ok(out)
     }
 
+    /// The controller `id` as `{ id, name }` if it is connected.
+    async fn known(&self, id: &str) -> Option<Value> {
+        self.conns.lock().await.iter().find(|c| c.id == id).map(|c| json!({ "id": c.id, "name": c.name }))
+    }
+
+    /// Connect `id` once: an already connected controller is returned as it is, and a connect
+    /// that is already running is waited for.
     pub async fn connect(self: &Arc<Self>, id: &str) -> Result<Value, String> {
+        let mut waited = Duration::ZERO;
+        let _claim = loop {
+            if let Some(c) = self.known(id).await {
+                return Ok(c);
+            }
+            if let Some(claim) = self.pending.claim(id) {
+                break claim;
+            }
+            if waited > Duration::from_secs(60) {
+                return Err("The controller is still connecting".into());
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            waited += Duration::from_millis(250);
+        };
+        // the other connect may have finished between the two checks
+        if let Some(c) = self.known(id).await {
+            return Ok(c);
+        }
+        self.open(id).await
+    }
+
+    async fn open(self: &Arc<Self>, id: &str) -> Result<Value, String> {
         let adapter = self.ble.adapter().await?;
         let mut periph = adapter.peripherals().await.ok().and_then(|ps| ps.into_iter().find(|p| p.id().to_string() == id));
         if periph.is_none() {
