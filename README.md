@@ -401,7 +401,12 @@ Nothing is sent anywhere except what you enable: uploads to the platforms you co
 
 ```bash
 cd src-tauri && cargo test                                                    # unit tests
+cd src-tauri && cargo clippy --all-targets                                    # lints (keep warning-free)
 ZWO_TEST_DIR=~/Downloads/zwo cargo test scan_real_library -- --nocapture       # parse a whole library
+node --test scripts/*.test.mjs                                                # UI unit tests (compact ride, battery, html``)
+node scripts/check-i18n.mjs                                                   # translations complete (en / de / fr)
+node scripts/check-css.mjs                                                    # CSS layers, imports, nesting
+node scripts/check-html.mjs                                                   # markup reaches the DOM only through mount()
 npx -y -p playwright node scripts/shots/run.mjs                               # retake all website screenshots (site/img)
 ```
 
@@ -411,7 +416,7 @@ The website screenshots are generated from the real interface with a sample ride
 
 GitHub Actions builds and publishes everything (workflows in `.github/workflows/`):
 
-- **CI** (`ci.yml`, every push to `main` and every PR): tests and clippy on Linux, tests on macOS and Windows.
+- **CI** (`ci.yml`, every push to `develop` and every PR): tests and clippy on Linux plus the UI checks (syntax, unit tests, translations, CSS, markup), tests on macOS and Windows.
 - **Release** (`release.yml`): *Actions → Release → Run workflow* on `develop`, pick **patch / minor / major**. It bumps the version in `src-tauri/Cargo.toml` (the only place it lives) and `Cargo.lock`, commits `chore(release): X`, tags `vX` and pushes the commit and the tag together (atomically: both or neither). Only one release runs at a time. Needs a repository secret **`RELEASE_PAT`** (a token with *Contents: read & write*), because pushes made with the default token don't start other workflows.
 - **Build** (`build-app.yml`, on every `v*` tag): builds macOS Apple silicon + Intel, Windows x64 and Linux x64 in parallel, then publishes one GitHub release with all installers, notes generated from the commits since the previous tag and `THIRD-PARTY-NOTICES.html` (the licences of all bundled Rust crates, generated with [cargo-about](https://github.com/EmbarkStudios/cargo-about) from `src-tauri/about.toml` and `about.hbs`). Run it by hand (*Run workflow*) for a test build: the installers are attached to the run instead.
 - **In-app updates:** with the repository secret **`TAURI_SIGNING_PRIVATE_KEY`** (plus `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` if the key has one), *Build* also signs update files (`src-tauri/tauri.updater.conf.json` turns on `createUpdaterArtifacts`), and the release gets the macOS `.app.tar.gz` bundles and a `latest.json` (`scripts/updater-manifest.mjs`) that the apps read from `releases/latest/download/latest.json`. One-time setup: `scripts/setup-updater-key.sh` creates the key in `~/.tauri/`, writes the public key into `tauri.conf.json` and sets both secrets with `gh`. Back the key and password up: without them, installed apps can't be updated any more. Without the secret, builds still work, just without update files.

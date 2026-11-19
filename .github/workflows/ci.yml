@@ -43,7 +43,7 @@ jobs:
       - name: UI syntax check
         run: for f in $(find ui/js -name '*.js'); do node --check "$f"; done
       - name: UI unit tests
-        run: node --test scripts/compact-ride.test.mjs scripts/battery.test.mjs scripts/html.test.mjs
+        run: node --test scripts/*.test.mjs
       - name: Translations (en / de / fr)
         run: node scripts/check-i18n.mjs
       - name: CSS structure (layers, imports, nesting)
