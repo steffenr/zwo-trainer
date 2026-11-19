@@ -2513,6 +2513,7 @@ class Ride {
     const vsc = $('#vs-choice', r);
     if (vsc) vsc.onkeydown = (e) => { rovingKey(e); if (e.defaultPrevented) e.stopPropagation(); };
     r.onclick = (e) => {
+      if (this.ending) return;
       const menu = e.target.closest('[data-act="menu"]');
       if (menu) return openMenu(menu);
       const vsb = e.target.closest('#vs-choice [data-v]');
@@ -2559,6 +2560,7 @@ class Ride {
 
   /** Controller button actions (see BUTTON_ACTIONS). */
   button(a) {
+    if (this.ending) return; // the ride is being saved: no second finish, no new ERG target
     switch (a) {
       case 'gear+': case 'gear-': {
         const d = a === 'gear+' ? 1 : -1;
@@ -2677,6 +2679,7 @@ class Ride {
 
   /** Start, pause or resume. auto = true when auto-pause triggered it (resumes by pedalling). */
   toggle(auto = false) {
+    if (this.ending) return;
     if (!this.started) { this.started = true; this.startedAt = new Date(); $('#ready')?.remove(); }
     this.running = !this.running;
     this.autoPaused = !this.running && auto;
@@ -2707,7 +2710,7 @@ class Ride {
 
   /** Keyboard shortcuts while riding (space, arrows, +/−); ignored in dialogs, inputs, or when switched off in Settings. */
   onKey(e) {
-    if (modal.open || e.target.matches('input') || state.settings.keyboardShortcuts === false) return;
+    if (this.ending || modal.open || e.target.matches('input') || state.settings.keyboardShortcuts === false) return;
     // Space / Enter on a focused radio (free-ride choice) selects it instead of play/pause. Plain buttons
     // keep the shortcut: after clicking "next", Space should still pause, not skip again.
     if ((e.key === ' ' || e.key === 'Enter') && e.target.closest?.('[role=radio], [role=tab]')) return;
@@ -3110,6 +3113,7 @@ class Ride {
 
   /** Stop button / Esc: expand from compact and pause; a ride that never started just closes, otherwise the rider decides how to end it. */
   async stop() {
+    if (this.ending) return;
     if (!await this.compact.set(false)) return;
     const wasRunning = this.running;
     if (wasRunning) this.toggle();
@@ -3153,6 +3157,10 @@ class Ride {
 
   /** End of the ride: save the FIT file, add to history and plan, evaluate FTP tests, show the summary, upload to Garmin and services. */
   async finish(completed) {
+    // Runs once: a controller ▶ on the last segment or a key during the save would otherwise
+    // save a second FIT file and history entry. Every ride input checks `ending`.
+    if (this.ending) return;
+    this.ending = true;
     $('#btn-compact').hidden = true;
     clearInterval(this.loop);
     this.running = false;
