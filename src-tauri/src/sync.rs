@@ -89,14 +89,17 @@ fn ts(p: &Value) -> &str {
 }
 
 /// Merge an append-only log (history / tests) from both sides; `newer` wins for identical keys.
-fn union_log(newer: &Value, older: &Value, key: impl Fn(&Value) -> String, cap: usize) -> Value {
+/// Newest first, at most `cap` entries (`None`: all of them).
+fn union_log(newer: &Value, older: &Value, key: impl Fn(&Value) -> String, cap: Option<usize>) -> Value {
     let mut m: BTreeMap<String, Value> = BTreeMap::new();
     for e in older.as_array().into_iter().flatten().chain(newer.as_array().into_iter().flatten()) {
         m.insert(key(e), e.clone());
     }
     let mut v: Vec<Value> = m.into_values().collect();
     v.sort_by(|a, b| b["at"].as_str().unwrap_or("").cmp(a["at"].as_str().unwrap_or("")));
-    v.truncate(cap);
+    if let Some(cap) = cap {
+        v.truncate(cap);
+    }
     Value::Array(v)
 }
 
@@ -143,8 +146,9 @@ pub fn merge(local: &Value, remote: &Value) -> Value {
     let mut out = newer.clone();
     keep_local(&mut out, local);
     let hk = |e: &Value| format!("{}|{}", e["at"].as_str().unwrap_or(""), e["file"].as_str().unwrap_or(""));
-    out["history"] = union_log(&newer["history"], &older["history"], hk, 1000);
-    out["tests"] = union_log(&newer["tests"], &older["tests"], |e| e["at"].as_str().unwrap_or("").to_string(), 200);
+    // every ride is kept: a ride's FIT file outlives a capped list, and old rides are the rider's
+    out["history"] = union_log(&newer["history"], &older["history"], hk, None);
+    out["tests"] = union_log(&newer["tests"], &older["tests"], |e| e["at"].as_str().unwrap_or("").to_string(), Some(200));
     if older["plans"].is_object() {
         out["plans"] = merge_plans(&newer["plans"], &older["plans"]);
     }
@@ -425,6 +429,16 @@ mod tests {
         assert_eq!(m["settings"]["devices"]["trainer"]["id"], "x");
         assert_eq!(m["history"].as_array().unwrap().len(), 2);
         assert_eq!(m["history"][0]["at"], "2026-09-05T00:00:00Z");
+    }
+
+    #[test]
+    fn long_histories_are_kept_whole() {
+        let at = |i: usize| format!("2020-01-01T00:{:02}:{:02}Z", i / 60, i % 60);
+        let side = |r: std::ops::Range<usize>| r.map(at).collect::<Vec<_>>();
+        let (a, b) = (side(0..900), side(900..1800));
+        let m = merge(&prof("Me", "2026-01-02T00:00:00Z", &a.iter().map(String::as_str).collect::<Vec<_>>()),
+                      &prof("Me", "2026-01-01T00:00:00Z", &b.iter().map(String::as_str).collect::<Vec<_>>()));
+        assert_eq!(m["history"].as_array().unwrap().len(), 1800, "no ride dropped above 1000");
     }
 
     #[test]

@@ -3224,8 +3224,7 @@ class Ride {
 
     const fit = await this.saveFit(title);
     const entry = { file: this.file, plan: this.planId, title, startedAt: this.startedAt?.toISOString(), at: new Date().toISOString(), ...result, fitPath: fit?.path || null, distanceKm: fit?.summary?.distanceKm ?? null };
-    state.history.unshift(entry);
-    state.history = state.history.slice(0, 1000);
+    state.history.unshift(entry); // never capped: old rides stay the rider's (and sync keeps them all)
     if (this.planId) await markEntry(this.planId, this.file, result); else await api.saveState();
     const testResult = this.test ? await this.recordTest(title) : null;
 
