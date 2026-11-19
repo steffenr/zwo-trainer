@@ -2429,7 +2429,7 @@ class Ride {
     this.wake();
     this.loop = setInterval(() => this.tick(), 250);
     this.last = performance.now();
-    this.render(true);
+    this.drive(); this.render(true);
   }
 
   /** Render the ride screen once (panels, chart, controls, compact view). Never called again on resize: compact mode only toggles CSS. */
@@ -2613,7 +2613,7 @@ class Ride {
     api.saveState();
     const ctl = $('#vs-choice');
     if (ctl) selectSeg(ctl, $(`[data-v="${v}"]`, ctl));
-    this.render(true);
+    this.drive(); this.render(true);
   }
 
   get freeLike() {
@@ -2658,7 +2658,7 @@ class Ride {
     if (this.freeLike && !this.vs.on) { this.vs.on = true; } // shifting implies virtual gears
     const lbl = $('#gear-lbl');
     lbl?.classList.remove('flash'); void lbl?.offsetWidth; lbl?.classList.add('flash');
-    this.render(true);
+    this.drive(); this.render(true);
   }
 
   /** Update the LIVE panel's connection state (dot and label) when a device connects or drops out. */
@@ -2689,7 +2689,7 @@ class Ride {
   adjust(d) {
     const old = this.intensity;
     this.intensity = Math.max(50, Math.min(150, this.intensity + d));
-    this.render(true);
+    this.drive(); this.render(true);
     if (this.intensity !== old && motionOK()) restartAnim($('#int-val'), this.intensity > old ? 'roll-up' : 'roll-down', ['roll-up', 'roll-down']);
   }
 
@@ -2716,7 +2716,7 @@ class Ride {
     this.t = Math.max(0, Math.min(this.w.duration - 0.01, to));
     this.lastSec = Math.floor(this.t) - 1; // record from where the jump lands, never the skipped seconds
     this.beeped.clear();
-    this.render(true);
+    this.drive(); this.render(true);
   }
 
   /** Ride controls (buttons, keys, controllers): play/pause, previous/next segment, ±1 min, stop. */
@@ -2752,7 +2752,7 @@ class Ride {
     if (this.running) trainer.resume();
     $('#ride').classList.toggle('paused', !this.running);
     $('#ride').classList.toggle('auto-paused', this.autoPaused);
-    this.render(true);
+    this.drive(); this.render(true);
   }
 
   /** Autopause: pause after a few seconds without power, resume as soon as the rider pedals again. */
@@ -2789,7 +2789,7 @@ class Ride {
     if (e.key === 'ArrowDown') { e.preventDefault(); this.adjust(e.shiftKey ? -10 : -1); }
   }
 
-  /** Main loop, every 250 ms: advance time, target power and ERG, 1 Hz samples, auto-pause, countdown cues, coach line, render(). */
+  /** Main loop, every 250 ms: advance time, 1 Hz samples, auto-pause, ramp-test end, then trainer control (drive()) and render(). */
   tick() {
     const now = performance.now();
     const realDt = (now - this.last) / 1000;
@@ -2833,6 +2833,7 @@ class Ride {
         if (this.lowCount >= 10) this.rampCooldown();
       }
     }
+    this.drive();
     this.render(false);
   }
 
@@ -2854,7 +2855,7 @@ class Ride {
     this.diagram.draw();
     $('#d-tot').textContent = t('ofTime', { time: fmtTime(total) });
     this.hint(t('rampComplete'));
-    this.render(true);
+    this.drive(); this.render(true);
   }
 
   get targetFrac() {
@@ -2878,8 +2879,6 @@ class Ride {
     return el;
   }
 
-  /** Update the ride screen from the current state. Cheap on purpose (4× per second): cached elements, writes only on change;
-   * `force` redraws everything that otherwise only changes with the segment. */
   /** Same cache for a selector (first match), for elements without an id. */
   qs(sel) {
     let el = this.sels?.get(sel);
@@ -2900,6 +2899,36 @@ class Ride {
     return list;
   }
 
+  /**
+   * Trainer control: ERG target, free ride, or a virtual-shifting target. Called every tick and right after
+   * anything that changes the target (intensity, seek, start/resume, shifting, a shortened ramp), so the
+   * resistance follows at once. ERG targets are deduplicated (Trainer.send); virtual-shifting targets go out
+   * at most every 900 ms, also on a shift (the next tick sends the latest). Once the ride is ending finish()
+   * has released ERG and nothing is sent again. Sets vsActive / vsSpeed / vs.watts for render() and recording.
+   */
+  drive() {
+    const segs = this.w.segments;
+    const s = segs[Math.max(0, segmentAt(segs, Math.min(this.t, this.w.duration - 0.01)))];
+    const f = powerAt(s, this.t - s.start);
+    const freeLike = f === null || s.erg === false;
+    this.vsActive = freeLike && this.vs.on && trainer.connected && trainer.canErg && !this.ending;
+    this.vsSpeed = null;
+    if (this.vsActive) {
+      const cad = fresh('cadence');
+      const ratio = this.gears[this.gear];
+      this.vsSpeed = virtualSpeed(cad, ratio);
+      const raw = targetWatts(cad, ratio, weight() || 75, this.vs.difficulty);
+      this.vs.watts = this.vs.watts == null ? raw : Math.round(this.vs.watts * 0.5 + raw * 0.5);
+      const now = performance.now();
+      if (now - this.vs.sentAt > 900) { trainer.setTargetPower(this.vs.watts); this.vs.sentAt = now; }
+    } else if (trainer.connected && !this.ending) {
+      this.vs.watts = null;
+      if (freeLike) trainer.setFreeRide(); else trainer.setTargetPower(Math.round(f * this.mult() * ftp()));
+    }
+  }
+
+  /** Update the ride screen from the current state. Cheap on purpose (4× per second): cached elements, writes only on change;
+   * `force` redraws everything that otherwise only changes with the segment. Only paints: it never talks to the trainer (drive()). */
   render(force) {
     const segs = this.w.segments;
     const idx = Math.max(0, segmentAt(segs, Math.min(this.t, this.w.duration - 0.01)));
@@ -2912,22 +2941,9 @@ class Ride {
     const tw = this.targetW;
     const F = ftp();
 
-    // trainer control
     const allOut = s.erg === false;
     const freeLike = tw === null || allOut;
-    // once the ride ends, finish() has released ERG; nothing may send a target again
-    const vsActive = freeLike && this.vs.on && trainer.connected && trainer.canErg && !this.ending;
-    let vsSpeed = null;
-    if (vsActive) {
-      const cad = fresh('cadence');
-      const ratio = this.gears[this.gear];
-      vsSpeed = virtualSpeed(cad, ratio);
-      const raw = targetWatts(cad, ratio, weight() || 75, this.vs.difficulty);
-      this.vs.watts = this.vs.watts == null ? raw : Math.round(this.vs.watts * 0.5 + raw * 0.5);
-      const now = performance.now();
-      if (now - this.vs.sentAt > 900 || force) { trainer.setTargetPower(this.vs.watts); this.vs.sentAt = now; }
-    } else if (trainer.connected && !this.ending) { this.vs.watts = null; if (freeLike) trainer.setFreeRide(); else trainer.setTargetPower(tw); }
-    this.vsSpeed = vsSpeed;
+    const vsActive = this.vsActive, vsSpeed = this.vsSpeed; // set by drive()
     const gb = this.q('gearbox');
     if (gb) {
       gb.hidden = !(freeLike && (this.vs.on || ctrls.connected));
