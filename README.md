@@ -388,7 +388,7 @@ Nothing is sent anywhere except what you enable: uploads to the platforms you co
 | Intervals.icu says the key is wrong | Create a new key under intervals.icu → Settings → Developer Settings and paste it again (no spaces). |
 | COROS import fails | Pick the **.zip** file zwoTrainer highlighted, not the .fit; processing in Training Hub can take a few minutes. |
 | Update fails or "Check now" says GitHub can't be reached | Check the internet connection and try again later; you can always download the newest version from the Releases page and install it over the old one. |
-| Sync says "waiting for iCloud downloads" | iCloud hasn't downloaded the files yet; zwoTrainer asks it to and picks them up on the next run. |
+| Sync says "waiting for iCloud downloads" | iCloud hasn't downloaded the files yet; zwoTrainer asks it to and picks them up on the next run. Until then it leaves those riders alone (nothing is overwritten), and on a new computer the default "Rider 1" is only uploaded once every rider file has arrived. |
 
 ---
 
