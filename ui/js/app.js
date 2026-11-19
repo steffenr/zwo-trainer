@@ -2844,7 +2844,8 @@ class Ride {
     // trainer control
     const allOut = s.erg === false;
     const freeLike = tw === null || allOut;
-    const vsActive = freeLike && this.vs.on && trainer.connected && trainer.canErg;
+    // once the ride ends, finish() has released ERG; nothing may send a target again
+    const vsActive = freeLike && this.vs.on && trainer.connected && trainer.canErg && !this.ending;
     let vsSpeed = null;
     if (vsActive) {
       const cad = fresh('cadence');
@@ -2854,7 +2855,7 @@ class Ride {
       this.vs.watts = this.vs.watts == null ? raw : Math.round(this.vs.watts * 0.5 + raw * 0.5);
       const now = performance.now();
       if (now - this.vs.sentAt > 900 || force) { trainer.setTargetPower(this.vs.watts); this.vs.sentAt = now; }
-    } else if (trainer.connected) { this.vs.watts = null; if (freeLike) trainer.setFreeRide(); else trainer.setTargetPower(tw); }
+    } else if (trainer.connected && !this.ending) { this.vs.watts = null; if (freeLike) trainer.setFreeRide(); else trainer.setTargetPower(tw); }
     this.vsSpeed = vsSpeed;
     const gb = this.q('gearbox');
     if (gb) {
@@ -3164,6 +3165,7 @@ class Ride {
     $('#btn-compact').hidden = true;
     clearInterval(this.loop);
     this.running = false;
+    trainer.setFreeRide(); // don't leave the trainer holding the last ERG target while the summary is open
     // Saving/results must still proceed if the OS rejects a window resize.
     await this.compact.set(false);
     // ridden to the end: the ring closes and turns into a check, then the summary rises
@@ -3300,6 +3302,8 @@ class Ride {
   async close() {
     if (!await this.compact.set(false)) return;
     clearInterval(this.loop);
+    this.ending = true;
+    trainer.setFreeRide(); // release ERG (also on Discard, which skips finish())
     this.cObs?.disconnect();
     invoke('keep_awake', { on: false }).catch(() => {});
     this.wakeLock?.release().catch(() => {});

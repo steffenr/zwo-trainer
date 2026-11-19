@@ -240,7 +240,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 - **Sync:** the newest profile wins, history and tests are unioned, deletions use tombstones, and history `*Path` fields are relocated per Mac. Changing merge rules needs a test in `sync.rs`. Only files whose stem passes `state::is_profile_id` (`p_` + hex) are read from the sync folder, so cloud conflict copies (`p_… (1).json`) are ignored.
 - **Damaged state (`state.rs`):** a `state.json` / `secrets.json` that doesn't parse as a JSON object is renamed to `<name>.corrupt-<unix>` before defaults are created; if it can't be read or moved aside, `read_json_object` fails and writes are refused instead of replacing it. `write_json` fsyncs the tmp file before the rename and creates secrets with mode 0600.
 - **ZWO limits:** `MAX_ELEMENT_SECS` (1 day, durations clamp), `MAX_REPS` (1000, repeats clamp) and `MAX_WORKOUT_SECS` (48 h; longer is a parse error, the scan skips the file). They exist in `zwo.rs` and `zwo.js`; keep both equal.
-- **Ending a ride:** `this.ending` makes `finish()` run once; while it is set, buttons, keys and controllers are ignored.
+- **Ending a ride:** `this.ending` makes `finish()` run once; while it is set, buttons, keys, controllers and new ERG targets are ignored. Both `finish()` and `close()` release ERG (`trainer.setFreeRide()`; Discard skips `finish()`).
 - **Other platforms (`services.rs`):**
   - Only platforms with **automatic upload for everyone** (Intervals.icu) plus COROS's manual import are supported, to keep the app simple.
   - Wahoo, TrainingPeaks and Suunto need approved partner apps and were removed on purpose; don't re-add them. **Never copy another app's client ids or secrets.**
