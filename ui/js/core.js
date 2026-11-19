@@ -1,8 +1,9 @@
 // Shared by the UI modules (app.js, ride/ride.js, views/settings.js, sync.js, updates.js): platform wording, DOM
 // helpers, the active rider and library, devices and live sensor values, the current ride, and dialogs
 // and toasts. Imports only leaf modules, never one of the modules above, so it has no import cycles.
-// Reassigned bindings (state, library, ride) are live exports: read them from any module, change
-// them only through setState() / setLibrary() / setRide().
+// Reassigned bindings (state, library, profiles, ride, justDone, pointerFocused) are live exports: read them
+// from any module, change them only through setState() / setLibrary() / setProfiles() / setRide() /
+// setJustDone() / setPointerFocused(). lastRidden is rebuilt by indexHistory().
 import { Trainer, HeartRate, Controllers } from './ble.js';
 import { DEFAULT_SHIFTING } from './vshift.js';
 import { motionOK } from './render.js';
@@ -11,9 +12,10 @@ import { html, tHtml, mount } from './html.js';
 
 export {
   OS, PLAT, $, $$, setText, setAttr, setHtml, params, SPEED,
-  library, setLibrary, state, setState, live, fresh, trainer, hrm, ctrls,
+  library, setLibrary, state, setState, profiles, setProfiles, lastRidden, indexHistory, lastRiddenText,
+  live, fresh, trainer, hrm, ctrls,
   shifting, bounds, ftp, maxHr, weight, wkg, mode, planById, allWorkouts, workoutInfo, folderOf, indexLibrary,
-  relDate, planProgress, ride, setRide, restartAnim,
+  relDate, planProgress, ride, setRide, justDone, setJustDone, pointerFocused, setPointerFocused, restartAnim,
   modal, onDialogEnd, openModal, closeModal, confirmDialog, promptDialog, choiceDialog, announce, toast, rovingKey,
 };
 
@@ -63,6 +65,9 @@ let state = null;         // the active profile: { id, name, settings, activePla
 const live = { power: null, cadence: null, speed: null, hr: null, at: {} };
 const setLibrary = (l) => { library = l; };
 const setState = (p) => { state = p; };
+let profiles = [];        // [{ id, name }]
+let lastRidden = new Map(); // file -> { at, count }
+const setProfiles = (p) => { profiles = p; };
 
 const trainer = new Trainer();
 const hrm = new HeartRate();
@@ -111,12 +116,34 @@ function planProgress(plan) {
   return { started: !!ps, done, skipped, total: plan.workouts.length, next, finished: !!ps && !next, entries };
 }
 
+/** Rebuild "last ridden" per workout file from the rider's history (for the ✓ marks and the "ridden 3 d ago" line). */
+function indexHistory() {
+  lastRidden = new Map();
+  for (const h of state?.history || []) {
+    const cur = lastRidden.get(h.file);
+    if (!cur) lastRidden.set(h.file, { at: h.at, count: 1 });
+    else { cur.count++; if (h.at > cur.at) cur.at = h.at; }
+  }
+}
+
+function lastRiddenText(file) {
+  const r = lastRidden.get(file);
+  return r ? `${t('lastRidden', { when: relDate(r.at) })}${r.count > 1 ? ` · ${r.count}×` : ''}` : '';
+}
+
 // treat values older than 4 s as missing
 const fresh = (k) => (Date.now() - (live.at[k] || 0) < 4000 ? live[k] : null);
 
 // The ride on screen (a Ride from ride/ride.js), or null.
 let ride = null;
 const setRide = (r) => { ride = r; };
+
+let justDone = null;         // file just marked done (its check draws itself once)
+const setJustDone = (f) => { justDone = f; };
+// the element focused by the last click or tap (null when focus came from Tab or the app), for the ride's
+// Space / Enter rule (Ride.keyTarget); kept up to date by bindChrome() in app.js
+let pointerFocused = null;
+const setPointerFocused = (el) => { pointerFocused = el; };
 
 /** Restart a CSS animation class (removes the given classes first). */
 function restartAnim(el, cls, all = [cls]) {

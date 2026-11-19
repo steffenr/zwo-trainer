@@ -21,10 +21,10 @@ import { badge } from '../components/indicators.js';
 import { segCtl, selectSeg } from '../components/buttons.js';
 import {
   OS, $, $$, setText, setAttr, setHtml, SPEED, state, fresh, trainer, ctrls,
-  shifting, bounds, ftp, maxHr, weight, planById, workoutInfo, setRide, restartAnim,
+  shifting, bounds, ftp, maxHr, weight, planById, workoutInfo, setRide, pointerFocused, restartAnim,
   modal, confirmDialog, choiceDialog, announce, toast, rovingKey,
 } from '../core.js';
-import { api, route, openMenu, pointerFocused, segmentText, markEntry } from '../app.js';
+import { api, route, openMenu, segmentText, markEntry } from '../app.js';
 import { updFound, updLater, showUpdateCard } from '../updates.js';
 import { coach } from './coach.js';
 import { finishRide } from './summary.js';

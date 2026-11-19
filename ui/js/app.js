@@ -21,9 +21,9 @@ import { segCtl, selectSeg, menuBtn } from './components/buttons.js';
 import { avatarInk } from './components/avatar.js';
 import {
   PLAT, $, $$, params,
-  library, setLibrary, state, setState, live, trainer, hrm, ctrls,
+  library, setLibrary, state, setState, profiles, setProfiles, lastRidden, indexHistory, lastRiddenText, live, trainer, hrm, ctrls,
   bounds, ftp, weight, wkg, mode, planById, allWorkouts, workoutInfo, folderOf, indexLibrary,
-  relDate, planProgress, ride, restartAnim,
+  relDate, planProgress, ride, justDone, setJustDone, setPointerFocused, restartAnim,
   modal, openModal, closeModal, confirmDialog, toast, rovingKey,
 } from './core.js';
 import { startRide, startTest } from './ride/ride.js';
@@ -33,7 +33,7 @@ import { initUpdates } from './updates.js';
 
 // Used by ride/ride.js, views/settings.js and sync.js (which import from this module in turn; see the note there).
 export {
-  api, route, bindActions, openMenu, pointerFocused, weekDay, segmentText, markEntry, applyFtp,
+  api, route, bindActions, openMenu, weekDay, segmentText, markEntry, applyFtp,
   syncMode, svcMode, svcRoute, SVC_LOGO, refreshServices, uploadToService, manualImport,
   exportFit, garminImport, uploadToGarmin,
   openExternal, applyTheme, applyLanguage, renderProfileChip, THEME_LABEL, devicesMenu, pickDir, loadLibrary,
@@ -41,9 +41,6 @@ export {
 };
 
 // ------------------------------------------------------------------ state
-let profiles = [];        // [{ id, name }]
-let lastRidden = new Map(); // file -> { at, count }
-
 const api = {
   appState: () => invoke('app_state'),
   library: () => invoke('scan_library'),
@@ -80,24 +77,7 @@ function descriptionBlock(md) {
 }
 let lastView = null;         // micro animations: last rendered view (fade in on change)
 const pbarMemo = new Map();  // plan id -> last progress-bar widths (glide on change)
-let justDone = null;         // file just marked done (its check draws itself once)
 
-
-/** Rebuild "last ridden" per workout file from the rider's history (for the ✓ marks and the "ridden 3 d ago" line). */
-function indexHistory() {
-  lastRidden = new Map();
-  for (const h of state?.history || []) {
-    const cur = lastRidden.get(h.file);
-    if (!cur) lastRidden.set(h.file, { at: h.at, count: 1 });
-    else { cur.count++; if (h.at > cur.at) cur.at = h.at; }
-  }
-}
-
-
-function lastRiddenText(file) {
-  const r = lastRidden.get(file);
-  return r ? `${t('lastRidden', { when: relDate(r.at) })}${r.count > 1 ? ` · ${r.count}×` : ''}` : '';
-}
 
 const favs = () => (state.favorites ||= []);
 const isFav = (file) => favs().includes(file);
@@ -151,7 +131,7 @@ async function boot() {
 /** Take a fresh app_state summary from Rust (after create / edit / switch / delete rider or a sync) and make it the UI state. */
 function applyAppState(a) {
   if (a.sync !== undefined) setSyncCfg(a.sync || {});
-  profiles = a.profiles;
+  setProfiles(a.profiles);
   setState(a.profile);
   indexHistory();
   applyTheme();
@@ -261,9 +241,9 @@ function bindChrome() {
   // or tap is remembered; one reached with Tab or focused by the app is not
   document.addEventListener('pointerdown', () => { pointerDown = true; }, true);
   document.addEventListener('pointerup', () => { pointerDown = false; }, true);
-  document.addEventListener('focusin', (e) => { pointerFocused = pointerDown ? e.target : null; }, true);
+  document.addEventListener('focusin', (e) => { setPointerFocused(pointerDown ? e.target : null); }, true);
 }
-let pointerDown = false, pointerFocused = null;
+let pointerDown = false;
 
 // kinds with a connection attempt from connectSaved() still running (hides "Retry auto-connect" meanwhile)
 const connectingKinds = new Set();
@@ -551,7 +531,7 @@ function afterRoute() {
     bar.classList.add('glide');
     d.style.width = `${to[0]}%`; s.style.width = `${to[1]}%`;
   }
-  justDone = null;
+  setJustDone(null);
 }
 
 /** Render #view for the current hash and mode (plans, workouts, tests, history, plan page). Never called during a ride. */
@@ -1244,7 +1224,7 @@ async function activatePlan(id) {
 async function markEntry(planId, file, entry) {
   const ps = (state.plans[planId] ||= { startedAt: new Date().toISOString(), entries: {} });
   ps.entries[file] = { ...entry, at: new Date().toISOString() };
-  if (entry.status === 'done') justDone = file;
+  if (entry.status === 'done') setJustDone(file);
   const plan = planById(planId);
   if (plan && !planProgress(plan).next) ps.finishedAt = new Date().toISOString();
   await api.saveState();
