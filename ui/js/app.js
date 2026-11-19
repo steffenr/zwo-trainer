@@ -3140,7 +3140,7 @@ class Ride {
    * unless a more important one replaces it. Automatic hints can be switched off (Settings → App).
    */
   coach(s, { segChanged, inSeg, rem, allOut, freeLike, gt, p, c, cLo, cHi, dev, cadState, paceFast }) {
-    const el = $('#coach');
+    const el = this.q('coach');
     if (!el) return;
     const now = performance.now() / 1000;
     const k = (this.cz ||= { cadOff: null, cadOn: null, cadShown: false, powLow: null, cur: null, since: 0 });
