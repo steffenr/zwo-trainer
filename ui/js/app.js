@@ -1494,7 +1494,10 @@ function closeModal() {
 }
 modal.addEventListener('click', (e) => { if (e.target === modal && !modal.classList.contains('sticky')) closeModal(); });
 modal.addEventListener('cancel', (e) => { if (modal.classList.contains('sticky')) e.preventDefault(); });
-modal.addEventListener('close', () => modalEnd.abort());
+// The close event arrives a task after modal.close(). Without motion closeModal() closes at once,
+// and a dialog opened right after (e.g. the preview's Skip → confirmation) is already showing when
+// it lands: that late event belongs to the previous dialog, which openModal already ended.
+modal.addEventListener('close', () => { if (!modal.open) modalEnd.abort(); });
 
 /** Yes/no dialog; resolves true when confirmed. Texts are plain text (escaped here). */
 function confirmDialog(title, text, ok = t('ok'), danger = false) {
