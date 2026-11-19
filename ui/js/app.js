@@ -1498,11 +1498,27 @@ function promptDialog(title, value = '') {
   });
 }
 
+/**
+ * Read a short message out to screen readers. The polite live regions exist in index.html from the start
+ * (a region created together with its text is often not announced): #live for the page, #modal-live
+ * inside the dialog, because an open modal dialog makes everything outside it inert. The region is
+ * emptied first so the same message twice is announced twice; play/skip symbols are left out.
+ */
+let liveTimer;
+function announce(msg) {
+  const el = modal.open ? $('#modal-live') : $('#live');
+  const text = String(msg).replace(/[⏩-⏯⏸-⏺▶]️?/gu, '').trim();
+  el.textContent = '';
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(() => { el.textContent = text; }, 60);
+}
+
 let toastTimer;
-/** Short plain-text notice at the bottom (3.2 s). */
+/** Short plain-text notice at the bottom (3.2 s), also announced to screen readers. */
 function toast(msg) {
   const el = $('#toast');
   el.textContent = msg;
+  announce(msg);
   if (el.hidden || el.classList.contains('out')) { el.classList.remove('out'); el.hidden = false; if (motionOK()) restartAnim(el, 'in'); }
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
@@ -2608,11 +2624,12 @@ class Ride {
     }
   }
 
-  /** Brief centred hint over the ride screen (controller / key actions). */
+  /** Brief centred hint over the ride screen (controller / key actions), also announced to screen readers. */
   hint(text) {
     let el = $('#ride-hint');
     if (!el) { el = document.createElement('div'); el.id = 'ride-hint'; el.className = 'ride-hint'; $('#ride').append(el); }
     el.textContent = text;
+    announce(text);
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
     clearTimeout(this.hintTimer);
     this.hintTimer = setTimeout(() => el.classList.remove('show'), 1400);

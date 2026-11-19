@@ -12,7 +12,7 @@ Plain CSS, no build step. `styles.css` declares the cascade layers and imports t
 | `base` | `base.css` | elements, native inputs and their focus/invalid states, text helpers (`.muted`, `.small`, `.eyebrow`, `.meta`, `.k`, `.ic`), shared keyframes |
 | `components` | `components/*.css`, one family per file | `buttons` (button, icon button, link, segmented control, tabs, star/⋯) · `card` (card, hero, card header row, section head, back link) · `indicators` (progress bar, badge, week/day tag, zone tag, spinner) · `dialog` · `popover` (+ ⋯ menus) · `notice` (toast, update card) · `list` (history-style table, sync list, service logo) · `forms` · `avatar` · `charts` (chart, mini profile, zone bar, gauge, ring) · `markdown` |
 | `views` | `views/*.css` | one file per screen or dialog: top bar, home, plan + workouts lists, history, FTP tests, dialogs, settings, ride, compact ride |
-| `utilities` | `utilities.css` | `[hidden]`, forced text colours, the global "Reduce motion" switch |
+| `utilities` | `utilities.css` | `[hidden]`, `.sr-only`, forced text colours, the global "Reduce motion" switch |
 
 - **Component or view?** If it appears on more than one screen, it is a component. A component file never refers to a view (`check-css.mjs` fails on `body.riding`, `.ride`, `dialog.settings` … in `components/`); a view adapts a component in its own file (e.g. `.ride-title .badge` lives in `views/ride.css`). Screen-only pieces stay in their view even when they look generic (zone limits and folder row in `settings.css`, overlay toggles in `ride.css`).
 - **Markup helpers mirror the CSS:** `ui/js/components/<family>.js` renders what `css/components/<family>.css` styles (e.g. `badge()` in `indicators.js`, `dialogHead()` in `dialog.js`, `segCtl()` in `buttons.js`). Use the helper instead of writing the markup again; they build with `html```, so text is escaped. New component: add both files.
@@ -143,7 +143,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 └──────────────────────────────────────────────────────────────────────────────────┘
 #view  (max 1120 px, centred) — home / plan / workouts / tests / history
 #ride  (fixed below the top bar while riding)
-<dialog id="modal"> · #toast · #popover
+<dialog id="modal"> (+ #modal-live) · #toast · #live · #popover
 ```
 
 - **Left padding:** 92 px on macOS (`:root[data-os="mac"]`), leaving room for the traffic lights of the overlay title bar; 24 px on Windows and Linux, which have a normal title bar.
@@ -231,7 +231,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 | **"⋯" menu** | `menuBtn(items)` gives a quiet 28–34 px button. Use it for every secondary or destructive action: Finder, Trash, Reset progress, … |
 | **Devices menu** | 300 px popover with the title "DEVICES" and one row per device kind: 34 px icon tile (`.dev-ico`, ok-tinted when connected) · name and status · action text ("Connect" / "Change"). Connected devices that report a battery show a **battery badge** (`.batt`) after the name: a 20 × 12 icon filled to the level plus the percentage. State colours: `ok` (≥ 40 %, `--ok`), `low` (16–39 %, `--warn`), `critical` (≤ 15 %, `--danger`); never colour alone, the percentage and an accessible label always accompany it. With several controllers the lowest level is shown. Battery appears only in this menu, not in the top bar. |
 | **Avatar** `.avatar` | circle with `--av` background and white 700 initials. With an emoji, the background is 22 % `--av` mixed with the surface, plus an inset 1.5 px `--av` ring. Sizes: 28 (lists), 32 (top bar), 72–84 (`.xl`: who's riding, editor). |
-| **Toast** `.toast` | inverted (text-colour background), radius 12, bottom centre, 3.2 s. Short and plain. |
+| **Toast** `.toast` | inverted (text-colour background), radius 12, bottom centre, 3.2 s. Short and plain. Screen readers hear it through `announce()` (see Accessibility). |
 | **Update card** `.update-card` | the only persistent notice: fixed bottom-right (24 px), 340 px, `--surface`, `--line` border, radius 14, `--shadow-lg`. 30 px accent-soft download tile · "zwoTrainer X is available" / muted "You have Y" · actions *What's new* (ghost, left), *Later* (ghost) and *Install &amp; restart* (primary). While installing: status line and a `.pbar` with the download progress. Hidden while riding (`body.riding`), pops in like a popover. |
 | **Description** `.plan-desc` + `.md` | card under the plan header (and inside the Workouts folder header): rendered Markdown in `--text-2`, 14.5 px / 1.6, max 78 ch, accent underlined links, selectable text. Longer than 300 characters → a plain-text preview, smart-trimmed at the last sentence end after ~180 characters (else at a word boundary with “…”), followed by an inline accent *Show more* link; expanded shows the full Markdown with *Show less* at the end (`smartTrim`, `markdownPlain`). Plan cards show the first sentence (2-line clamp, `.pc-desc`). |
 | **Plan / Collection badge** | muted `.badge` next to the folder title in Workouts; the sidebar groups folders under PLANS and COLLECTIONS. |
@@ -272,6 +272,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 - **Text:** plain, friendly wording in sentence case, in English, German and French (`ui/js/i18n/`; German "du", French "vous"). Leave room for German, the longest of the three: labels in segmented controls and buttons must still fit at 900 px. Units use a thin space in tables ("250 W", "90 %"), and durations are `m:ss` / `h:mm:ss` (`fmtTime`) or "1h 05m" (`fmtDur`).
 - **Accessibility:**
   - Icon-only buttons need a `title` and an `aria-label`.
+  - Transient messages (toasts, ride hints) are announced with `announce()` in app.js through a polite live region that exists in index.html from the start: `#live` on the page, `#modal-live` inside the dialog (an open modal makes the rest of the page inert). Both are `.sr-only` (utilities.css). Never create a live region together with its text; it is often not read.
   - Status is never shown by colour alone: dots are paired with text in the devices menu and tooltips.
   - Contrast is ≥ 4.5:1 for text (use the zone *ink* tokens for coloured text).
   - Everything should be reachable by keyboard, and rows are focusable (`tabindex="0"`, Enter opens). Keyboard focus is one shared rule in `utilities.css` (`:focus-visible` on buttons, links, `[tabindex]`, `summary`, `[role=…]` → 2 px `--accent` outline, offset 2; inset −2 inside popovers), so `all: unset` controls get it too. It sits in the last layer on purpose; don't remove focus outlines in a view (`outline: none` there has no effect).
