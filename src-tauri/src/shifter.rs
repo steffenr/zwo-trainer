@@ -650,4 +650,57 @@ mod tests {
         // over-long varint (more than 64 bits)
         assert_eq!(proto_varints(&[0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01]), vec![]);
     }
+
+    #[test]
+    fn play_without_pad_field() {
+        // no fields at all: no buttons
+        assert_eq!(decode(&[0x07]), Some(0));
+        // all buttons released, pad field missing
+        assert_eq!(decode(&[0x07, 0x10, 0x01, 0x18, 0x01, 0x20, 0x01, 0x28, 0x01, 0x30, 0x01, 0x38, 0x01]), Some(0));
+        // a missing pad field is protobuf's default 0 = right pad
+        assert_eq!(decode(&[0x07, 0x20, 0x00]), Some(B_A));
+        assert_eq!(decode(&[0x07, 0x38, 0x00]), Some(B_POWERUP));
+        // pad sent with another wire type (fixed32): not a varint, so also the default
+        assert_eq!(decode(&[0x07, 0x0d, 0x01, 0x00, 0x00, 0x00, 0x30, 0x00]), Some(B_SHIFT_UP));
+    }
+
+    #[test]
+    fn play_odd_button_values() {
+        // only 0 means pressed: other values, buttons sent as bytes, or cut-off fields are released
+        assert_eq!(decode(&[0x07, 0x08, 0x01, 0x10, 0x02, 0x18, 0x7f]), Some(0));
+        assert_eq!(decode(&[0x07, 0x08, 0x01, 0x22, 0x01, 0x00]), Some(0), "field 4 length-delimited");
+        assert_eq!(decode(&[0x07, 0x08, 0x01, 0x28]), Some(0), "field 5 key without value");
+        assert_eq!(decode(&[0x07, 0x08, 0x01, 0x28, 0x80]), Some(0), "field 5 varint never ends");
+        // left pad, every button pressed
+        let all_left = [0x07, 0x08, 0x01, 0x10, 0x00, 0x18, 0x00, 0x20, 0x00, 0x28, 0x00, 0x30, 0x00, 0x38, 0x00];
+        assert_eq!(decode(&all_left), Some(B_UP | B_LEFT | B_RIGHT | B_DOWN | B_SHIFT_DN | B_ONOFF));
+        // fields beyond 7 (e.g. analog values) don't add buttons
+        assert_eq!(decode(&[0x07, 0x08, 0x00, 0x40, 0x00, 0x48, 0x00]), Some(0));
+    }
+
+    #[test]
+    fn click_missing_or_odd_fields() {
+        assert_eq!(decode(&[0x37]), Some(0), "no fields: nothing pressed");
+        assert_eq!(decode(&[0x37, 0x08]), Some(0), "cut after the key");
+        assert_eq!(decode(&[0x37, 0x10, 0x00]), Some(B_SHIFT_DN), "plus missing");
+        assert_eq!(decode(&[0x37, 0x08, 0x00, 0x10, 0x00]), Some(B_SHIFT_UP | B_SHIFT_DN));
+        assert_eq!(decode(&[0x37, 0x0a, 0x01, 0x00, 0x10, 0x01]), Some(0), "plus as bytes is not a press");
+    }
+
+    #[test]
+    fn ride_without_bitmap() {
+        // no field 1: not a button message
+        assert_eq!(decode(&[0x23]), None);
+        assert_eq!(decode(&[0x23, 0x10, 0x00]), None);
+        assert_eq!(decode(&[0x23, 0x08]), None, "key without value");
+        assert_eq!(decode(&[0x23, 0x0a, 0x02, 0x00, 0x00]), None, "field 1 length-delimited");
+        // analog paddle data (field 2, nested) before the bitmap: its inner field 1 isn't the bitmap
+        let mut msg = vec![0x23, 0x12, 0x04, 0x08, 0x00, 0x10, 0x00];
+        msg.extend(&ride(!RIDE_SHIFT_UP_L)[1..]);
+        assert_eq!(decode(&msg), Some(B_SHIFT_UP));
+        // bits above 32 are ignored
+        let mut big = vec![0x23, 0x08];
+        big.extend([0xFF, 0xFF, 0xFF, 0xFF, 0x1F]); // 0x1_FFFF_FFFF: bit 32 set, all 32 low bits released
+        assert_eq!(decode(&big), Some(0));
+    }
 }
