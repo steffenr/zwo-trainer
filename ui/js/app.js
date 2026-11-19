@@ -131,12 +131,6 @@ function applyTheme() {
   else document.documentElement.dataset.theme = th;
 }
 
-async function setTheme(th) {
-  state.settings.theme = th;
-  applyTheme();
-  await api.saveState();
-}
-
 // ------------------------------------------------------------------ top bar: mode switch, buttons, device events
 function renderModeSwitch() {
   const m = mode();

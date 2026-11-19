@@ -63,7 +63,7 @@ function connectSaved(list) {
 function autoConnect() { connectSaved(offlineSaved()); }
 
 /** Controller button → [workout action, dictionary key of its description] (Zwift Ride / Play / Click, OpenBikeControl). */
-export const BUTTON_ACTIONS = {
+const BUTTON_ACTIONS = {
   shiftUp: ['gear+', 'btnShiftUp'],
   shiftDown: ['gear-', 'btnShiftDown'],
   up: ['int+', 'btnIntUp'],

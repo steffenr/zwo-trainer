@@ -16,7 +16,7 @@ export {
   live, fresh, trainer, hrm, ctrls,
   shifting, bounds, ftp, maxHr, weight, wkg, mode, planById, allWorkouts, workoutInfo, folderOf, indexLibrary,
   relDate, planProgress, ride, setRide, justDone, setJustDone, pointerFocused, setPointerFocused, restartAnim,
-  modal, onDialogEnd, openModal, closeModal, confirmDialog, promptDialog, choiceDialog, announce, toast, rovingKey,
+  modal, onDialogEnd, openModal, closeModal, confirmDialog, choiceDialog, announce, toast, rovingKey,
 };
 
 // Platform wording: zwoTrainer runs on macOS, Windows and Linux; only labels differ.
@@ -194,18 +194,6 @@ function confirmDialog(title, text, ok = t('ok'), danger = false) {
     openModal(html`<h2>${title}</h2><p>${text}</p><div class="modal-actions"><button class="btn ghost" data-r="0">${tHtml('cancel')}</button><button class="btn ${danger ? 'danger' : 'primary'}" data-r="1">${ok}</button></div>`, 'small');
     onDialogEnd(() => resolve(false));   // Esc, backdrop or replaced by another dialog
     $$('[data-r]', modal).forEach((b) => (b.onclick = () => { resolve(b.dataset.r === '1'); closeModal(); }));
-  });
-}
-
-/** Dialog with one text field (rename); resolves the entered value, or nothing on cancel. */
-function promptDialog(title, value = '') {
-  return new Promise((resolve) => {
-    openModal(html`<h2>${title}</h2><form id="pf"><input type="text" name="v" value="${value}" maxlength="40" class="full" autocomplete="off"><div class="modal-actions"><button class="btn ghost" type="button" data-r="0">${tHtml('cancel')}</button><button class="btn primary" type="submit">${tHtml('save')}</button></div></form>`, 'small');
-    const f = $('#pf', modal);
-    f.v.select();
-    onDialogEnd(() => resolve(null));
-    f.onsubmit = (e) => { e.preventDefault(); resolve(f.v.value.trim() || null); closeModal(); };
-    $('[data-r]', modal).onclick = () => { resolve(null); closeModal(); };
   });
 }
 
