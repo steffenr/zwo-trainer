@@ -2,15 +2,16 @@
 // protocols (tests.js), test workouts found in the library and the test history, where a result can be
 // applied as the new FTP (applyFtp, also used by the ride summary).
 //
-// Import cycle with app.js (api, route, bindActions; app.js routes here). Safe because nothing from app.js is
-// used while this module is evaluated, only inside functions that run after boot.
+// Import cycles with app.js (api, route; app.js routes here) and through actions.js (bindActions). Safe because
+// nothing from those modules is used while this module is evaluated, only inside functions that run after boot.
 import { ZONES, fmtDur, miniProfile } from '../render.js';
 import { PROTOCOLS, protocolById, isTestWorkout, classifyTest } from '../tests.js';
 import { t, fmtLocale } from '../i18n/index.js';
 import { html, raw, tHtml, tText, mount } from '../html.js';
 import { badge } from '../components/indicators.js';
 import { $, state, bounds, ftp, weight, wkg, allWorkouts, relDate, toast } from '../core.js';
-import { api, route, bindActions } from '../app.js';
+import { api, route } from '../app.js';
+import { bindActions } from '../actions.js';
 import { workoutRow } from './parts.js';
 import { openSettings } from './settings.js';
 import { startTest } from '../ride/ride.js';

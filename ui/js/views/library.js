@@ -3,8 +3,9 @@
 // rows (filter state in `wf`, kept while the app runs), and openPreview(): the details dialog with chart,
 // zones, description and Ride / Start / Skip / Open plan.
 //
-// Import cycle with app.js (api, actions, ⋯ menus; app.js routes here and opens the preview). Safe because
-// nothing from app.js is used while this module is evaluated, only inside functions that run after boot.
+// Import cycles with app.js (api, setMode, refreshView; app.js routes here) and with actions.js (bindActions,
+// moreMenu, markEntry, toggleFav here; its preview action and ⋯ menu use openPreview and `wf`). Safe because
+// nothing from those modules is used while this module is evaluated, only inside functions that run after boot.
 import { powerAt, estimateTss } from '../zwo.js';
 import { ZONES, FREE_COLOR, zoneOf, fmtTime, fmtDur, Diagram, motionOK } from '../render.js';
 import { t, pct } from '../i18n/index.js';
@@ -16,7 +17,8 @@ import {
   PLAT, $, $$, library, state, bounds, ftp, mode, planById, allWorkouts, workoutInfo, folderOf, planProgress,
   restartAnim, modal, openModal, closeModal, confirmDialog, rovingKey, lastRidden, lastRiddenText,
 } from '../core.js';
-import { api, bindActions, markEntry, toggleFav, setMode, refreshView, moreMenu } from '../app.js';
+import { api, setMode, refreshView } from '../app.js';
+import { bindActions, moreMenu, markEntry, toggleFav } from '../actions.js';
 import { isPlan, showWeekDay, descriptionBlock, favs, starBtn, workoutRow, segmentText } from './parts.js';
 import { startRide } from '../ride/ride.js';
 

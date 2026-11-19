@@ -3,10 +3,10 @@
 // with finish() → finishRide() in ./summary.js (FIT file, history, ride summary). The coach line is painted
 // by coach() from ./coach.js.
 //
-// Import cycles: with app.js (app.js imports startRide / startTest from here, this module uses app-level
-// actions such as route() and markEntry()) and with ./summary.js (finishRide here, startRide there). They
-// are safe because nothing from those modules is used while this module is evaluated: only inside
-// functions and methods that run after boot.
+// Import cycles: with app.js (api, route) and actions.js (openMenu, markEntry), which start rides through
+// startRide / startTest from here (as do the views), and with ./summary.js (finishRide here, startRide
+// there). They are safe because nothing from those modules is used while this module is evaluated: only
+// inside functions and methods that run after boot.
 import { CompactView, compactMode } from '../compact.js';
 import { powerAt, segmentAt } from '../zwo.js';
 import { zoneOf, zoneColor, zoneInk, fmtTime, Diagram, Gauge, ProgressRing, motionOK } from '../render.js';
@@ -24,7 +24,8 @@ import {
   shifting, bounds, ftp, maxHr, weight, planById, workoutInfo, setRide, pointerFocused, restartAnim,
   modal, confirmDialog, choiceDialog, announce, toast, rovingKey,
 } from '../core.js';
-import { api, route, openMenu, markEntry } from '../app.js';
+import { api, route } from '../app.js';
+import { openMenu, markEntry } from '../actions.js';
 import { segmentText } from '../views/parts.js';
 import { updFound, updLater, showUpdateCard } from '../updates.js';
 import { coach } from './coach.js';

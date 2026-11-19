@@ -2,13 +2,13 @@
 // show in the file manager, show as collection, move to the trash), the plan's description, then its
 // workouts grouped by week (or one list for a plan without week numbers).
 //
-// Import cycle with app.js (bindActions; app.js routes here). Safe because nothing from app.js is used while
-// this module is evaluated, only inside functions that run after boot.
+// Import cycle through actions.js (bindActions) and app.js, which routes here. Safe because nothing from those
+// modules is used while this module is evaluated, only inside functions that run after boot.
 import { t } from '../i18n/index.js';
 import { html, raw, tHtml, tText, mount } from '../html.js';
 import { menuBtn } from '../components/buttons.js';
 import { PLAT, $, state, planById, planProgress } from '../core.js';
-import { bindActions } from '../app.js';
+import { bindActions } from '../actions.js';
 import { planWeeks, planMeta, descriptionBlock, progressBar, workoutRow } from './parts.js';
 
 export { renderPlan };

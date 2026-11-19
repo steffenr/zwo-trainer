@@ -1,14 +1,15 @@
 // Ride history (#/history): one row per ride with date, workout and plan, time, power, heart rate, where it
 // was uploaded (Garmin Connect, other platforms) and its FIT and ⋯ actions (handled by the h-* actions).
 //
-// Import cycle with app.js (bindActions; app.js routes here). Safe because nothing from app.js is used while
-// this module is evaluated, only inside functions that run after boot.
+// Import cycle with actions.js (bindActions here; the Garmin action redraws this view) and through app.js,
+// which routes here. Safe because nothing from those modules is used while this module is evaluated, only
+// inside functions that run after boot.
 import { fmtTime } from '../render.js';
 import { fmtLocale } from '../i18n/index.js';
 import { html, tHtml, tText, mount } from '../html.js';
 import { menuBtn } from '../components/buttons.js';
 import { $, state, planById } from '../core.js';
-import { bindActions } from '../app.js';
+import { bindActions } from '../actions.js';
 import { svcCache, svcRoute } from '../connections.js';
 
 export { renderHistory };

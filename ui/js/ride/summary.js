@@ -2,9 +2,10 @@
 // history and the plan, evaluates FTP tests and opens the ride summary (test result, stats, uploads to
 // Garmin and other platforms, next plan workout). The functions take the Ride as their first argument.
 //
-// Import cycles: with app.js (upload helpers, bindActions …) and with ./ride.js (startRide for "Start next
-// now", while ride.js imports finishRide from here). Both are safe because nothing from those modules is
-// used while this module is evaluated: only inside functions that run after a ride has ended.
+// Import cycles: through app.js (api), actions.js (bindActions, markEntry) and connections.js (uploads),
+// which lead back here through ride.js, and directly with ./ride.js (startRide for "Start next now", while
+// ride.js imports finishRide from here). They are safe because nothing from those modules is used while this
+// module is evaluated: only inside functions that run after a ride has ended.
 import { fmtTime, fmtDur, miniProfile, motionOK } from '../render.js';
 import { invoke } from '../ble.js';
 import { evaluateGeneric, vo2max } from '../tests.js';
@@ -15,9 +16,8 @@ import { badge } from '../components/indicators.js';
 import {
   $, state, trainer, bounds, ftp, weight, wkg, planById, planProgress, modal, openModal, closeModal, toast,
 } from '../core.js';
-import {
-  api, bindActions, markEntry,
-} from '../app.js';
+import { api } from '../app.js';
+import { bindActions, markEntry } from '../actions.js';
 import { weekDay } from '../views/parts.js';
 import { applyFtp } from '../views/tests.js';
 import {

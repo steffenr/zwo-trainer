@@ -1,14 +1,14 @@
 // Home in Plans mode: the active plan with its next workout (Start / Details / Skip) or a prompt to pick
 // one, then all plans as cards with a filter; renderEmpty() is the first-run view without workouts.
 //
-// Import cycle with app.js (bindActions; app.js routes here). Safe because nothing from app.js is used while
-// this module is evaluated, only inside functions that run after boot.
+// Import cycle through actions.js (bindActions) and app.js, which routes here. Safe because nothing from those
+// modules is used while this module is evaluated, only inside functions that run after boot.
 import { fmtDur, miniProfile } from '../render.js';
 import { markdownSummary } from '../markdown.js';
 import { html, raw, tHtml, tText, mount } from '../html.js';
 import { badge } from '../components/indicators.js';
 import { $, library, state, bounds, planById, planProgress, lastRidden, lastRiddenText } from '../core.js';
-import { bindActions } from '../app.js';
+import { bindActions } from '../actions.js';
 import { isPlan, planMeta, progressBar, weekDay } from './parts.js';
 
 export { renderHome, renderEmpty };
