@@ -28,7 +28,9 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  TAURI_CLI: '@tauri-apps/cli@^2'
+  # Exact version: it runs next to TAURI_SIGNING_PRIVATE_KEY, so a new release must never be
+  # pulled in unseen. Dependabot can't see this line; bump it by hand (keep it on 2.x).
+  TAURI_CLI: '@tauri-apps/cli@2.12.4'
 
 jobs:
   build:
