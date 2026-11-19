@@ -1,18 +1,19 @@
 // zwoTrainer UI controller. Sections, top to bottom:
-//   state & helpers · library and plan progress · profile sync · in-app updates · theme, riders, top bar
+//   riders, api and library helpers · profile sync · in-app updates · theme, riders, top bar
 //   · devices menu · routing and views (renderHome / renderPlan / renderWorkouts / renderTests /
-//   renderHistory) · actions (bindActions, ⋯ menus) · dialogs (openModal, preview, settings, devices,
+//   renderHistory) · actions (bindActions, ⋯ menus) · dialogs (preview, settings, devices,
 //   connections) · the Ride class (ride screen and loop) · ride summary.
+// Shared state, DOM helpers, dialogs and toasts live in ./core.js.
 // Markup: html`` from ./html.js (auto-escaping) and the helpers in ./components/ for shared pieces;
 // markup reaches the DOM only through mount() (scripts/check-html.mjs). Rust is reached only through
 // invoke() / listen() (ble.js).
 import { CompactView, compactMode } from './compact.js';
 import { powerAt, segmentAt, estimateTss } from './zwo.js';
 import { ZONES, FREE_COLOR, zoneOf, zoneColor, zoneInk, fmtTime, fmtDur, miniProfile, Diagram, Gauge, ProgressRing, motionOK } from './render.js';
-import { Trainer, HeartRate, Controllers, bindNative, invoke, listen } from './ble.js';
+import { bindNative, invoke, listen } from './ble.js';
 import { batteryBadge, lowestLevel } from './battery.js';
 import { renderMarkdown, markdownSummary, markdownPlain, smartTrim } from './markdown.js';
-import { DEFAULT_SHIFTING, gearTable, virtualSpeed, targetWatts } from './vshift.js';
+import { gearTable, virtualSpeed, targetWatts } from './vshift.js';
 import { PROTOCOLS, protocolById, isTestWorkout, evaluateGeneric, classifyTest, prepareTestWorkout, vo2max } from './tests.js';
 import { t, pct, LOCALES, setLocale, systemLocale, coerceLocale, fmtLocale, translateDom } from './i18n/index.js';
 import { loadSounds, countdown, endChime } from './sound.js';
@@ -22,57 +23,17 @@ import { badge, wdTag, zoneTag } from './components/indicators.js';
 import { dialogHead, closeBtn } from './components/dialog.js';
 import { segCtl, segRow, selectSeg, menuBtn } from './components/buttons.js';
 import { avatarInk } from './components/avatar.js';
-
-// Platform wording: zwoTrainer runs on macOS, Windows and Linux; only labels differ.
-const OS = (() => {
-  const p = String(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent).toLowerCase();
-  return p.includes('mac') ? 'mac' : p.includes('win') ? 'win' : 'linux';
-})();
-document.documentElement.dataset.os = OS;
-// Each wording is looked up in the dictionary when it's used, so it follows the UI language.
-const PLAT = Object.defineProperties({ emojiKey: { mac: ' (⌃⌘Space)', win: ' (Win + .)', linux: '' }[OS] },
-  Object.fromEntries(['files', 'trash', 'machine', 'onThisMachine', 'bt'].map((k) => [k, { get: () => t(`${OS}.${k}`) }])));
+import {
+  OS, PLAT, $, $$, setText, setAttr, setHtml, params, SPEED,
+  library, setLibrary, state, setState, live, fresh, trainer, hrm, ctrls,
+  shifting, bounds, ftp, maxHr, weight, wkg, mode, planById, allWorkouts, workoutInfo, folderOf, indexLibrary,
+  relDate, planProgress, ride, setRide, restartAnim,
+  modal, onDialogEnd, openModal, closeModal, confirmDialog, choiceDialog, announce, toast, rovingKey,
+} from './core.js';
 
 // ------------------------------------------------------------------ state
-const $ = (s, r = document) => r.querySelector(s);
-const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-/**
- * Write text only when it changed. The ride screen updates ~40 readouts 4× a second; most values are the
- * same as last tick, and skipping the write avoids needless style/layout work. null/undefined → ''.
- */
-const setText = (el, v) => {
-  if (!el) return;
-  const s = String(v ?? '');
-  if (el.textContent !== s) el.textContent = s;
-};
-/** Same for an attribute: written only when the value changed (aria-label, aria-pressed, title in render()). */
-const setAttr = (el, name, v) => {
-  if (!el) return;
-  const s = String(v ?? '');
-  if (el.getAttribute(name) !== s) el.setAttribute(name, s);
-};
-/**
- * Same for an html`` fragment, written through mount(). Compares with the fragment written last by
- * setHtml (kept on the element), so use it as the only writer of that element.
- */
-const setHtml = (el, frag) => {
-  if (!el || el._html === frag.s) return;
-  mount(el, frag);
-  el._html = frag.s;
-};
-const params = new URLSearchParams(location.search);
-const SPEED = Math.max(1, Number(params.get('speed')) || 1); // dev: fast-forward time
-
-let library = { plans: [], singles: [], root: '' };
 let profiles = [];        // [{ id, name }]
-let state = null;         // the active profile: { id, name, settings, activePlan, plans, history }
 let lastRidden = new Map(); // file -> { at, count }
-const live = { power: null, cadence: null, speed: null, hr: null, at: {} };
-
-const trainer = new Trainer();
-const hrm = new HeartRate();
-const ctrls = new Controllers();
-const shifting = () => ({ ...DEFAULT_SHIFTING, ...(state.settings.shifting || {}) });
 
 const api = {
   appState: () => invoke('app_state'),
@@ -81,14 +42,6 @@ const api = {
   saveState: () => { indexHistory(); return invoke('save_profile', { profile: state }).then((r) => { scheduleSync(); return r; }).catch((e) => toast(t('couldNotSave', { e }))); },
 };
 
-const bounds = () => state.settings.zones;
-const ftp = () => Number(state.settings.ftp) || 250;
-const maxHr = () => Number(state.settings.maxHr) || 185;
-const weight = () => Number(state.settings.weight) || null;
-const wkg = (w) => (weight() && w ? (w / weight()).toFixed(2) : null);
-const mode = () => (['workouts', 'tests'].includes(state.settings.mode) ? state.settings.mode : 'plans');
-const planById = (id) => library.plans.find((p) => p.id === id);
-const allWorkouts = () => [...library.singles, ...library.plans.flatMap((p) => p.workouts)];
 /** Folder shown under Plans? Rider override first, then folders already ridden as a plan, then
  *  the library's guess (≥ 2 weeks = plan, otherwise a collection that lives in Workouts only). */
 function isPlan(p) {
@@ -116,17 +69,10 @@ function descriptionBlock(md) {
     <div class="md md-full">${full}<p><a href="#" class="md-toggle" data-act="desc-toggle">${tHtml('showLess')}</a></p></div>
   </section>`;
 }
-let workoutIndex = new Map();
 let lastView = null;         // micro animations: last rendered view (fade in on change)
 const pbarMemo = new Map();  // plan id -> last progress-bar widths (glide on change)
 let justDone = null;         // file just marked done (its check draws itself once)
-const workoutInfo = (file) => workoutIndex.get(file);
-const folderOf = (file) => (file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '');
 
-/** Rebuild the lookup maps over the scanned library (workout by file, plan by id) after a scan. */
-function indexLibrary() {
-  workoutIndex = new Map(allWorkouts().map((w) => [w.file, w]));
-}
 
 /** Rebuild "last ridden" per workout file from the rider's history (for the ✓ marks and the "ridden 3 d ago" line). */
 function indexHistory() {
@@ -138,15 +84,6 @@ function indexHistory() {
   }
 }
 
-function relDate(iso) {
-  if (!iso) return '';
-  const d = new Date(iso), now = new Date();
-  const days = Math.floor((new Date(now.toDateString()) - new Date(d.toDateString())) / 864e5);
-  if (days <= 0) return t('today');
-  if (days === 1) return t('yesterday');
-  if (days < 7) return t('daysAgo', { n: days });
-  return d.toLocaleDateString(fmtLocale(), { day: 'numeric', month: 'short', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
-}
 
 function lastRiddenText(file) {
   const r = lastRidden.get(file);
@@ -165,19 +102,6 @@ async function toggleFav(file) {
 /** Favourite toggle (☆ / ★) for a workout file. */
 const starBtn = (file) => html`<button class="star ${isFav(file) ? 'on' : ''}" data-act="fav" data-file="${file}" title="${tText(isFav(file) ? 'favRemove' : 'favAdd')}" aria-label="${tText('favorite')}">${isFav(file) ? '★' : '☆'}</button>`;
 
-/** Progress of a plan for the active rider: done / skipped counts, the next workout, started / finished flags. */
-function planProgress(plan) {
-  const ps = state.plans[plan.id];
-  const entries = ps?.entries || {};
-  let done = 0, skipped = 0;
-  for (const w of plan.workouts) {
-    const e = entries[w.file];
-    if (e?.status === 'done') done++;
-    else if (e?.status === 'skipped') skipped++;
-  }
-  const next = plan.workouts.find((w) => !entries[w.file]) || null;
-  return { started: !!ps, done, skipped, total: plan.workouts.length, next, finished: !!ps && !next, entries };
-}
 
 // ------------------------------------------------------------------ boot
 /**
@@ -219,7 +143,7 @@ async function boot() {
 function applyAppState(a) {
   if (a.sync !== undefined) syncCfg = a.sync || {};
   profiles = a.profiles;
-  state = a.profile;
+  setState(a.profile);
   indexHistory();
   applyTheme();
   applyLanguage();
@@ -229,7 +153,7 @@ function applyAppState(a) {
 
 /** Scan the workouts folder (scan_library in Rust; cached by mtime) and re-index it. */
 async function loadLibrary() {
-  library = await api.library();
+  setLibrary(await api.library());
   indexLibrary();
   route();
 }
@@ -534,8 +458,6 @@ function onSensor(d) {
   const now = Date.now();
   for (const k of ['power', 'cadence', 'speed', 'hr']) if (d[k] !== undefined) { live[k] = d[k]; live.at[k] = now; }
 }
-// treat values older than 4 s as missing
-const fresh = (k) => (Date.now() - (live.at[k] || 0) < 4000 ? live[k] : null);
 
 // ------------------------------------------------------------------ devices menu (one top-bar button)
 const DEVICE_KINDS = [
@@ -1161,7 +1083,7 @@ const testName = (x) => protocolById(x.protocol)?.name || x.name;
 
 function startTest(id) {
   const p = protocolById(id);
-  ride = new Ride(p.build(ftp()), `test:${id}`, null, { protocol: p });
+  setRide(new Ride(p.build(ftp()), `test:${id}`, null, { protocol: p }));
 }
 
 // ------------------------------------------------------------------ history
@@ -1464,88 +1386,6 @@ async function unskip(file) {
   route();
 }
 
-// ------------------------------------------------------------------ modals
-const modal = $('#modal');
-let modalCloseTimer = null;
-// The shown dialog's lifetime: aborted when #modal closes or the next openModal replaces the content.
-let modalEnd = new AbortController();
-/** Run fn once when the dialog just opened ends (closed or replaced). Call it right after openModal. */
-const onDialogEnd = (fn) => modalEnd.signal.addEventListener('abort', fn, { once: true });
-/** Show #modal with an html`` fragment and size classes (small, wide, settings …). One dialog at a time; a plain string would show as text. */
-function openModal(markup, cls = '') {
-  if (modalCloseTimer) { clearTimeout(modalCloseTimer); modalCloseTimer = null; } // reopened while fading out: keep it open
-  modal.className = cls;
-  modal.onclick = null;   // the previous dialog's action delegation must not handle this one's buttons
-  modalEnd.abort();       // the previous dialog ends here, even if #modal never closed in between
-  modalEnd = new AbortController();
-  mount($('.modal-body', modal), markup);
-  // name the dialog after its heading (dialogHead() or a plain <h2>); no heading, no reference
-  const head = $('.modal-body h2', modal);
-  if (head) { head.id ||= 'modal-title'; modal.setAttribute('aria-labelledby', head.id); } else modal.removeAttribute('aria-labelledby');
-  if (!modal.open) modal.showModal();
-  return modal;
-}
-/** Close #modal with its animation; the dialog's onDialogEnd handlers run when it has closed. */
-function closeModal() {
-  if (!modal.open || modalCloseTimer) return;
-  if (!motionOK()) return modal.close();
-  modal.classList.add('closing');
-  modalCloseTimer = setTimeout(() => { modalCloseTimer = null; modal.classList.remove('closing'); modal.close(); }, 120);
-}
-modal.addEventListener('click', (e) => { if (e.target === modal && !modal.classList.contains('sticky')) closeModal(); });
-modal.addEventListener('cancel', (e) => { if (modal.classList.contains('sticky')) e.preventDefault(); });
-modal.addEventListener('close', () => modalEnd.abort());
-
-/** Yes/no dialog; resolves true when confirmed. Texts are plain text (escaped here). */
-function confirmDialog(title, text, ok = t('ok'), danger = false) {
-  return new Promise((resolve) => {
-    openModal(html`<h2>${title}</h2><p>${text}</p><div class="modal-actions"><button class="btn ghost" data-r="0">${tHtml('cancel')}</button><button class="btn ${danger ? 'danger' : 'primary'}" data-r="1">${ok}</button></div>`, 'small');
-    onDialogEnd(() => resolve(false));   // Esc, backdrop or replaced by another dialog
-    $$('[data-r]', modal).forEach((b) => (b.onclick = () => { resolve(b.dataset.r === '1'); closeModal(); }));
-  });
-}
-
-/** Dialog with one text field (rename); resolves the entered value, or nothing on cancel. */
-function promptDialog(title, value = '') {
-  return new Promise((resolve) => {
-    openModal(html`<h2>${title}</h2><form id="pf"><input type="text" name="v" value="${value}" maxlength="40" class="full" autocomplete="off"><div class="modal-actions"><button class="btn ghost" type="button" data-r="0">${tHtml('cancel')}</button><button class="btn primary" type="submit">${tHtml('save')}</button></div></form>`, 'small');
-    const f = $('#pf', modal);
-    f.v.select();
-    onDialogEnd(() => resolve(null));
-    f.onsubmit = (e) => { e.preventDefault(); resolve(f.v.value.trim() || null); closeModal(); };
-    $('[data-r]', modal).onclick = () => { resolve(null); closeModal(); };
-  });
-}
-
-/**
- * Read a short message out to screen readers. The polite live regions exist in index.html from the start
- * (a region created together with its text is often not announced): #live for the page, #modal-live
- * inside the dialog, because an open modal dialog makes everything outside it inert. The region is
- * emptied first so the same message twice is announced twice; play/skip symbols are left out.
- */
-let liveTimer;
-function announce(msg) {
-  const el = modal.open ? $('#modal-live') : $('#live');
-  const text = String(msg).replace(/[⏩-⏯⏸-⏺▶]️?/gu, '').trim();
-  el.textContent = '';
-  clearTimeout(liveTimer);
-  liveTimer = setTimeout(() => { el.textContent = text; }, 60);
-}
-
-let toastTimer;
-/** Short plain-text notice at the bottom (3.2 s), also announced to screen readers. */
-function toast(msg) {
-  const el = $('#toast');
-  el.textContent = msg;
-  announce(msg);
-  if (el.hidden || el.classList.contains('out')) { el.classList.remove('out'); el.hidden = false; if (motionOK()) restartAnim(el, 'in'); }
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    if (!motionOK()) { el.hidden = true; return; }
-    el.classList.add('out');
-    toastTimer = setTimeout(() => { el.hidden = true; el.classList.remove('in', 'out'); }, 180);
-  }, 3200);
-}
 
 /** Workout preview dialog: header, interactive chart with segment info, zones, description and start buttons. */
 async function openPreview(file) {
@@ -1639,19 +1479,6 @@ function syncMode(svc) {
 const MODES = [['off', 'off'], ['manual', 'manual'], ['auto', 'automatic']];
 const modeSelect = (name, cur) => segRow(`mode-${name}`, tHtml('upload'), MODES.map(([k, l]) => [k, tHtml(l)]), cur, 'sync-mode');
 
-/** Arrow keys / Home / End inside tab lists and segmented controls (selection follows focus). */
-function rovingKey(e) {
-  const el = e.target.closest?.('[role=tab], .seg-ctl [role=radio]');
-  const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1, Home: 'first', End: 'last' }[e.key];
-  if (!el || step === undefined) return;
-  const items = [...el.parentElement.children].filter((x) => x.getAttribute('role') === el.getAttribute('role') && !x.disabled);
-  const i = items.indexOf(el);
-  const next = items[step === 'first' ? 0 : step === 'last' ? items.length - 1 : (i + step + items.length) % items.length];
-  e.preventDefault();
-  next.focus();
-  next.click();
-}
-modal.addEventListener('keydown', rovingKey);
 
 const fmtNum = (n) => n.toLocaleString(fmtLocale());
 
@@ -1977,7 +1804,7 @@ function settingsActions(svcs) {
     },
     'garmin-dir': async () => {
       const dir = await invoke('pick_garmin_dir').catch((err) => toast(String(err)));
-      if (dir) { state = (await api.appState()).profile; openSettings('sync'); }
+      if (dir) { setState((await api.appState()).profile); openSettings('sync'); }
     },
     'svc-getkey': () => openExternal('open_url', { url: 'https://intervals.icu/settings' }),
     'svc-key': async (el) => {
@@ -2021,7 +1848,7 @@ function settingsActions(svcs) {
 async function pickDir() {
   const dir = await invoke('pick_zwo_dir').catch((e) => toast(String(e)));
   if (!dir) return;
-  state = (await api.appState()).profile;
+  setState((await api.appState()).profile);
   await loadLibrary();
   toast(t('plansIn', { n: library.plans.length, dir: dir.split(/[\\/]/).pop() }));
 }
@@ -2236,7 +2063,6 @@ async function uploadToGarmin(h) {
 }
 
 // ------------------------------------------------------------------ ride
-let ride = null;
 
 /** Load a workout (and test preparation if it is an FTP test) and open the ride screen. */
 async function startRide(file, planId) {
@@ -2248,13 +2074,13 @@ async function startRide(file, planId) {
     if (kind.kind === 'broken-ramp') {
       const p = protocolById(kind.lite ? 'ramp-lite' : 'ramp');
       if (!await confirmDialog(t('builtinRampQ'), `${t('builtinRampText', { title: info.title, name: p.name })}${planId ? ` ${t('countsForPlan')}` : ''}`, t('startName', { name: p.name }))) return;
-      ride = new Ride(p.build(ftp()), file, planId, { protocol: p });
+      setRide(new Ride(p.build(ftp()), file, planId, { protocol: p }));
       return;
     }
-    ride = new Ride(prepareTestWorkout(workout), file, planId, { generic: true });
+    setRide(new Ride(prepareTestWorkout(workout), file, planId, { generic: true }));
     return;
   }
-  ride = new Ride(workout, file, planId);
+  setRide(new Ride(workout, file, planId));
 }
 
 /** Plausibility note for a test result that differs a lot (> 15 %) from the current FTP. */
@@ -2286,13 +2112,6 @@ function countUp(el, from, to, fmt, delay = 0) {
   }, delay);
 }
 
-/** Restart a CSS animation class (removes the given classes first). */
-function restartAnim(el, cls, all = [cls]) {
-  if (!el) return;
-  el.classList.remove(...all);
-  void el.offsetWidth;
-  el.classList.add(cls);
-}
 
 /** Fill a small metric bar (0–1) and optionally mark a target band. */
 function setBar(el, frac, { mark = null, color = null, band = null } = {}) {
@@ -3466,19 +3285,12 @@ class Ride {
     $('#ride-title').hidden = true;
     $('#btn-compact').hidden = true;
     $('#ride-title').replaceChildren();
-    ride = null;
+    setRide(null);
     route();
     if (updFound && updLater !== updFound.version) showUpdateCard();
   }
 }
 
-function choiceDialog(title, text, options) {
-  return new Promise((resolve) => {
-    openModal(html`<h2>${title}</h2><p>${text}</p><div class="modal-actions">${options.map(([v, l, c]) => html`<button class="btn ${c}" data-v="${v}">${l}</button>`)}</div>`, 'small');
-    onDialogEnd(() => resolve(null));
-    $$('[data-v]', modal).forEach((b) => (b.onclick = () => { resolve(b.dataset.v); closeModal(); }));
-  });
-}
 
 // Direction of the coming change for the countdown cue: 'up', 'down', or null for about the same
 // (within 3 % FTP) or no fixed target (free ride). All-out efforts count as higher than any target.
