@@ -590,6 +590,45 @@ mod tests {
         (base, root(&cloud).join("profiles"), a, b)
     }
 
+    #[test]
+    fn ride_paths_point_at_this_machines_folder() {
+        let mut p = json!({ "history": [
+            { "at": "1", "fitPath": "/Users/other/Library/x/activities/p_1/ride.fit", "garminPath": "/elsewhere/ride.garmin.fit", "file": "plan/w.zwo" },
+            { "at": "2" },
+        ] });
+        let here = Path::new("/home/me/data/activities/p_1");
+        relocate_paths(&mut p, here);
+        assert_eq!(p["history"][0]["fitPath"], json!(here.join("ride.fit").display().to_string()));
+        assert_eq!(p["history"][0]["garminPath"], json!(here.join("ride.garmin.fit").display().to_string()));
+        assert_eq!(p["history"][0]["file"], "plan/w.zwo", "only *Path fields");
+        assert_eq!(p["history"][1], json!({ "at": "2" }), "entries without files stay as they are");
+    }
+
+    #[test]
+    fn deleted_riders_stay_deleted() {
+        let (base, pdir, a, b) = setup("tomb");
+        let anna = a.create_profile("Anna").unwrap()["activeProfile"].as_str().unwrap().to_string();
+        let ben = a.create_profile("Ben").unwrap()["activeProfile"].as_str().unwrap().to_string();
+        run(&a).unwrap();
+        run(&b).unwrap();
+        a.delete_profile(&anna).unwrap();
+        a.delete_profile(&ben).unwrap();
+        run(&a).unwrap();
+        // B edits Ben after the deletion (later updatedAt): Ben is kept; Anna (untouched) goes
+        b.update(|d| { d["profiles"][&ben]["updatedAt"] = json!("2999-01-01T00:00:00Z"); Ok(()) }).unwrap();
+        run(&b).unwrap();
+        let ids = |s: &Store| s.app_state()["profiles"].as_array().unwrap().iter().map(|p| p["id"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+        assert!(!ids(&b).contains(&anna));
+        assert!(ids(&b).contains(&ben), "edited after the deletion");
+        // the tombstone keeps Anna gone in later rounds on both sides, and her file says deleted
+        run(&a).unwrap();
+        run(&b).unwrap();
+        assert!(!ids(&a).contains(&anna) && !ids(&b).contains(&anna));
+        let f: Value = serde_json::from_str(&std::fs::read_to_string(pdir.join(format!("{anna}.json"))).unwrap()).unwrap();
+        assert_eq!(f["deleted"], true);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
     fn profile_files(pdir: &Path) -> Vec<String> {
         let mut v: Vec<String> = std::fs::read_dir(pdir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).filter(|n| n.ends_with(".json")).collect();
         v.sort();
