@@ -9,19 +9,18 @@
 // invoke() / listen() (ble.js).
 import { powerAt, estimateTss } from './zwo.js';
 import { ZONES, FREE_COLOR, zoneOf, fmtTime, fmtDur, miniProfile, Diagram, motionOK } from './render.js';
-import { bindNative, invoke, listen } from './ble.js';
+import { bindNative, invoke } from './ble.js';
 import { batteryBadge, lowestLevel } from './battery.js';
 import { renderMarkdown, markdownSummary, markdownPlain, smartTrim } from './markdown.js';
 import { PROTOCOLS, protocolById, isTestWorkout, classifyTest } from './tests.js';
 import { t, pct, setLocale, systemLocale, coerceLocale, fmtLocale, translateDom } from './i18n/index.js';
 import { html, raw, tHtml, tText, mount } from './html.js';
-import { IC } from './components/icons.js';
 import { badge, wdTag, zoneTag } from './components/indicators.js';
 import { dialogHead, closeBtn } from './components/dialog.js';
 import { segCtl, selectSeg, menuBtn } from './components/buttons.js';
 import { avatarInk } from './components/avatar.js';
 import {
-  OS, PLAT, $, $$, params,
+  PLAT, $, $$, params,
   library, setLibrary, state, setState, live, trainer, hrm, ctrls,
   bounds, ftp, weight, wkg, mode, planById, allWorkouts, workoutInfo, folderOf, indexLibrary,
   relDate, planProgress, ride, restartAnim,
@@ -29,14 +28,16 @@ import {
 } from './core.js';
 import { startRide, startTest } from './ride.js';
 import { openSettings } from './settings.js';
+import { setSyncCfg, syncOn, scheduleSync, runSync } from './sync.js';
+import { initUpdates } from './updates.js';
 
-// Used by ride.js and settings.js (which import from this module in turn; see the note there).
+// Used by ride.js, settings.js and sync.js (which import from this module in turn; see the note there).
 export {
   api, route, bindActions, openMenu, pointerFocused, weekDay, segmentText, markEntry, applyFtp,
   syncMode, svcMode, svcRoute, SVC_LOGO, refreshServices, uploadToService, manualImport,
-  exportFit, garminImport, uploadToGarmin, updFound, updLater, showUpdateCard,
+  exportFit, garminImport, uploadToGarmin,
   openExternal, applyTheme, applyLanguage, renderProfileChip, THEME_LABEL, devicesMenu, pickDir, loadLibrary,
-  svcCache, setSvcCache, syncOn, syncCfg, setSyncCfg, agoText, syncLabel, runSync, updPrefs, setUpdPrefs, checkUpdate,
+  svcCache, setSvcCache, applyAppState,
 };
 
 // ------------------------------------------------------------------ state
@@ -149,7 +150,7 @@ async function boot() {
 
 /** Take a fresh app_state summary from Rust (after create / edit / switch / delete rider or a sync) and make it the UI state. */
 function applyAppState(a) {
-  if (a.sync !== undefined) syncCfg = a.sync || {};
+  if (a.sync !== undefined) setSyncCfg(a.sync || {});
   profiles = a.profiles;
   setState(a.profile);
   indexHistory();
@@ -164,137 +165,6 @@ async function loadLibrary() {
   setLibrary(await api.library());
   indexLibrary();
   route();
-}
-
-// ------------------------------------------------------------------ profile sync (iCloud Drive / Dropbox / Nextcloud folder)
-let syncCfg = {};
-const setSyncCfg = (c) => { syncCfg = c; };
-let syncTimer = null;
-let syncBusy = false;
-const syncOn = () => syncCfg.provider && syncCfg.provider !== 'off' && !!syncCfg.dir;
-const agoText = (iso) => {
-  const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
-  return s < 45 ? t('justNow') : s < 3600 ? t('minAgo', { n: Math.round(s / 60) }) : s < 86400 ? t('hAgo', { n: Math.round(s / 3600) }) : relDate(iso);
-};
-const SYNC_LABEL = { icloud: 'iCloud Drive', dropbox: 'Dropbox', nextcloud: 'Nextcloud' };
-const syncLabel = (p) => SYNC_LABEL[p] || t('syncFolder');
-
-/** Debounced profile sync after a change; never during a ride (sync can re-render). */
-function scheduleSync(delay = 4000) {
-  if (!syncOn() || syncCfg.auto === false) return;
-  clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => runSync(true), delay);
-}
-
-/** One sync round; quietly applies changes from other Macs (never during a ride). */
-async function runSync(quiet = false) {
-  if (!syncOn()) return null;
-  if (ride || syncBusy) { scheduleSync(30000); return null; }
-  syncBusy = true;
-  try {
-    const r = await invoke('sync_now');
-    syncCfg = { ...syncCfg, lastSync: r.at, lastError: null };
-    if (r.changed && !ride && !modal.open) { applyAppState(r.app); await loadLibrary(); }
-    else if (r.changed) syncCfg.dirty = true;
-    if (!quiet) toast(`${t('syncedWith', { where: syncLabel(syncCfg.provider) })}${r.pulled ? ` · ${t('nUpdated', { n: r.pulled })}` : ''}${r.pending ? ` · ${t('waitingIcloud')}` : ''}`);
-    return r;
-  } catch (e) {
-    syncCfg.lastError = String(e);
-    if (!quiet) toast(t('syncFailed', { e }));
-    return null;
-  } finally { syncBusy = false; }
-}
-
-window.addEventListener('focus', () => { if (syncOn() && Date.now() - Date.parse(syncCfg.lastSync || 0) > 60000) scheduleSync(500); });
-setInterval(() => scheduleSync(0), 5 * 60 * 1000);
-
-// ------------------------------------------------------------------ app updates (signed, from GitHub releases)
-// Rust does the work (updater.rs); this only decides when. Never checks, shows or installs during a ride.
-const RELEASES = 'https://github.com/steffenr/zwo-trainer/releases';
-let updPrefs = { auto: true, available: false }; // available: this build carries an updater key
-const setUpdPrefs = (p) => { updPrefs = p; };
-let updFound = null;     // { version, current, notes } from the last check
-let updLater = null;     // version postponed with "Later" (until the next launch)
-let updBusy = false;
-
-/** In-app updates: read the preferences, then check 8 s after start and every 6 h (never while riding). */
-async function initUpdates() {
-  updPrefs = await invoke('update_status').catch(() => updPrefs);
-  if (!updPrefs.available) return;
-  await listen('update-progress', updateProgress).catch(() => {});
-  setTimeout(autoCheckUpdate, 8000);
-  setInterval(autoCheckUpdate, 6 * 3600 * 1000);
-}
-
-/** Periodic update check, skipped while riding, when switched off, or while one is in progress. */
-function autoCheckUpdate() {
-  if (updPrefs.auto !== false && !ride && !updBusy) checkUpdate(true);
-}
-
-/** One check. quiet: no toast for "up to date" or errors (automatic checks). */
-async function checkUpdate(quiet = false) {
-  if (updBusy) return null;
-  updBusy = true;
-  try {
-    updFound = await invoke('update_check');
-    if (!updFound) { if (!quiet) toast(t('updUpToDate')); return null; }
-    if (ride) { if (!quiet) toast(t('updAfterRide', { v: updFound.version })); }
-    else if (!quiet || updLater !== updFound.version) showUpdateCard();
-    return updFound;
-  } catch (e) {
-    if (!quiet) toast(String(e));
-    return null;
-  } finally { updBusy = false; }
-}
-
-
-/** Show the "update available" card for an update found earlier (not while riding; Later hides it for this version). */
-function showUpdateCard() {
-  if (!updFound || ride) return;
-  const u = updFound;
-  let card = $('#update-card');
-  if (!card) { card = document.createElement('div'); card.id = 'update-card'; card.className = 'update-card'; card.setAttribute('role', 'status'); document.body.append(card); }
-  mount(card, html`<div class="uc-head"><span class="uc-ico">${IC.download}</span><div><b>${tHtml('updAvailable', { v: u.version })}</b><small class="muted">${tHtml('updYouHave', { v: u.current })}</small></div></div>
-    <div class="uc-actions"><button class="btn ghost sm" data-u="notes">${tHtml('updWhatsNew')}</button><span class="grow"></span><button class="btn ghost sm" data-u="later">${tHtml('updLater')}</button><button class="btn primary sm" data-u="install">${tHtml('updInstall')}</button></div>`);
-  card.hidden = false;
-  if (motionOK()) restartAnim(card, 'in');
-  card.onclick = (e) => {
-    const a = e.target.closest('[data-u]')?.dataset.u;
-    if (a === 'notes') invoke('open_link', { url: `${RELEASES}/tag/v${u.version}` }).catch((err) => toast(String(err)));
-    if (a === 'later') { updLater = u.version; hideUpdateCard(); }
-    if (a === 'install') installUpdate();
-  };
-}
-
-function hideUpdateCard() {
-  const card = $('#update-card');
-  if (card) card.hidden = true;
-}
-
-/** Download, verify and install the pending update, showing progress in the card; the app restarts afterwards. */
-async function installUpdate() {
-  const card = $('#update-card');
-  if (ride || !card) return;
-  const ask = OS === 'linux' && html` ${tHtml('updPassword')}`;
-  mount(card, html`<div class="uc-head"><span class="uc-ico">${IC.download}</span><div><b id="uc-status">${tHtml('updDownloading', { v: updFound.version })}</b><small class="muted">${tHtml('updRestarts')}${ask}</small></div></div>
-    <div class="pbar uc-bar"><i class="d" id="uc-bar" style="width:0%"></i></div>`);
-  card.onclick = null;
-  try {
-    await invoke('update_install'); // restarts the app (Windows: the installer quits it)
-  } catch (e) {
-    toast(String(e));
-    showUpdateCard();
-  }
-}
-
-function updateProgress({ done, total }) {
-  const st = $('#uc-status'), bar = $('#uc-bar');
-  if (!st || !bar) return;
-  if (total) {
-    const pct = Math.min(100, Math.round((done / total) * 100));
-    bar.style.width = `${pct}%`;
-    if (pct >= 100) st.textContent = t('updInstalling');
-  }
 }
 
 // ------------------------------------------------------------------ theme & language

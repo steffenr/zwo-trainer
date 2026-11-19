@@ -20,8 +20,9 @@ import {
 import {
   api, route, bindActions, openExternal, applyTheme, applyLanguage, renderProfileChip, THEME_LABEL, devicesMenu,
   pickDir, loadLibrary, refreshServices, svcCache, setSvcCache, svcMode, syncMode, SVC_LOGO,
-  syncOn, syncCfg, setSyncCfg, agoText, syncLabel, runSync, updPrefs, setUpdPrefs, checkUpdate,
 } from './app.js';
+import { syncOn, syncCfg, setSyncCfg, agoText, syncLabel, runSync } from './sync.js';
+import { updPrefs, setUpdPrefs, checkUpdate } from './updates.js';
 
 export { openSettings };
 

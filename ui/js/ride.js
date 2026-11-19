@@ -25,8 +25,9 @@ import {
 import {
   api, route, bindActions, openMenu, pointerFocused, weekDay, segmentText, markEntry, applyFtp,
   syncMode, svcMode, svcRoute, SVC_LOGO, refreshServices, uploadToService, manualImport,
-  exportFit, garminImport, uploadToGarmin, updFound, updLater, showUpdateCard,
+  exportFit, garminImport, uploadToGarmin,
 } from './app.js';
+import { updFound, updLater, showUpdateCard } from './updates.js';
 
 export { startRide, startTest };
 
