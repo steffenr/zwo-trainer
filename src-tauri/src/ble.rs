@@ -1135,6 +1135,36 @@ mod tests {
     }
 
     #[test]
+    fn heart_rate_optional_fields_follow_the_value() {
+        // sensor contact supported + detected (bits 1–2), 8-bit
+        assert_eq!(Value::Object(parse_hr(&[0x06, 72]).unwrap()), json!({ "hr": 72 }));
+        // contact supported but not detected: the strap still reports its value as it is
+        assert_eq!(parse_hr(&[0x04, 72]).unwrap()["hr"], json!(72));
+        assert!(parse_hr(&[0x04, 0]).unwrap().is_empty());
+        // energy expended (bit 3) and RR intervals (bit 4) come after the value
+        assert_eq!(parse_hr(&[0x18, 128, 0x34, 0x12, 0x00, 0x04, 0x10, 0x04]).unwrap()["hr"], json!(128));
+        // 16-bit value with everything: 0x1f
+        assert_eq!(Value::Object(parse_hr(&[0x1f, 0xb4, 0x00, 0x34, 0x12, 0x00, 0x04]).unwrap()), json!({ "hr": 180 }));
+        // energy / RR flags set but their data missing: the value is still read
+        assert_eq!(parse_hr(&[0x18, 128]).unwrap()["hr"], json!(128));
+        assert_eq!(parse_hr(&[0x19, 0x80, 0x00]).unwrap()["hr"], json!(128));
+        // reserved bits are ignored
+        assert_eq!(parse_hr(&[0xe0, 60]).unwrap()["hr"], json!(60));
+        // the 16-bit high byte counts
+        assert_eq!(parse_hr(&[0x01, 0xff, 0xff]).unwrap()["hr"], json!(65535));
+    }
+
+    #[test]
+    fn heart_rate_truncated() {
+        assert_eq!(parse_hr(&[]), None);
+        assert_eq!(parse_hr(&[0x00]), None);
+        assert_eq!(parse_hr(&[0x06]), None);
+        assert_eq!(parse_hr(&[0x01]), None);
+        assert_eq!(parse_hr(&[0x01, 0x48]), None, "16-bit value cut after one byte");
+        assert_eq!(parse_hr(&[0x1f, 0x48]), None);
+    }
+
+    #[test]
     fn power_with_crank() {
         let mut st = None;
         let mk = |revs: u16, t: u16| {
