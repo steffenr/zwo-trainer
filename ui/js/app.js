@@ -1,12 +1,22 @@
-// zwoTrainer UI controller (entry module). Sections, top to bottom:
-//   riders, api and library helpers · boot · theme, riders, top bar · devices menu · routing and views
-//   (renderHome / renderPlan / renderWorkouts / renderTests / renderHistory) · actions (bindActions,
-//   ⋯ menus) · dialogs (preview, workouts folder, devices) · other platforms and uploads.
-// Elsewhere: shared state, DOM helpers, dialogs and toasts in ./core.js; the ride screen and summary in
-// ./ride/ride.js; Settings in ./views/settings.js; profile sync in ./sync.js; in-app updates in ./updates.js.
+// zwoTrainer UI entry module, only wiring: boot, the app state from Rust (api, applyAppState, loadLibrary,
+// pickDir), theme and language, the top bar (mode switch; its buttons and the device events are wired to
+// their modules) and routing (route() renders the view for the hash and mode). The parts live in:
+//   core.js              shared state (with setters), DOM helpers, dialogs and toasts
+//   views/               one module per screen: home, plan, library (Workouts mode and the workout preview),
+//                        tests, history, settings; parts.js holds the pieces several views share
+//   actions.js           VIEW_ACTIONS and bindActions, popovers and ⋯ menus, favourites, plan progress, trash
+//   riders.js            avatars, rider chip, "Who's riding?", the Riders dialog
+//   devices.js           auto-connect, devices popover, device and controller dialogs, device events
+//   connections.js       other platforms (Intervals.icu, COROS), FIT export and Garmin uploads
+//   ride/                the ride screen, its coach line and the ride summary
+//   sync.js, updates.js  profile sync, in-app updates
 // Markup: html`` from ./html.js (auto-escaping) and the helpers in ./components/ for shared pieces;
 // markup reaches the DOM only through mount() (scripts/check-html.mjs). Rust is reached only through
 // invoke() / listen() (ble.js).
+//
+// Import cycles: most of those modules import api, route() and other wiring from here while this module
+// imports them. That is safe because no module calls into another while it is evaluated; boot() runs last,
+// when every module has been evaluated.
 import { motionOK } from './render.js';
 import { bindNative, invoke } from './ble.js';
 import { t, setLocale, systemLocale, coerceLocale, translateDom } from './i18n/index.js';
@@ -22,31 +32,24 @@ import { renderTests } from './views/tests.js';
 import { renderHistory } from './views/history.js';
 import { renderProfileChip, whoIsRiding, profileMenu } from './riders.js';
 import { autoConnect, onButton, onSensor, setBattery, setDev, devicesTitle, devicesMenu } from './devices.js';
-import {
-  refreshServices,
-} from './connections.js';
+import { refreshServices } from './connections.js';
 import { openSettings } from './views/settings.js';
 import { setSyncCfg, syncOn, scheduleSync, runSync } from './sync.js';
 import { initUpdates } from './updates.js';
 
-// Used by ride/ride.js, views/settings.js and sync.js (which import from this module in turn; see the note there).
+// Imported back by actions, riders, devices, connections, views/library, views/tests, views/settings,
+// ride/ride, ride/summary and sync (see the note on import cycles above).
 export {
   api, route, applyTheme, applyLanguage, THEME_LABEL, pickDir, loadLibrary, applyAppState, setMode, refreshView,
 };
 
-// ------------------------------------------------------------------ state
+// ------------------------------------------------------------------ app state from Rust
 const api = {
   appState: () => invoke('app_state'),
   library: () => invoke('scan_library'),
   workout: (file) => invoke('load_workout', { file }),
   saveState: () => { indexHistory(); return invoke('save_profile', { profile: state }).then((r) => { scheduleSync(); return r; }).catch((e) => toast(t('couldNotSave', { e }))); },
 };
-
-let lastView = null;         // micro animations: last rendered view (fade in on change)
-const pbarMemo = new Map();  // plan id -> last progress-bar widths (glide on change)
-
-
-
 
 // ------------------------------------------------------------------ boot
 /**
@@ -103,6 +106,15 @@ async function loadLibrary() {
   route();
 }
 
+/** Ask Rust for a folder (native dialog); resolves the path or null. */
+async function pickDir() {
+  const dir = await invoke('pick_zwo_dir').catch((e) => toast(String(e)));
+  if (!dir) return;
+  setState((await api.appState()).profile);
+  await loadLibrary();
+  toast(t('plansIn', { n: library.plans.length, dir: dir.split(/[\\/]/).pop() }));
+}
+
 // ------------------------------------------------------------------ theme & language
 const THEME_LABEL = { system: 'themeSystem', light: 'themeLight', dark: 'themeDark' };
 
@@ -125,8 +137,7 @@ async function setTheme(th) {
   await api.saveState();
 }
 
-// ------------------------------------------------------------------ chrome: profile, mode, devices
-
+// ------------------------------------------------------------------ top bar: mode switch, buttons, device events
 function renderModeSwitch() {
   const m = mode();
   // toggle buttons in a labelled group (not tabs: there is no tab panel, each click switches the whole view)
@@ -174,9 +185,10 @@ function bindChrome() {
 }
 let pointerDown = false;
 
-
-
 // ------------------------------------------------------------------ routing / views
+let lastView = null;         // micro animations: last rendered view (fade in on change)
+const pbarMemo = new Map();  // plan id -> last progress-bar widths (glide on change)
+
 function route() {
   routeView();
   afterRoute();
@@ -217,39 +229,12 @@ function routeView() {
   renderHome();
 }
 
-
-
-
-
-
-
-
-
-
-
-
 /** Re-render the current view keeping scroll position. */
 function refreshView() {
   const y = window.scrollY;
   route();
   window.scrollTo(0, y);
 }
-
-
-
-
-
-// ------------------------------------------------------------------ workouts folder & device dialogs
-/** Ask Rust for a folder (native dialog); resolves the path or null. */
-async function pickDir() {
-  const dir = await invoke('pick_zwo_dir').catch((e) => toast(String(e)));
-  if (!dir) return;
-  setState((await api.appState()).profile);
-  await loadLibrary();
-  toast(t('plansIn', { n: library.plans.length, dir: dir.split(/[\\/]/).pop() }));
-}
-
-
 
 boot().catch((e) => {
   mount($('#view'), html`<div class="card"><h2>${tHtml('couldNotLoad')}</h2><p>${e.message || String(e)}</p></div>`);

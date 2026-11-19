@@ -3,9 +3,10 @@
 // (FIELDS: number fields and where their valid value goes) and settingsActions() for the buttons.
 // Every control saves at once; the views redraw once when the dialog ends.
 //
-// Import cycle with app.js (app.js opens Settings; this module calls app-level helpers such as route(),
-// applyTheme() and the sync / service functions). Safe because nothing from app.js is used while this
-// module is evaluated, only inside functions that run after boot.
+// Import cycles with app.js (route(), applyTheme(), pickDir() …; app.js opens Settings) and riders.js
+// (renderProfileChip; a new rider opens Settings), and through actions.js, devices.js and connections.js,
+// which import app.js. Safe because nothing from those modules is used while this module is evaluated, only
+// inside functions that run after boot.
 import { ZONES } from '../render.js';
 import { invoke } from '../ble.js';
 import { t, LOCALES, systemLocale, coerceLocale, fmtLocale } from '../i18n/index.js';
