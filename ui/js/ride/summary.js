@@ -16,9 +16,10 @@ import {
   $, state, trainer, bounds, ftp, weight, wkg, planById, planProgress, modal, openModal, closeModal, toast,
 } from '../core.js';
 import {
-  api, bindActions, markEntry, applyFtp,
+  api, bindActions, markEntry,
 } from '../app.js';
 import { weekDay } from '../views/parts.js';
+import { applyFtp } from '../views/tests.js';
 import {
   syncMode, svcMode, SVC_LOGO, refreshServices, svcRoute, uploadToGarmin, uploadToService, garminImport,
   manualImport, exportFit,
