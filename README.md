@@ -403,7 +403,7 @@ Nothing is sent anywhere except what you enable: uploads to the platforms you co
 cd src-tauri && cargo test                                                    # unit tests
 cd src-tauri && cargo clippy --all-targets                                    # lints (keep warning-free)
 ZWO_TEST_DIR=~/Downloads/zwo cargo test scan_real_library -- --nocapture       # parse a whole library
-node --test scripts/*.test.mjs                                                # UI unit tests (compact ride, battery, html``)
+node --test scripts/*.test.mjs                                                # UI unit tests (compact ride, battery, html``, Markdown)
 node scripts/check-i18n.mjs                                                   # translations complete (en / de / fr)
 node scripts/check-css.mjs                                                    # CSS layers, imports, nesting
 node scripts/check-html.mjs                                                   # markup reaches the DOM only through mount()
