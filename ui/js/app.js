@@ -568,7 +568,9 @@ function setDev(kind, s) {
 
 function devicesTitle() {
   const on = Object.values(devState).filter((d) => d.connected).length;
-  $('#btn-devices').title = on ? t('devicesOn', { n: on }) : t('devicesNone');
+  const btn = $('#btn-devices'), label = on ? t('devicesOn', { n: on }) : t('devicesNone');
+  btn.title = label;
+  btn.setAttribute('aria-label', label);   // the dots are aria-hidden, so the label carries the state
 }
 
 /** Content of the devices popover: one row per device kind (state, battery, Change / Connect), then "Retry auto-connect" when saved devices are missing. */
@@ -1465,6 +1467,9 @@ function openModal(markup, cls = '') {
   modal.className = cls;
   modal.onclick = null;   // the previous dialog's action delegation must not handle this one's buttons
   mount($('.modal-body', modal), markup);
+  // name the dialog after its heading (dialogHead() or a plain <h2>); no heading, no reference
+  const head = $('.modal-body h2', modal);
+  if (head) { head.id ||= 'modal-title'; modal.setAttribute('aria-labelledby', head.id); } else modal.removeAttribute('aria-labelledby');
   if (!modal.open) modal.showModal();
   return modal;
 }
@@ -1482,7 +1487,7 @@ let onModalClose = null;
 modal.addEventListener('close', () => { const fn = onModalClose; onModalClose = null; fn?.(); });
 
 /** Yes/no dialog; resolves true when confirmed. Texts are plain text (escaped here). */
-function confirmDialog(title, text, ok = 'OK', danger = false) {
+function confirmDialog(title, text, ok = t('ok'), danger = false) {
   return new Promise((resolve) => {
     openModal(html`<h2>${title}</h2><p>${text}</p><div class="modal-actions"><button class="btn ghost" data-r="0">${tHtml('cancel')}</button><button class="btn ${danger ? 'danger' : 'primary'}" data-r="1">${ok}</button></div>`, 'small');
     const done = (r) => { modal.removeEventListener('close', onClose); closeModal(); resolve(r); };

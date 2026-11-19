@@ -557,6 +557,7 @@ export const fr = {
   upNextIn: 'À suivre dans {name}',
   lastWorkoutDone: 'C’était la dernière séance — plan bouclé ! 🎉',
   done: 'Terminé',
+  ok: 'OK',
   startNextNow: 'Démarrer la suivante',
   uploadingGarmin: 'Envoi vers Garmin…',
   uploadFailed: 'Échec de l’envoi',
