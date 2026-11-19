@@ -1479,7 +1479,7 @@ function openModal(markup, cls = '') {
   if (!modal.open) modal.showModal();
   return modal;
 }
-/** Close #modal with its animation; onModalClose (e.g. Settings) runs afterwards. */
+/** Close #modal with its animation; the dialog's onDialogEnd handlers run when it has closed. */
 function closeModal() {
   if (!modal.open || modalCloseTimer) return;
   if (!motionOK()) return modal.close();
@@ -1488,9 +1488,7 @@ function closeModal() {
 }
 modal.addEventListener('click', (e) => { if (e.target === modal && !modal.classList.contains('sticky')) closeModal(); });
 modal.addEventListener('cancel', (e) => { if (modal.classList.contains('sticky')) e.preventDefault(); });
-// a dialog's own clean-up when it closes (Settings redraws the views once)
-let onModalClose = null;
-modal.addEventListener('close', () => { modalEnd.abort(); const fn = onModalClose; onModalClose = null; fn?.(); });
+modal.addEventListener('close', () => modalEnd.abort());
 
 /** Yes/no dialog; resolves true when confirmed. Texts are plain text (escaped here). */
 function confirmDialog(title, text, ok = t('ok'), danger = false) {
@@ -1825,8 +1823,9 @@ async function openSettings(tab = 'rider') {
     clearTimeout(statusTimer);
     statusTimer = setTimeout(() => (status.textContent = t('autoSaved')), 1800);
   };
-  // views (FTP, zones, …) redraw once, when the dialog closes — never while typing
-  onModalClose = () => { if (settingsDirty && !ride) route(); settingsDirty = false; };
+  // views (FTP, zones, …) redraw once, when Settings ends (closed, or replaced by a confirmation)
+  // — never while typing
+  onDialogEnd(() => { if (settingsDirty && !ride) route(); settingsDirty = false; });
 
   $('#set-tabs', modal).onclick = (e) => {
     const b = e.target.closest('[data-tab]');
