@@ -848,12 +848,15 @@ pub fn parse_power(v: &[u8], crank: &mut Option<CrankState>) -> Option<Map<Strin
     Some(out)
 }
 
-/// Heart Rate Measurement (0x2A37).
+/// Heart Rate Measurement (0x2A37). 0 bpm (no skin contact) is left out, like in Indoor Bike
+/// Data, so the UI lets the last value go stale instead of recording zeros.
 pub fn parse_hr(v: &[u8]) -> Option<Map<String, Value>> {
     let flags = *v.first()?;
     let hr = if flags & 1 != 0 { u16le(v, 1)? } else { *v.get(1)? as u16 };
     let mut out = Map::new();
-    out.insert("hr".into(), json!(hr));
+    if hr > 0 {
+        out.insert("hr".into(), json!(hr));
+    }
     Some(out)
 }
 
@@ -1001,6 +1004,9 @@ mod tests {
     fn heart_rate() {
         assert_eq!(parse_hr(&[0x00, 142]).unwrap()["hr"], json!(142));
         assert_eq!(parse_hr(&[0x01, 0x2c, 0x01]).unwrap()["hr"], json!(300));
+        // poor strap contact: no value rather than 0 bpm (same as Indoor Bike Data)
+        assert!(parse_hr(&[0x00, 0]).unwrap().is_empty());
+        assert!(parse_hr(&[0x01, 0, 0]).unwrap().is_empty());
     }
 
     #[test]
