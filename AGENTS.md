@@ -174,7 +174,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 **Rust**
 - `Result<T, String>` at the command boundary (`type Res<T>`). Error strings are shown to the user, so make them short, plain English and actionable.
 - **No new crates without a strong reason;** keep the release binary small (`opt-level = "s"`, LTO). Prefer std plus existing deps (serde_json `Value` for flexible JSON).
-- **File writes** go through `state::write_json` (tmp + rename) and must never be partial.
+- **File writes** go through `state::write_json` (tmp + fsync + rename) and must never be partial.
 - **Paths from the UI** are relative to the workouts folder and pass `library::inside_root` (path-traversal guard). Deleting goes to the Trash (`trash` crate), never `remove_file` on user content.
 - **Bluetooth:** dedupe ERG writes, never block the async runtime (use `spawn_blocking` for blocking work), reconnect silently.
 - **Tests:** every parser, encoder, protocol decoder and merge rule has unit tests next to the code (`#[cfg(test)] mod tests`). Add one for every bug fix.
@@ -238,6 +238,7 @@ UI (vanilla ES modules) ──invoke(cmd, args)──▶ Rust commands (lib.rs) 
 - **Activity names:** FIT has no activity-title field. `fit::encode` writes a `workout` message (`wkt_name`, max 63 bytes) plus up to 100 `workout_step`s from `Ride.steps` (power targets as watts + 1000; > 100 steps → name only), like a structured workout from an Edge. Garmin Connect ignores it when importing (tested Oct 2026: the activity is still named by Garmin's default), but FIT readers such as Strautomator can use it. After a Garmin upload, `garmin::rename` sets `activityName` / `description` (`PUT /activity-service/activity/{id}`). If Garmin hasn't returned an id yet, `find_by_start` matches the latest activities by start time (the UI passes `start`). Intervals.icu gets `name` on upload plus a `PUT /api/v1/activity/{id}`. Names come from `rideMeta()` in app.js.
 - **Garmin:** the sign-in runs on Garmin's own page in a WebviewWindow; we only read the `ST-` ticket. Never inject credentials or scrape the password field.
 - **Sync:** the newest profile wins, history and tests are unioned, deletions use tombstones, and history `*Path` fields are relocated per Mac. Changing merge rules needs a test in `sync.rs`.
+- **Damaged state (`state.rs`):** a `state.json` / `secrets.json` that doesn't parse as a JSON object is renamed to `<name>.corrupt-<unix>` before defaults are created; if it can't be read or moved aside, `read_json_object` fails and writes are refused instead of replacing it. `write_json` fsyncs the tmp file before the rename and creates secrets with mode 0600.
 - **Other platforms (`services.rs`):**
   - Only platforms with **automatic upload for everyone** (Intervals.icu) plus COROS's manual import are supported, to keep the app simple.
   - Wahoo, TrainingPeaks and Suunto need approved partner apps and were removed on purpose; don't re-add them. **Never copy another app's client ids or secrets.**
