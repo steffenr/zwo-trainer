@@ -453,7 +453,13 @@ function bindChrome() {
   hrm.on('data', onSensor);
   ctrls.on('status', (s) => { setDev('controller', s); ride?.render(true); });
   document.addEventListener('keydown', (e) => ride?.onKey(e));
+  // where focus came from, for the ride's Space / Enter rule (Ride.keyTarget): an element focused by a click
+  // or tap is remembered; one reached with Tab or focused by the app is not
+  document.addEventListener('pointerdown', () => { pointerDown = true; }, true);
+  document.addEventListener('pointerup', () => { pointerDown = false; }, true);
+  document.addEventListener('focusin', (e) => { pointerFocused = pointerDown ? e.target : null; }, true);
 }
+let pointerDown = false, pointerFocused = null;
 
 // kinds with a connection attempt from connectSaved() still running (hides "Retry auto-connect" meanwhile)
 const connectingKinds = new Set();
@@ -1461,11 +1467,17 @@ async function unskip(file) {
 // ------------------------------------------------------------------ modals
 const modal = $('#modal');
 let modalCloseTimer = null;
+// The shown dialog's lifetime: aborted when #modal closes or the next openModal replaces the content.
+let modalEnd = new AbortController();
+/** Run fn once when the dialog just opened ends (closed or replaced). Call it right after openModal. */
+const onDialogEnd = (fn) => modalEnd.signal.addEventListener('abort', fn, { once: true });
 /** Show #modal with an html`` fragment and size classes (small, wide, settings …). One dialog at a time; a plain string would show as text. */
 function openModal(markup, cls = '') {
   if (modalCloseTimer) { clearTimeout(modalCloseTimer); modalCloseTimer = null; } // reopened while fading out: keep it open
   modal.className = cls;
   modal.onclick = null;   // the previous dialog's action delegation must not handle this one's buttons
+  modalEnd.abort();       // the previous dialog ends here, even if #modal never closed in between
+  modalEnd = new AbortController();
   mount($('.modal-body', modal), markup);
   // name the dialog after its heading (dialogHead() or a plain <h2>); no heading, no reference
   const head = $('.modal-body h2', modal);
@@ -1473,7 +1485,7 @@ function openModal(markup, cls = '') {
   if (!modal.open) modal.showModal();
   return modal;
 }
-/** Close #modal with its animation; onModalClose (e.g. Settings) runs afterwards. */
+/** Close #modal with its animation; the dialog's onDialogEnd handlers run when it has closed. */
 function closeModal() {
   if (!modal.open || modalCloseTimer) return;
   if (!motionOK()) return modal.close();
@@ -1482,18 +1494,17 @@ function closeModal() {
 }
 modal.addEventListener('click', (e) => { if (e.target === modal && !modal.classList.contains('sticky')) closeModal(); });
 modal.addEventListener('cancel', (e) => { if (modal.classList.contains('sticky')) e.preventDefault(); });
-// a dialog's own clean-up when it closes (Settings redraws the views once)
-let onModalClose = null;
-modal.addEventListener('close', () => { const fn = onModalClose; onModalClose = null; fn?.(); });
+// The close event arrives a task after modal.close(). Without motion closeModal() closes at once,
+// and a dialog opened right after (e.g. the preview's Skip → confirmation) is already showing when
+// it lands: that late event belongs to the previous dialog, which openModal already ended.
+modal.addEventListener('close', () => { if (!modal.open) modalEnd.abort(); });
 
 /** Yes/no dialog; resolves true when confirmed. Texts are plain text (escaped here). */
 function confirmDialog(title, text, ok = t('ok'), danger = false) {
   return new Promise((resolve) => {
     openModal(html`<h2>${title}</h2><p>${text}</p><div class="modal-actions"><button class="btn ghost" data-r="0">${tHtml('cancel')}</button><button class="btn ${danger ? 'danger' : 'primary'}" data-r="1">${ok}</button></div>`, 'small');
-    const done = (r) => { modal.removeEventListener('close', onClose); closeModal(); resolve(r); };
-    const onClose = () => resolve(false);
-    modal.addEventListener('close', onClose, { once: true });
-    $$('[data-r]', modal).forEach((b) => (b.onclick = () => done(b.dataset.r === '1')));
+    onDialogEnd(() => resolve(false));   // Esc, backdrop or replaced by another dialog
+    $$('[data-r]', modal).forEach((b) => (b.onclick = () => { resolve(b.dataset.r === '1'); closeModal(); }));
   });
 }
 
@@ -1501,12 +1512,11 @@ function confirmDialog(title, text, ok = t('ok'), danger = false) {
 function promptDialog(title, value = '') {
   return new Promise((resolve) => {
     openModal(html`<h2>${title}</h2><form id="pf"><input type="text" name="v" value="${value}" maxlength="40" class="full" autocomplete="off"><div class="modal-actions"><button class="btn ghost" type="button" data-r="0">${tHtml('cancel')}</button><button class="btn primary" type="submit">${tHtml('save')}</button></div></form>`, 'small');
-    let settled = false;
     const f = $('#pf', modal);
     f.v.select();
-    f.onsubmit = (e) => { e.preventDefault(); settled = true; const v = f.v.value.trim(); closeModal(); resolve(v || null); };
-    $('[data-r]', modal).onclick = () => { settled = true; closeModal(); resolve(null); };
-    modal.addEventListener('close', () => { if (!settled) resolve(null); }, { once: true });
+    onDialogEnd(() => resolve(null));
+    f.onsubmit = (e) => { e.preventDefault(); resolve(f.v.value.trim() || null); closeModal(); };
+    $('[data-r]', modal).onclick = () => { resolve(null); closeModal(); };
   });
 }
 
@@ -1575,7 +1585,7 @@ async function openPreview(file) {
     </div>
     <div class="pv-diagram"></div>
     <div class="seg-info muted">${tHtml('tapSegment', { ftp: ftp() })}</div>
-    ${raw(zoneBreakdown(workout))}
+    ${zoneBreakdown(workout)}
     ${workout.description && html`<p class="pv-desc">${workout.description}</p>`}
     <div class="modal-actions">${actions}</div>`, 'wide');
 
@@ -1606,8 +1616,8 @@ function zoneBreakdown(workout) {
     for (let i = 0; i < n; i++) secs[zoneOf(powerAt(s, ((i + 0.5) / n) * s.duration), bounds()).id - 1] += s.duration / n;
   }
   const total = workout.duration || 1;
-  return `<div class="zones-bar">${ZONES.map((z, i) => secs[i] ? `<i style="flex:${secs[i]};background:${z.color}" title="${z.short} ${z.name}: ${fmtTime(secs[i])}"></i>` : '').join('')}${free ? `<i style="flex:${free};background:${FREE_COLOR}" title="${t('freeRide')} ${fmtTime(free)}"></i>` : ''}</div>
-  <div class="zones-legend">${ZONES.map((z, i) => `<span><i style="background:${z.color}"></i>${z.short} ${z.name} <b>${pct(Math.round((secs[i] / total) * 100))}</b></span>`).join('')}</div>`;
+  return html`<div class="zones-bar">${ZONES.map((z, i) => secs[i] > 0 && html`<i style="flex:${secs[i]};background:${z.color}" title="${z.short} ${z.name}: ${fmtTime(secs[i])}"></i>`)}${free > 0 && html`<i style="flex:${free};background:${FREE_COLOR}" title="${tText('freeRide')} ${fmtTime(free)}"></i>`}</div>
+  <div class="zones-legend">${ZONES.map((z, i) => html`<span><i style="background:${z.color}"></i>${z.short} ${z.name} <b>${pct(Math.round((secs[i] / total) * 100))}</b></span>`)}</div>`;
 }
 
 function targetText(s, mult = 1) {
@@ -1822,8 +1832,9 @@ async function openSettings(tab = 'rider') {
     clearTimeout(statusTimer);
     statusTimer = setTimeout(() => (status.textContent = t('autoSaved')), 1800);
   };
-  // views (FTP, zones, …) redraw once, when the dialog closes — never while typing
-  onModalClose = () => { if (settingsDirty && !ride) route(); settingsDirty = false; };
+  // views (FTP, zones, …) redraw once, when Settings ends (closed, or replaced by a confirmation)
+  // — never while typing
+  onDialogEnd(() => { if (settingsDirty && !ride) route(); settingsDirty = false; });
 
   $('#set-tabs', modal).onclick = (e) => {
     const b = e.target.closest('[data-tab]');
@@ -2427,7 +2438,7 @@ class Ride {
     this.wake();
     this.loop = setInterval(() => this.tick(), 250);
     this.last = performance.now();
-    this.render(true);
+    this.drive(); this.render(true);
   }
 
   /** Render the ride screen once (panels, chart, controls, compact view). Never called again on resize: compact mode only toggles CSS. */
@@ -2611,7 +2622,7 @@ class Ride {
     api.saveState();
     const ctl = $('#vs-choice');
     if (ctl) selectSeg(ctl, $(`[data-v="${v}"]`, ctl));
-    this.render(true);
+    this.drive(); this.render(true);
   }
 
   get freeLike() {
@@ -2656,7 +2667,7 @@ class Ride {
     if (this.freeLike && !this.vs.on) { this.vs.on = true; } // shifting implies virtual gears
     const lbl = $('#gear-lbl');
     lbl?.classList.remove('flash'); void lbl?.offsetWidth; lbl?.classList.add('flash');
-    this.render(true);
+    this.drive(); this.render(true);
   }
 
   /** Update the LIVE panel's connection state (dot and label) when a device connects or drops out. */
@@ -2687,7 +2698,7 @@ class Ride {
   adjust(d) {
     const old = this.intensity;
     this.intensity = Math.max(50, Math.min(150, this.intensity + d));
-    this.render(true);
+    this.drive(); this.render(true);
     if (this.intensity !== old && motionOK()) restartAnim($('#int-val'), this.intensity > old ? 'roll-up' : 'roll-down', ['roll-up', 'roll-down']);
   }
 
@@ -2714,7 +2725,7 @@ class Ride {
     this.t = Math.max(0, Math.min(this.w.duration - 0.01, to));
     this.lastSec = Math.floor(this.t) - 1; // record from where the jump lands, never the skipped seconds
     this.beeped.clear();
-    this.render(true);
+    this.drive(); this.render(true);
   }
 
   /** Ride controls (buttons, keys, controllers): play/pause, previous/next segment, ±1 min, stop. */
@@ -2750,7 +2761,7 @@ class Ride {
     if (this.running) trainer.resume();
     $('#ride').classList.toggle('paused', !this.running);
     $('#ride').classList.toggle('auto-paused', this.autoPaused);
-    this.render(true);
+    this.drive(); this.render(true);
   }
 
   /** Autopause: pause after a few seconds without power, resume as soon as the rider pedals again. */
@@ -2771,13 +2782,21 @@ class Ride {
     }
   }
 
+  /** True when Space / Enter belong to the focused element rather than to the ride shortcuts: a control the
+   *  rider reached with the keyboard, or any focused radio / tab. A control focused by a click keeps the shortcuts. */
+  keyTarget(el) {
+    if (!el?.matches?.('button, a[href], select, textarea, summary, [tabindex], [role]')) return false;
+    return el.matches('[role=radio], [role=tab]') || el !== pointerFocused;
+  }
+
   /** Keyboard shortcuts while riding (space, arrows, +/−); ignored in dialogs, inputs, or when switched off in Settings. */
   onKey(e) {
     // an open popover menu owns the keyboard (Esc closes it, never stops the ride)
     if (this.ending || modal.open || $('#popover') || e.target.matches('input') || state.settings.keyboardShortcuts === false) return;
-    // Space / Enter on a focused radio (free-ride choice) selects it instead of play/pause. Plain buttons
-    // keep the shortcut: after clicking "next", Space should still pause, not skip again.
-    if ((e.key === ' ' || e.key === 'Enter') && e.target.closest?.('[role=radio], [role=tab]')) return;
+    // Space / Enter activate a control the rider reached with the keyboard (Tab), and always
+    // select a focused radio or tab (free-ride choice). A button that only has focus because it was clicked
+    // keeps the shortcut: after clicking "next", Space should still pause, not skip again.
+    if ((e.key === ' ' || e.key === 'Enter') && this.keyTarget(e.target)) return;
     const map = { ' ': 'play', ArrowRight: 'next', ArrowLeft: 'prev', Escape: 'stop' };
     if (map[e.key]) { e.preventDefault(); return this.control(map[e.key]); }
     if (e.key === '+' || e.key === '=') { e.preventDefault(); return this.shift(1); }
@@ -2787,7 +2806,7 @@ class Ride {
     if (e.key === 'ArrowDown') { e.preventDefault(); this.adjust(e.shiftKey ? -10 : -1); }
   }
 
-  /** Main loop, every 250 ms: advance time, target power and ERG, 1 Hz samples, auto-pause, countdown cues, coach line, render(). */
+  /** Main loop, every 250 ms: advance time, 1 Hz samples, auto-pause, ramp-test end, then trainer control (drive()) and render(). */
   tick() {
     const now = performance.now();
     const realDt = (now - this.last) / 1000;
@@ -2831,6 +2850,7 @@ class Ride {
         if (this.lowCount >= 10) this.rampCooldown();
       }
     }
+    this.drive();
     this.render(false);
   }
 
@@ -2852,7 +2872,7 @@ class Ride {
     this.diagram.draw();
     $('#d-tot').textContent = t('ofTime', { time: fmtTime(total) });
     this.hint(t('rampComplete'));
-    this.render(true);
+    this.drive(); this.render(true);
   }
 
   get targetFrac() {
@@ -2876,8 +2896,6 @@ class Ride {
     return el;
   }
 
-  /** Update the ride screen from the current state. Cheap on purpose (4× per second): cached elements, writes only on change;
-   * `force` redraws everything that otherwise only changes with the segment. */
   /** Same cache for a selector (first match), for elements without an id. */
   qs(sel) {
     let el = this.sels?.get(sel);
@@ -2898,6 +2916,36 @@ class Ride {
     return list;
   }
 
+  /**
+   * Trainer control: ERG target, free ride, or a virtual-shifting target. Called every tick and right after
+   * anything that changes the target (intensity, seek, start/resume, shifting, a shortened ramp), so the
+   * resistance follows at once. ERG targets are deduplicated (Trainer.send); virtual-shifting targets go out
+   * at most every 900 ms, also on a shift (the next tick sends the latest). Once the ride is ending finish()
+   * has released ERG and nothing is sent again. Sets vsActive / vsSpeed / vs.watts for render() and recording.
+   */
+  drive() {
+    const segs = this.w.segments;
+    const s = segs[Math.max(0, segmentAt(segs, Math.min(this.t, this.w.duration - 0.01)))];
+    const f = powerAt(s, this.t - s.start);
+    const freeLike = f === null || s.erg === false;
+    this.vsActive = freeLike && this.vs.on && trainer.connected && trainer.canErg && !this.ending;
+    this.vsSpeed = null;
+    if (this.vsActive) {
+      const cad = fresh('cadence');
+      const ratio = this.gears[this.gear];
+      this.vsSpeed = virtualSpeed(cad, ratio);
+      const raw = targetWatts(cad, ratio, weight() || 75, this.vs.difficulty);
+      this.vs.watts = this.vs.watts == null ? raw : Math.round(this.vs.watts * 0.5 + raw * 0.5);
+      const now = performance.now();
+      if (now - this.vs.sentAt > 900) { trainer.setTargetPower(this.vs.watts); this.vs.sentAt = now; }
+    } else if (trainer.connected && !this.ending) {
+      this.vs.watts = null;
+      if (freeLike) trainer.setFreeRide(); else trainer.setTargetPower(Math.round(f * this.mult() * ftp()));
+    }
+  }
+
+  /** Update the ride screen from the current state. Cheap on purpose (4× per second): cached elements, writes only on change;
+   * `force` redraws everything that otherwise only changes with the segment. Only paints: it never talks to the trainer (drive()). */
   render(force) {
     const segs = this.w.segments;
     const idx = Math.max(0, segmentAt(segs, Math.min(this.t, this.w.duration - 0.01)));
@@ -2910,22 +2958,9 @@ class Ride {
     const tw = this.targetW;
     const F = ftp();
 
-    // trainer control
     const allOut = s.erg === false;
     const freeLike = tw === null || allOut;
-    // once the ride ends, finish() has released ERG; nothing may send a target again
-    const vsActive = freeLike && this.vs.on && trainer.connected && trainer.canErg && !this.ending;
-    let vsSpeed = null;
-    if (vsActive) {
-      const cad = fresh('cadence');
-      const ratio = this.gears[this.gear];
-      vsSpeed = virtualSpeed(cad, ratio);
-      const raw = targetWatts(cad, ratio, weight() || 75, this.vs.difficulty);
-      this.vs.watts = this.vs.watts == null ? raw : Math.round(this.vs.watts * 0.5 + raw * 0.5);
-      const now = performance.now();
-      if (now - this.vs.sentAt > 900 || force) { trainer.setTargetPower(this.vs.watts); this.vs.sentAt = now; }
-    } else if (trainer.connected && !this.ending) { this.vs.watts = null; if (freeLike) trainer.setFreeRide(); else trainer.setTargetPower(tw); }
-    this.vsSpeed = vsSpeed;
+    const vsActive = this.vsActive, vsSpeed = this.vsSpeed; // set by drive()
     const gb = this.q('gearbox');
     if (gb) {
       gb.hidden = !(freeLike && (this.vs.on || ctrls.connected));
@@ -3122,7 +3157,7 @@ class Ride {
    * unless a more important one replaces it. Automatic hints can be switched off (Settings → App).
    */
   coach(s, { segChanged, inSeg, rem, allOut, freeLike, gt, p, c, cLo, cHi, dev, cadState, paceFast }) {
-    const el = $('#coach');
+    const el = this.q('coach');
     if (!el) return;
     const now = performance.now() / 1000;
     const k = (this.cz ||= { cadOff: null, cadOn: null, cadShown: false, powLow: null, cur: null, since: 0 });
@@ -3368,9 +3403,13 @@ class Ride {
     if (!hold) startAutoUploads();
   }
 
-  /** Leave the ride screen: expand from compact, release devices to idle, restore the normal views and pending updates. */
+  /** Leave the ride screen: expand from compact, release devices to idle, restore the normal views and pending updates.
+   *  The teardown always runs, even when the window can't be restored to full size: a stuck ride screen with
+   *  `ride` still set would keep sync and profile switching deferred. CompactView already reported the error. */
   async close() {
-    if (!await this.compact.set(false)) return;
+    let restored = false;
+    try { restored = await this.compact.set(false); } catch (err) { toast(String(err)); }
+    if (!restored) document.body.classList.remove('compact-riding');
     clearInterval(this.loop);
     this.ending = true;
     trainer.setFreeRide(); // release ERG (also on Discard, which skips finish())
@@ -3394,9 +3433,8 @@ class Ride {
 function choiceDialog(title, text, options) {
   return new Promise((resolve) => {
     openModal(html`<h2>${title}</h2><p>${text}</p><div class="modal-actions">${options.map(([v, l, c]) => html`<button class="btn ${c}" data-v="${v}">${l}</button>`)}</div>`, 'small');
-    let settled = false;
-    modal.addEventListener('close', () => { if (!settled) resolve(null); }, { once: true });
-    $$('[data-v]', modal).forEach((b) => (b.onclick = () => { settled = true; closeModal(); resolve(b.dataset.v); }));
+    onDialogEnd(() => resolve(null));
+    $$('[data-v]', modal).forEach((b) => (b.onclick = () => { resolve(b.dataset.v); closeModal(); }));
   });
 }
 

@@ -6,19 +6,32 @@
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-/** Inline formatting on an already-escaped line. Links become data-link anchors. */
-function inline(text) {
-  const codes = [];
-  let t = text.replace(/`([^`]+)`/g, (_, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
-  const link = (label, url) => {
-    const u = url.replace(/&amp;/g, '&');
-    return /^https?:\/\//i.test(u) ? `<a href="#" class="md-link" data-act="md-link" data-link="${esc(u)}" title="${esc(u)}">${label}</a>` : label;
-  };
-  t = t.replace(/\[([^\]]+)\]\(\s*([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\s*\)/g, (_, l, u) => link(l, u));
-  t = t.replace(/(^|[\s(])(https?:\/\/[^\s<)]+[^\s<).,;:!?])/g, (_, pre, u) => `${pre}${link(u, u)}`);
+/** **bold**, *italic* / _italic_ and ~~strike~~ on already-escaped text. */
+function emphasis(t) {
   t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/__([^_]+)__/g, '<strong>$1</strong>');
   t = t.replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, '$1<em>$2</em>').replace(/(^|[^_\w])_([^_\s][^_]*?)_(?!\w)/g, '$1<em>$2</em>');
-  t = t.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+  return t.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+}
+
+/** Inline formatting on an already-escaped line. Links become data-link anchors.
+ *  Code spans and finished links are swapped for placeholders before emphasis runs,
+ *  so `_` / `*` in code, URLs or link markup never turn into <em> / <strong>. */
+function inline(text) {
+  const codes = [];
+  const links = [];
+  let t = text.replace(/`([^`]+)`/g, (_, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
+  const link = (label, url) => {
+    const u = url.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+    if (!/^https?:\/\//i.test(u)) return label;
+    links.push(`<a href="#" class="md-link" data-act="md-link" data-link="${esc(u)}" title="${esc(u)}">${label}</a>`);
+    return `\u0001${links.length - 1}\u0001`;
+  };
+  // A Markdown link's label gets its own emphasis pass; a bare URL is shown as it is
+  // (it may sit inside *…* / **…**, so it never ends with a star).
+  t = t.replace(/\[([^\]]+)\]\(\s*([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\s*\)/g, (_, l, u) => link(emphasis(l), u));
+  t = t.replace(/(^|[\s(*])(https?:\/\/[^\s<)]+[^\s<).,;:!?*])/g, (_, pre, u) => `${pre}${link(u, u)}`);
+  t = emphasis(t);
+  t = t.replace(/\u0001(\d+)\u0001/g, (_, i) => links[+i]);
   return t.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[+i]}</code>`);
 }
 
