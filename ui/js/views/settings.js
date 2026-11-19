@@ -14,13 +14,14 @@ import { IC } from '../components/icons.js';
 import { dialogHead } from '../components/dialog.js';
 import { segRow, selectSeg } from '../components/buttons.js';
 import {
-  PLAT, $, $$, library, state, setState, ride, trainer, shifting, ftp, maxHr, weight,
-  modal, onDialogEnd, openModal, closeModal, confirmDialog, toast,
+  PLAT, $, $$, library, state, setState, ride, shifting, modal, onDialogEnd, openModal, closeModal,
+  confirmDialog, toast,
 } from '../core.js';
 import {
   api, route, bindActions, openExternal, applyTheme, applyLanguage, renderProfileChip, THEME_LABEL, devicesMenu,
-  pickDir, loadLibrary, refreshServices, svcCache, setSvcCache, svcMode, syncMode, SVC_LOGO,
+  pickDir, loadLibrary,
 } from '../app.js';
+import { svcMode, SVC_LOGO, syncMode, refreshServices, setSvcCache, svcCache } from '../connections.js';
 import { syncOn, syncCfg, setSyncCfg, agoText, syncLabel, runSync } from '../sync.js';
 import { updPrefs, setUpdPrefs, checkUpdate } from '../updates.js';
 
