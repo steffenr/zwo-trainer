@@ -2941,9 +2941,12 @@ class Ride {
     }
   }
 
-  /** Update the ride screen from the current state. Cheap on purpose (4× per second): cached elements, writes only on change;
-   * `force` redraws everything that otherwise only changes with the segment. Only paints: it never talks to the trainer (drive()). */
-  render(force) {
+  /**
+   * What one render() paints from, computed once per tick: the segment (and whether it changed), time in it,
+   * targets, fresh sensor values and the cadence state. renderPacing() adds `paceFast` for coach().
+   * Moves segIdx to the segment at `t` first, so targetFrac / targetW read the current one.
+   */
+  frame() {
     const segs = this.w.segments;
     const idx = Math.max(0, segmentAt(segs, Math.min(this.t, this.w.duration - 0.01)));
     const segChanged = idx !== this.segIdx;
@@ -2954,44 +2957,71 @@ class Ride {
     const tf = this.targetFrac;
     const tw = this.targetW;
     const F = ftp();
-
     const allOut = s.erg === false;
     const freeLike = tw === null || allOut;
     const vsActive = this.vsActive, vsSpeed = this.vsSpeed; // set by drive()
+    const p = fresh('power'), c = fresh('cadence'), hr = fresh('hr'), v = fresh('speed');
+    const gt = vsActive ? this.vs.watts : allOut ? null : tw;
+    // cadence vs target (Zwift: Cadence / CadenceLow+High): green on target, amber ±5–10, red beyond 10 rpm
+    const cLo = s.cadenceLow ?? s.cadence, cHi = s.cadenceHigh ?? s.cadence;
+    const dev = c != null && cLo != null ? (c < cLo ? cLo - c : c > cHi ? c - cHi : 0) : null;
+    const cadState = dev == null ? '' : dev > 10 ? 'bad' : dev > 5 ? 'warn' : 'good';
+    const live = this.running || !this.started; // the cadence warning shows while riding or before the start
+    return {
+      idx, segChanged, s, n: segs[idx + 1], inSeg, rem, tf, tw, F, allOut, freeLike, vsActive, vsSpeed,
+      p, c, hr, v, gt, cLo, cHi, dev, cadState, live, color: zoneColor(tf, bounds()), paceFast: false,
+    };
+  }
+
+  /** Update the ride screen from the current state. Cheap on purpose (4× per second): cached elements, writes only on change;
+   * `force` redraws everything that otherwise only changes with the segment. Only paints: it never talks to the trainer (drive()). */
+  render(force) {
+    const f = this.frame();
+    this.renderGears(f);
+    this.beeps(f);
+    this.renderLive(f);
+    this.renderSegment(f);
+    if (f.segChanged || force) this.renderSegmentChange(f);
+    this.animReady = true;
+    this.coach(f.s, f);
+    setText(this.q('d-el'), fmtTime(this.t));
+    setText(this.q('d-rem'), fmtTime(Math.max(0, Math.ceil(this.w.duration - this.t))));
+    this.renderCompact(f); // after the full view: it copies some of its values
+    this.renderControls();
+  }
+
+  /** Gear box (free-ride segments with virtual shifting or a controller): current gear and ratio. */
+  renderGears({ freeLike, vsActive }) {
     const gb = this.q('gearbox');
     if (gb) {
       gb.hidden = !(freeLike && (this.vs.on || ctrls.connected));
       setHtml(this.q('gear-lbl'), html`<b>${tHtml('gearN', { n: this.gear + 1 })}</b><small>/${this.gears.length} · ${this.gears[this.gear].toFixed(2)}${vsActive && ` · ${this.vs.watts} W`}</small>`);
     }
+  }
 
-    // beeps: last 3 s before a change of target
-    const n = segs[idx + 1];
+  /** Countdown beeps: last 3 s before a change of target. */
+  beeps({ idx, s, n, rem }) {
     if (state.settings.beeps && this.running && n && rem <= 3.05 && rem > 0) {
       const sec = Math.min(3, Math.ceil(rem)), k = `${idx}:${sec}`;
       if (!this.beeped.has(k)) { this.beeped.add(k); countdown(sec, state.settings.beepDirection !== false ? cueDir(s, n) : null); }
     }
+  }
 
+  /** ERG state label and the LIVE panel: power, cadence, speed, heart rate, gauge. */
+  renderLive({ s, F, allOut, freeLike, vsActive, vsSpeed, p, c, hr, v, gt, cLo, cHi, cadState, live }) {
     const ergEl = this.q('erg-state');
     if (ergEl && trainer.connected && trainer.canErg) {
       setText(ergEl, vsActive ? `${t('virtualGears')} · ${t(`diff.${this.vs.difficulty}`)}` : freeLike ? t('ergOffGears') : 'ERG');
       ergEl.className = vsActive ? 'erg vs' : freeLike ? 'erg off' : 'erg on';
     }
 
-    // LIVE panel
-    const p = fresh('power'), c = fresh('cadence'), hr = fresh('hr'), v = fresh('speed');
-    const gt = vsActive ? this.vs.watts : allOut ? null : tw;
     setText(this.q('m-pow'), p ?? '–');
     // power bar: 0…1.5× target, coloured by the zone you're riding in (the target is on the gauge)
     const pRef = gt || F;
     setBar(this.q('b-pow'), p != null ? p / (pRef * 1.5) : 0, { color: p != null ? zoneColor(p / F, bounds()) : null });
 
-    // cadence vs target (Zwift: Cadence / CadenceLow+High): green on target, amber ±5–10, red beyond 10 rpm
-    const cLo = s.cadenceLow ?? s.cadence, cHi = s.cadenceHigh ?? s.cadence;
     setText(this.q('v-cad'), c != null ? Math.round(c) : '–');
     setText(this.q('t-cad'), cLo != null ? `/ ${cLo === cHi ? cLo : `${cLo}–${cHi}`}` : '');
-    const dev = c != null && cLo != null ? (c < cLo ? cLo - c : c > cHi ? c - cHi : 0) : null;
-    const cadState = dev == null ? '' : dev > 10 ? 'bad' : dev > 5 ? 'warn' : 'good';
-    const live = this.running || !this.started;
     this.q('v-cad').classList.toggle('off-target', live && cadState === 'bad');
     this.q('t-cad').className = live ? cadState : '';
     const CMIN = 40, CMAX = 130, cf = (x) => (x - CMIN) / (CMAX - CMIN);
@@ -3018,9 +3048,11 @@ class Ride {
     const gEl = this.q('gauge');
     if (gt != null) gEl.style.setProperty('--glow', zoneColor(gt / F, bounds()));
     gEl.classList.toggle('on-target', onT && performance.now() - this.onSince >= 3000);
+  }
 
-    // CURRENT SEGMENT
-    const color = zoneColor(tf, bounds());
+  /** CURRENT SEGMENT panel: progress ring, target (or test pacing), cadence target, time left. */
+  renderSegment(f) {
+    const { s, n, inSeg, rem, tf, tw, F, allOut, vsActive, gt, cLo, cHi, color } = f;
     this.ring.update(Math.min(1, inSeg / s.duration), color);
     if (s.p0 === null) { this.q('s-target').classList.remove('range'); setText(this.q('s-target'), s.type === 'maxeffort' ? t('bigMax') : t('bigFree')); setText(this.q('s-watts'), vsActive ? t('virtualShiftingLc') : t('rideByFeel')); }
     else {
@@ -3032,26 +3064,7 @@ class Ride {
     this.q('s-target').style.color = zoneInk(tf, bounds());
     setText(this.q('s-tw'), gt != null ? `${gt} W` : allOut ? t('allOut') : t('free'));
     this.q('s-tw').style.color = gt != null ? zoneInk(gt / F, bounds()) : '';
-    // live pacing in long all-out test efforts: running average, projected FTP, "too fast" warning
-    const pacing = this.test && allOut && s.measure && s.duration >= 300;
-    setText(this.q('s-tw-k'), pacing ? (s.duration >= 480 ? t('estFtp') : t('effortAvg')) : t('targetPower'));
-    this.q('s-watts').classList.remove('warn-text');
-    let paceFast = false;
-    if (pacing) {
-      const acc = this.effAcc?.[s.measure];
-      const avg = acc && acc.n >= 5 ? Math.round(acc.sum / acc.n) : null;
-      const factor = s.duration >= 1140 ? 0.95 : s.duration >= 480 ? 0.9 : null;
-      const fast = !!(avg && tw && acc.n >= 60 && avg > tw * 1.1);
-      setText(this.q('s-target'), avg ? `${avg} W` : t('bigAllOut'));
-      this.q('s-target').classList.toggle('range', !avg);
-      if (avg) this.q('s-target').style.color = zoneInk(avg / F, bounds());
-      setText(this.q('s-watts'), !avg ? t('aimW', { w: tw ?? '–', how: vsActive ? t('howShift') : t('howGears') }) : fast ? t('tooFastShort') : tw ? t('avgAim', { w: tw }) : t('effortAverage'));
-      this.q('s-watts').classList.toggle('warn-text', fast);
-      paceFast = fast;
-      const proj = avg && factor && acc.n >= 30 ? Math.round(avg * factor) : null;
-      setText(this.q('s-tw'), factor ? (proj ? `${proj} W` : '–') : (avg ? `${avg} W` : '–'));
-      this.q('s-tw').style.color = '';
-    }
+    this.renderPacing(f);
     setText(this.q('s-cad'), cLo != null ? `${cLo === cHi ? cLo : `${cLo}–${cHi}`} rpm` : '–');
     this.q('s-cad').classList.toggle('range', cLo != null && cLo !== cHi);
     setText(this.q('s-dur'), fmtTime(s.duration));
@@ -3059,56 +3072,85 @@ class Ride {
     this.q('s-bar').style.background = color;
     setText(this.q('s-rem'), fmtTime(Math.ceil(rem)));
     this.qs('.panel.seg').classList.toggle('closing', rem <= 5 && !!n);
+  }
 
-    if (segChanged || force) {
-      setText(this.q('seg-kind'), segKind(s));
-      this.qs('.panel.seg').style.setProperty('--zc', color);
-      // NEXT SEGMENT
-      // One description of the next segment, rendered into both cards: the full view (#next-card) and
-      // the compact panel (#cmp-next), whose optional lines (.cp-opt) drop out on small windows and which
-      // has a slot for the "in 0:42" countdown (#cmp-next-in, filled every tick below).
-      const card = this.q('next-card'), cn = this.q('cmp-next');
-      let zc = 'var(--line-strong)', title = '', body;
-      if (n) {
-        const m = this.mult();
-        const nf = n.p0 === null ? null : ((n.p0 + n.p1) / 2) * m;
-        const pa = n.p0 === null ? null : Math.round(n.p0 * 100 * m), pb = n.p0 === null ? null : Math.round(n.p1 * 100 * m);
-        const wa = n.p0 === null ? null : Math.round(n.p0 * F * m), wb = n.p0 === null ? null : Math.round(n.p1 * F * m);
-        const big = n.p0 === null ? tHtml(n.type === 'maxeffort' ? 'maxEffort' : 'freeRide') : n.erg === false ? tHtml('allOut') : pa === pb ? pct(pa) : `${pct(pa)} → ${pct(pb)}`;
-        const watts = n.p0 === null ? tHtml('rideByFeel') : wa === wb ? `${wa} W` : `${wa} → ${wb} W`;
-        const nLo = n.cadenceLow ?? n.cadence, nHi = n.cadenceHigh ?? n.cadence;
-        const rpm = nLo == null ? null : `${nLo === nHi ? nLo : `${nLo}–${nHi}`} rpm`;
-        zc = zoneColor(nf, bounds());
-        title = nf == null ? t('freeRide') : zoneOf(nf, bounds()).name;
-        body = (compact) => html`<div class="nc-txt"><b>${big}</b><span class="nc-v">${watts}</span><span class="nc-v${compact ? ' cp-opt' : ''}">${fmtTime(n.duration)} min</span>${compact
-          ? html`<span class="nc-v cp-opt" id="cmp-next-in"></span>`
-          : rpm && html`<span class="nc-v nc-rpm">${rpm}</span>`}</div>`;
-      } else {
-        // last segment: "Finish strong", or after a failed ramp test the result hint
-        const note = (compact) => (this.cooling ? (compact ? null : tHtml('pressStopResult')) : tHtml('noMoreChanges'));
-        body = (compact) => html`<div class="nc-txt"><b>${tHtml(this.cooling ? 'testDone' : 'finishStrong')}</b>${note(compact) && html`<span class="nc-v muted${compact ? ' cp-opt' : ''}">${note(compact)}</span>`}</div>`;
-      }
-      card.style.setProperty('--zc', zc);
-      cn.style.setProperty('--zc', zc);
-      card.title = title;
-      mount(card, body(false));
-      mount(cn, body(true));
-      setText(this.q('int-val'), pct(this.intensity));
-      this.q('int-val').classList.toggle('changed', this.intensity !== 100);
-      this.diagram.highlight(idx);
-      this.q('btn-play').classList.toggle('is-running', this.running);
-      // segment change: zone-coloured sweep over Current segment, Next card slides up
-      if (segChanged && this.animReady && motionOK()) { restartAnim(this.qs('.panel.seg'), 'seg-in'); restartAnim(card, 'nx-in'); }
+  /** Live pacing in long all-out test efforts: running average, projected FTP, "too fast" warning (sets f.paceFast). */
+  renderPacing(f) {
+    const { s, tw, F, allOut, vsActive } = f;
+    const pacing = this.test && allOut && s.measure && s.duration >= 300;
+    setText(this.q('s-tw-k'), pacing ? (s.duration >= 480 ? t('estFtp') : t('effortAvg')) : t('targetPower'));
+    this.q('s-watts').classList.remove('warn-text');
+    if (!pacing) return;
+    const acc = this.effAcc?.[s.measure];
+    const avg = acc && acc.n >= 5 ? Math.round(acc.sum / acc.n) : null;
+    const factor = s.duration >= 1140 ? 0.95 : s.duration >= 480 ? 0.9 : null;
+    const fast = !!(avg && tw && acc.n >= 60 && avg > tw * 1.1);
+    setText(this.q('s-target'), avg ? `${avg} W` : t('bigAllOut'));
+    this.q('s-target').classList.toggle('range', !avg);
+    if (avg) this.q('s-target').style.color = zoneInk(avg / F, bounds());
+    setText(this.q('s-watts'), !avg ? t('aimW', { w: tw ?? '–', how: vsActive ? t('howShift') : t('howGears') }) : fast ? t('tooFastShort') : tw ? t('avgAim', { w: tw }) : t('effortAverage'));
+    this.q('s-watts').classList.toggle('warn-text', fast);
+    f.paceFast = fast;
+    const proj = avg && factor && acc.n >= 30 ? Math.round(avg * factor) : null;
+    setText(this.q('s-tw'), factor ? (proj ? `${proj} W` : '–') : (avg ? `${avg} W` : '–'));
+    this.q('s-tw').style.color = '';
+  }
+
+  /** On a new segment (or `force`): segment kind, zone colour, next-segment cards, intensity, chart highlight, sweep. */
+  renderSegmentChange(f) {
+    const { idx, segChanged, s, color } = f;
+    setText(this.q('seg-kind'), segKind(s));
+    this.qs('.panel.seg').style.setProperty('--zc', color);
+    const card = this.renderNext(f);
+    setText(this.q('int-val'), pct(this.intensity));
+    this.q('int-val').classList.toggle('changed', this.intensity !== 100);
+    this.diagram.highlight(idx);
+    this.q('btn-play').classList.toggle('is-running', this.running);
+    // segment change: zone-coloured sweep over Current segment, Next card slides up
+    if (segChanged && this.animReady && motionOK()) { restartAnim(this.qs('.panel.seg'), 'seg-in'); restartAnim(card, 'nx-in'); }
+  }
+
+  /**
+   * NEXT SEGMENT. One description of the next segment, rendered into both cards: the full view (#next-card) and
+   * the compact panel (#cmp-next), whose optional lines (.cp-opt) drop out on small windows and which
+   * has a slot for the "in 0:42" countdown (#cmp-next-in, filled every tick by renderCompact()). Returns the full card.
+   */
+  renderNext({ n, F }) {
+    const card = this.q('next-card'), cn = this.q('cmp-next');
+    let zc = 'var(--line-strong)', title = '', body;
+    if (n) {
+      const m = this.mult();
+      const nf = n.p0 === null ? null : ((n.p0 + n.p1) / 2) * m;
+      const pa = n.p0 === null ? null : Math.round(n.p0 * 100 * m), pb = n.p0 === null ? null : Math.round(n.p1 * 100 * m);
+      const wa = n.p0 === null ? null : Math.round(n.p0 * F * m), wb = n.p0 === null ? null : Math.round(n.p1 * F * m);
+      const big = n.p0 === null ? tHtml(n.type === 'maxeffort' ? 'maxEffort' : 'freeRide') : n.erg === false ? tHtml('allOut') : pa === pb ? pct(pa) : `${pct(pa)} → ${pct(pb)}`;
+      const watts = n.p0 === null ? tHtml('rideByFeel') : wa === wb ? `${wa} W` : `${wa} → ${wb} W`;
+      const nLo = n.cadenceLow ?? n.cadence, nHi = n.cadenceHigh ?? n.cadence;
+      const rpm = nLo == null ? null : `${nLo === nHi ? nLo : `${nLo}–${nHi}`} rpm`;
+      zc = zoneColor(nf, bounds());
+      title = nf == null ? t('freeRide') : zoneOf(nf, bounds()).name;
+      body = (compact) => html`<div class="nc-txt"><b>${big}</b><span class="nc-v">${watts}</span><span class="nc-v${compact ? ' cp-opt' : ''}">${fmtTime(n.duration)} min</span>${compact
+        ? html`<span class="nc-v cp-opt" id="cmp-next-in"></span>`
+        : rpm && html`<span class="nc-v nc-rpm">${rpm}</span>`}</div>`;
+    } else {
+      // last segment: "Finish strong", or after a failed ramp test the result hint
+      const note = (compact) => (this.cooling ? (compact ? null : tHtml('pressStopResult')) : tHtml('noMoreChanges'));
+      body = (compact) => html`<div class="nc-txt"><b>${tHtml(this.cooling ? 'testDone' : 'finishStrong')}</b>${note(compact) && html`<span class="nc-v muted${compact ? ' cp-opt' : ''}">${note(compact)}</span>`}</div>`;
     }
-    this.animReady = true;
+    card.style.setProperty('--zc', zc);
+    cn.style.setProperty('--zc', zc);
+    card.title = title;
+    mount(card, body(false));
+    mount(cn, body(true));
+    return card;
+  }
 
-    this.coach(s, { segChanged, inSeg, rem, allOut, freeLike, gt, p, c, cLo, cHi, dev, cadState, paceFast });
-
-    setText(this.q('d-el'), fmtTime(this.t));
-    setText(this.q('d-rem'), fmtTime(Math.max(0, Math.ceil(this.w.duration - this.t))));
-
-    // Both presentations share the same samples and Ride. No DOM is rebuilt on resize.
-    // compact panels: same values as the full view (actual target, never a test-estimated FTP)
+  /**
+   * Compact panels: same values as the full view (actual target, never a test-estimated FTP). Both presentations
+   * share the same samples and Ride; no DOM is rebuilt on resize. Runs after the full view, whose target, bar and
+   * "workout left" it copies.
+   */
+  renderCompact({ s, rem, inSeg, F, allOut, freeLike, p, c, hr, gt, cadState, live, color }) {
     const cmpSub = gt != null ? `${gt} W` : t(allOut ? 'gAllOut' : 'gFree');
     this.cGauge.update({ target: gt, actual: p, ftp: F, bounds: bounds() });
     setText(this.q('cmp-pow'), p ?? '–');
@@ -3135,7 +3177,10 @@ class Ride {
     this.q('cmp-state').title = `${statusDetail} · ${connection}`;
     this.q('cmp-state').setAttribute('aria-label', `${statusDetail} · ${connection}`);
     this.q('cmp-dot').classList.toggle('on', trainer.connected);
-    // play button (full and compact view): Start before the ride, then Pause / Resume
+  }
+
+  /** Play buttons (full and compact view: Start before the ride, then Pause / Resume), gauge toggle state, workout chart. */
+  renderControls() {
     const play = this.running ? t('btnPause') : this.started ? t('resume') : t('start');
     this.qsa('#ride [data-act="play"]').forEach((el) => {
       el.classList.toggle('is-running', this.running);
