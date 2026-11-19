@@ -79,6 +79,7 @@ export const de = {
   devicesOn: 'Geräte — {n} verbunden',
   devicesNone: 'Geräte — keins verbunden',
   batteryPct: 'Batterie {n} %',
+  pct: '{n}%',
   devices: 'Geräte',
   connected: 'verbunden',
   connectingName: 'verbinde {name}…',

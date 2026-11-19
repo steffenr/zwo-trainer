@@ -61,6 +61,10 @@ export function t(key, vars) {
   return vars ? s.replace(/\{(\w+)\}/g, (m, k) => (vars[k] !== undefined ? String(vars[k]) : m)) : s;
 }
 
+/** A percentage in the UI language's typography ("75%", French "75 %" with a narrow no-break space);
+ *  `n` may be a number or a range such as "75–80". */
+export const pct = (n) => t('pct', { n });
+
 /** Fill static markup: data-i18n (text), data-i18n-title, data-i18n-aria (aria-label). */
 export function translateDom(root = document) {
   for (const el of root.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);

@@ -80,6 +80,7 @@ export const en = {
   devicesOn: 'Devices — {n} connected',
   devicesNone: 'Devices — none connected',
   batteryPct: 'Battery {n}%',
+  pct: '{n}%',
   devices: 'Devices',
   connected: 'connected',
   connectingName: 'connecting {name}…',

@@ -14,7 +14,7 @@ import { batteryBadge, lowestLevel } from './battery.js';
 import { renderMarkdown, markdownSummary, markdownPlain, smartTrim } from './markdown.js';
 import { DEFAULT_SHIFTING, gearTable, virtualSpeed, targetWatts } from './vshift.js';
 import { PROTOCOLS, protocolById, isTestWorkout, evaluateGeneric, classifyTest, prepareTestWorkout, vo2max } from './tests.js';
-import { t, LOCALES, setLocale, systemLocale, coerceLocale, fmtLocale, translateDom } from './i18n/index.js';
+import { t, pct, LOCALES, setLocale, systemLocale, coerceLocale, fmtLocale, translateDom } from './i18n/index.js';
 import { loadSounds, countdown, endChime } from './sound.js';
 import { html, raw, tHtml, tText, mount } from './html.js';
 import { IC } from './components/icons.js';
@@ -577,7 +577,7 @@ function renderDevicesMenu(pop) {
   const row = ([k, label, icon]) => {
     const d = devState[k];
     const level = d.connected ? lowestLevel(battery[k]) : null;
-    const batt = raw(batteryBadge(level, t('batteryPct', { n: level })));
+    const batt = raw(batteryBadge(level, t('batteryPct', { n: level }), pct));
     const savedName = k === 'controller' ? (saved.controllers || []).map((c) => c.name).join(' + ') : saved[k]?.name;
     const status = d.connected ? html`<span class="ok-text">${d.name || tHtml('connected')}</span>`
       : d.reconnecting ? html`<span class="warn-text">${d.name ? tHtml('connectingName', { name: d.name }) : tHtml('connectingDots')}</span>`
@@ -1602,14 +1602,14 @@ function zoneBreakdown(workout) {
   }
   const total = workout.duration || 1;
   return `<div class="zones-bar">${ZONES.map((z, i) => secs[i] ? `<i style="flex:${secs[i]};background:${z.color}" title="${z.short} ${z.name}: ${fmtTime(secs[i])}"></i>` : '').join('')}${free ? `<i style="flex:${free};background:${FREE_COLOR}" title="${t('freeRide')} ${fmtTime(free)}"></i>` : ''}</div>
-  <div class="zones-legend">${ZONES.map((z, i) => `<span><i style="background:${z.color}"></i>${z.short} ${z.name} <b>${Math.round((secs[i] / total) * 100)}%</b></span>`).join('')}</div>`;
+  <div class="zones-legend">${ZONES.map((z, i) => `<span><i style="background:${z.color}"></i>${z.short} ${z.name} <b>${pct(Math.round((secs[i] / total) * 100))}</b></span>`).join('')}</div>`;
 }
 
 function targetText(s, mult = 1) {
   if (s.p0 === null) return s.type === 'maxeffort' ? t('maxEffort') : t('freeRide');
   const a = Math.round(s.p0 * 100 * mult), b = Math.round(s.p1 * 100 * mult);
   const wa = Math.round(s.p0 * ftp() * mult), wb = Math.round(s.p1 * ftp() * mult);
-  return a === b ? `${a}% · ${wa} W` : `${a}–${b}% · ${wa}–${wb} W`;
+  return a === b ? `${pct(a)} · ${wa} W` : `${pct(`${a}–${b}`)} · ${wa}–${wb} W`;
 }
 
 /** One segment in words (name, type, duration, target, cadence, zone): chart tooltip and preview line. */
@@ -2503,7 +2503,7 @@ class Ride {
         <button class="ctl" data-act="fwd" title="${tText('fwd1min')}" aria-label="${tText('fwd1min')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v4h-4"/></svg></button>
         <button class="ctl" data-act="next" title="${tText('btnNext')} (→)" aria-label="${tText('btnNext')}" aria-keyshortcuts="ArrowRight"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14M5 5l9 7-9 7z"/></svg></button>
         <div class="int-group" title="${tText('intensityTitle')}">
-          <div class="int-read"><span class="k">${tHtml('intensity')}</span><b id="int-val" class="int-val">100%</b></div>
+          <div class="int-read"><span class="k">${tHtml('intensity')}</span><b id="int-val" class="int-val">${pct(100)}</b></div>
           <button class="ctl int-b" data-int="-1" title="${tText('intDownTitle')}" aria-label="${tText('btnIntDown')}">−</button>
           <button class="ctl int-b" data-int="1" title="${tText('intUpTitle')}" aria-label="${tText('btnIntUp')}">+</button>
         </div>
@@ -2968,12 +2968,12 @@ class Ride {
     setText(this.q('v-spd'), spd != null ? spd.toFixed(1) : '–');
     setBar(this.q('b-spd'), spd != null ? spd / 60 : 0, { color: 'var(--ok)' });
     setText(this.q('v-hr'), hr ?? '–');
-    setText(this.q('t-hr'), hr != null ? `${Math.round((hr / maxHr()) * 100)}%` : '');
+    setText(this.q('t-hr'), hr != null ? pct(Math.round((hr / maxHr()) * 100)) : '');
     setBar(this.q('b-hr'), hr != null ? hr / maxHr() : 0, { color: 'var(--hrline)' });
 
     setText(this.q('g-unit'), this.showPct ? '% FTP' : t('watt'));
-    setText(this.q('v-pow'), p == null ? '–' : this.showPct ? `${Math.round((p / F) * 100)}%` : p);
-    setText(this.q('t-pow'), gt == null ? t(s.type === 'maxeffort' ? 'gMax' : allOut ? 'gAllOut' : 'gFree') : this.showPct ? `${Math.round((gt / F) * 100)}%` : `${gt} W`);
+    setText(this.q('v-pow'), p == null ? '–' : this.showPct ? pct(Math.round((p / F) * 100)) : p);
+    setText(this.q('t-pow'), gt == null ? t(s.type === 'maxeffort' ? 'gMax' : allOut ? 'gAllOut' : 'gFree') : this.showPct ? pct(Math.round((gt / F) * 100)) : `${gt} W`);
     this.gauge.update({ target: gt, actual: p, ftp: F, bounds: bounds() });
     // on target: within ±5 % for 3 s -> soft glow in the zone colour around the gauge
     const onT = this.running && gt != null && p != null && Math.abs(p - gt) / gt <= 0.05;
@@ -2988,7 +2988,7 @@ class Ride {
     if (s.p0 === null) { this.q('s-target').classList.remove('range'); setText(this.q('s-target'), s.type === 'maxeffort' ? t('bigMax') : t('bigFree')); setText(this.q('s-watts'), vsActive ? t('virtualShiftingLc') : t('rideByFeel')); }
     else {
       const a = Math.round(s.p0 * 100 * this.mult()), b = Math.round(s.p1 * 100 * this.mult());
-      setText(this.q('s-target'), allOut ? t('bigAllOut') : a === b ? `${a}%` : `${a}–${b}%`);
+      setText(this.q('s-target'), allOut ? t('bigAllOut') : a === b ? pct(a) : pct(`${a}–${b}`));
       this.q('s-target').classList.toggle('range', a !== b || allOut);
       setText(this.q('s-watts'), allOut ? t('aimW', { w: tw, how: vsActive ? t('howShift') : t('howGears') }) : `${tw} W`);
     }
@@ -3037,7 +3037,7 @@ class Ride {
         const nf = n.p0 === null ? null : ((n.p0 + n.p1) / 2) * m;
         const pa = n.p0 === null ? null : Math.round(n.p0 * 100 * m), pb = n.p0 === null ? null : Math.round(n.p1 * 100 * m);
         const wa = n.p0 === null ? null : Math.round(n.p0 * F * m), wb = n.p0 === null ? null : Math.round(n.p1 * F * m);
-        const big = n.p0 === null ? tHtml(n.type === 'maxeffort' ? 'maxEffort' : 'freeRide') : n.erg === false ? tHtml('allOut') : pa === pb ? `${pa}%` : `${pa}% → ${pb}%`;
+        const big = n.p0 === null ? tHtml(n.type === 'maxeffort' ? 'maxEffort' : 'freeRide') : n.erg === false ? tHtml('allOut') : pa === pb ? pct(pa) : `${pct(pa)} → ${pct(pb)}`;
         const watts = n.p0 === null ? tHtml('rideByFeel') : wa === wb ? `${wa} W` : `${wa} → ${wb} W`;
         const nLo = n.cadenceLow ?? n.cadence, nHi = n.cadenceHigh ?? n.cadence;
         const rpm = nLo == null ? null : `${nLo === nHi ? nLo : `${nLo}–${nHi}`} rpm`;
@@ -3056,7 +3056,7 @@ class Ride {
       card.title = title;
       mount(card, body(false));
       mount(cn, body(true));
-      setText(this.q('int-val'), `${this.intensity}%`);
+      setText(this.q('int-val'), pct(this.intensity));
       this.q('int-val').classList.toggle('changed', this.intensity !== 100);
       this.diagram.highlight(idx);
       this.q('btn-play').classList.toggle('is-running', this.running);
