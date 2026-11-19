@@ -1,6 +1,6 @@
 # DESIGN.md — zwoTrainer design system
 
-The visual and interaction rules for zwoTrainer. The styles live in `ui/css/` (tokens on `:root` in `tokens.css`, see [CSS structure](#css-structure)) plus a few constants in `ui/js/render.js` / `ui/js/app.js`. Any new screen or component must follow this document; if you introduce a new pattern, document it here.
+The visual and interaction rules for zwoTrainer. The styles live in `ui/css/` (tokens on `:root` in `tokens.css`, see [CSS structure](#css-structure)) plus a few constants in `ui/js/render.js` / `ui/js/riders.js` (avatar colours). Any new screen or component must follow this document; if you introduce a new pattern, document it here.
 
 ## CSS structure
 
@@ -280,7 +280,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
   - Status is never shown by colour alone: dots are paired with text in the devices menu and tooltips.
   - Contrast is ≥ 4.5:1 for text (use the zone *ink* tokens for coloured text).
   - Everything should be reachable by keyboard, and rows are focusable (`tabindex="0"`, Enter opens). Keyboard focus is one shared rule in `utilities.css` (`:focus-visible` on buttons, links, `[tabindex]`, `summary`, `[role=…]` → 2 px `--accent` outline, offset 2; inset −2 inside popovers), so `all: unset` controls get it too. It sits in the last layer on purpose; don't remove focus outlines in a view (`outline: none` there has no effect).
-  - Popover menus (`popoverOpen()` in app.js): opening focuses the first item, ↑/↓/Home/End move, Esc or Tab closes and returns focus to the anchor, the anchor carries `aria-haspopup` / `aria-expanded`. While a popover is open the ride shortcuts are off, so Esc never stops the workout.
+  - Popover menus (`popoverOpen()` in actions.js): opening focuses the first item, ↑/↓/Home/End move, Esc or Tab closes and returns focus to the anchor, the anchor carries `aria-haspopup` / `aria-expanded`. While a popover is open the ride shortcuts are off, so Esc never stops the workout.
   - Every input has an accessible name: a `<label>`, or an `aria-label` when the visible text isn't a label (zone limits, the two gear-range fields).
   - Text is at least 12 px.
 
