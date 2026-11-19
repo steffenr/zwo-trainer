@@ -3370,9 +3370,13 @@ class Ride {
     if (!hold) startAutoUploads();
   }
 
-  /** Leave the ride screen: expand from compact, release devices to idle, restore the normal views and pending updates. */
+  /** Leave the ride screen: expand from compact, release devices to idle, restore the normal views and pending updates.
+   *  The teardown always runs, even when the window can't be restored to full size: a stuck ride screen with
+   *  `ride` still set would keep sync and profile switching deferred. CompactView already reported the error. */
   async close() {
-    if (!await this.compact.set(false)) return;
+    let restored = false;
+    try { restored = await this.compact.set(false); } catch (err) { toast(String(err)); }
+    if (!restored) document.body.classList.remove('compact-riding');
     clearInterval(this.loop);
     this.ending = true;
     trainer.setFreeRide(); // release ERG (also on Discard, which skips finish())
