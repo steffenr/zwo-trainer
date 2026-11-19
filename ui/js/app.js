@@ -44,6 +44,12 @@ const setText = (el, v) => {
   const s = String(v ?? '');
   if (el.textContent !== s) el.textContent = s;
 };
+/** Same for an attribute: written only when the value changed (aria-label, aria-pressed, title in render()). */
+const setAttr = (el, name, v) => {
+  if (!el) return;
+  const s = String(v ?? '');
+  if (el.getAttribute(name) !== s) el.setAttribute(name, s);
+};
 /**
  * Same for an html`` fragment, written through mount(). Compares with the fragment written last by
  * setHtml (kept on the element), so use it as the only writer of that element.
@@ -2427,7 +2433,7 @@ class Ride {
     const plan = this.planId && planById(this.planId);
     const ov = state.settings.overlay || { power: true };
     // compact view: play/stop and "workout left" appear twice (heading row when short, footer otherwise)
-    const cmpCtl = html`<span class="compact-ctl"><button class="ctl play" data-act="play" title="${tText('btnPlay')}" aria-label="${tText('btnPlay')}"><svg viewBox="0 0 24 24" class="i-play" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" class="i-pause" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg></button><button class="ctl" data-act="stop" title="${tText('endWorkout')}" aria-label="${tText('endWorkout')}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button></span>`;
+    const cmpCtl = html`<span class="compact-ctl"><button class="ctl play" data-act="play" title="${tText('start')} (${tText('spaceKey')})" aria-label="${tText('start')}" aria-keyshortcuts="Space"><svg viewBox="0 0 24 24" class="i-play" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" class="i-pause" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg></button><button class="ctl" data-act="stop" title="${tText('endWorkout')}" aria-label="${tText('endWorkout')}" aria-keyshortcuts="Escape"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button></span>`;
     const cmpWl = html`<span class="cmp-wl"><small>${tHtml('compactWorkoutLeft')}</small><b class="cmp-wleft">0:00</b></span>`;
     // the ride title lives in the regular top bar (in place of the mode switch)
     const rt = $('#ride-title');
@@ -2440,7 +2446,7 @@ class Ride {
         <section class="panel live">
           <header class="ph"><span class="ph-dot" id="live-dot"></span><b>${tHtml('live')}</b>${IC.pulse}<span class="ph-status" id="live-status"></span></header>
           <div class="live-body">
-            <button class="gauge" id="gauge" title="${tText('gaugeTitle')}">
+            <button class="gauge" id="gauge" title="${tText('gaugeTitle')}" aria-label="${tText('gaugeAria')}" aria-pressed="false">
               <div class="gauge-mount"></div>
               <div class="gauge-center"><span class="k" id="g-unit">${tHtml('watt')}</span><b id="v-pow">–</b><small id="t-pow">–</small></div>
             </button>
@@ -2464,7 +2470,7 @@ class Ride {
                 </div>
                 <svg class="ring-check" viewBox="0 0 100 100" aria-hidden="true"><path d="M27 52 L44 68 L74 34"/></svg>
               </div>
-              <div class="gearbox" id="gearbox" hidden><button class="btn round sm" data-shift="-1" title="${tText('shiftDownKey')}">−</button><span id="gear-lbl" class="gear-lbl">${tHtml('gear')}</span><button class="btn round sm" data-shift="1" title="${tText('shiftUpKey')}">+</button></div>
+              <div class="gearbox" id="gearbox" hidden><button class="btn round sm" data-shift="-1" title="${tText('shiftDownKey')}" aria-label="${tText('shiftDownKey')}">−</button><span id="gear-lbl" class="gear-lbl">${tHtml('gear')}</span><button class="btn round sm" data-shift="1" title="${tText('shiftUpKey')}" aria-label="${tText('shiftUpKey')}">+</button></div>
             </div>
             <div class="seg-stats">
               <div class="stat">${IC.bolt}<div><span class="k" id="s-tw-k">${tHtml('targetPower')}</span><b id="s-tw">–</b></div></div>
@@ -2483,19 +2489,19 @@ class Ride {
       <div class="ride-diagram panel">
         <div class="dg-times">
           <div class="wt-head"><span class="ph-mini">${IC.bars}<b>${tHtml('workout')}</b></span><div class="wt-time"><span class="k">${tHtml('elapsed')}</span><b id="d-el">0:00</b></div></div>
-          <span class="overlay-toggles" id="ov">${OVERLAY.map(([k, l]) => html`<button data-ov="${k}" class="ov ov-${k} ${ov[k] ? 'on' : ''}"><i></i>${tHtml(l)}</button>`)}</span>
+          <span class="overlay-toggles" id="ov" role="group" aria-label="${tText('chartLines')}">${OVERLAY.map(([k, l]) => html`<button data-ov="${k}" class="ov ov-${k} ${ov[k] ? 'on' : ''}" aria-pressed="${String(!!ov[k])}"><i aria-hidden="true"></i>${tHtml(l)}</button>`)}</span>
           <div class="wt-time rem"><span class="k">${tHtml('remainingLc')}</span><b id="d-rem">${fmtTime(this.w.duration)}</b><small id="d-tot">${tHtml('ofTime', { time: fmtTime(this.w.duration) })}</small></div>
         </div>
         <div class="dg-mount"></div>
         <div class="dg-tip" id="dg-tip" hidden></div>
       </div>
       <div class="ride-controls" data-msg="${tText('autoPaused')}">
-        <button class="ctl" data-act="prev" title="${tText('btnPrev')} (←)"><svg viewBox="0 0 24 24"><path d="M6 5v14M19 5l-9 7 9 7z"/></svg></button>
-        <button class="ctl" data-act="back" title="${tText('back1min')}"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4"/></svg></button>
-        <button class="ctl play" data-act="play" title="${tText('btnPlay')} (${tText('spaceKey')})" id="btn-play"><svg viewBox="0 0 24 24" class="i-play"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" class="i-pause"><path d="M8 5v14M16 5v14"/></svg></button>
-        <button class="ctl" data-act="stop" title="${tText('endWorkout')}"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
-        <button class="ctl" data-act="fwd" title="${tText('fwd1min')}"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v4h-4"/></svg></button>
-        <button class="ctl" data-act="next" title="${tText('btnNext')} (→)"><svg viewBox="0 0 24 24"><path d="M18 5v14M5 5l9 7-9 7z"/></svg></button>
+        <button class="ctl" data-act="prev" title="${tText('btnPrev')} (←)" aria-label="${tText('btnPrev')}" aria-keyshortcuts="ArrowLeft"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14M19 5l-9 7 9 7z"/></svg></button>
+        <button class="ctl" data-act="back" title="${tText('back1min')}" aria-label="${tText('back1min')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4"/></svg></button>
+        <button class="ctl play" data-act="play" title="${tText('start')} (${tText('spaceKey')})" aria-label="${tText('start')}" aria-keyshortcuts="Space" id="btn-play"><svg viewBox="0 0 24 24" aria-hidden="true" class="i-play"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" aria-hidden="true" class="i-pause"><path d="M8 5v14M16 5v14"/></svg></button>
+        <button class="ctl" data-act="stop" title="${tText('endWorkout')}" aria-label="${tText('endWorkout')}" aria-keyshortcuts="Escape"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
+        <button class="ctl" data-act="fwd" title="${tText('fwd1min')}" aria-label="${tText('fwd1min')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v4h-4"/></svg></button>
+        <button class="ctl" data-act="next" title="${tText('btnNext')} (→)" aria-label="${tText('btnNext')}" aria-keyshortcuts="ArrowRight"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14M5 5l9 7-9 7z"/></svg></button>
         <div class="int-group" title="${tText('intensityTitle')}">
           <div class="int-read"><span class="k">${tHtml('intensity')}</span><b id="int-val" class="int-val">100%</b></div>
           <button class="ctl int-b" data-int="-1" title="${tText('intDownTitle')}" aria-label="${tText('btnIntDown')}">−</button>
@@ -2586,6 +2592,7 @@ class Ride {
     ov[k] = !ov[k];
     state.settings.overlay = ov;
     btn.classList.toggle('on', ov[k]);
+    btn.setAttribute('aria-pressed', String(ov[k]));
     this.diagram.setOverlay(ov);
     this.diagram.update(this.t, this.samples);
     api.saveState();
@@ -3091,12 +3098,14 @@ class Ride {
     this.q('cmp-state').title = `${statusDetail} · ${connection}`;
     this.q('cmp-state').setAttribute('aria-label', `${statusDetail} · ${connection}`);
     this.q('cmp-dot').classList.toggle('on', trainer.connected);
+    // play button (full and compact view): Start before the ride, then Pause / Resume
+    const play = this.running ? t('btnPause') : this.started ? t('resume') : t('start');
     this.qsa('#ride [data-act="play"]').forEach((el) => {
       el.classList.toggle('is-running', this.running);
-      const label = this.running ? t('btnPause') : t('btnPlay');
-      el.title = `${label} (${t('spaceKey')})`;
-      el.setAttribute('aria-label', label);
+      setAttr(el, 'aria-label', play);
+      setAttr(el, 'title', `${play} (${t('spaceKey')})`);
     });
+    setAttr(this.q('gauge'), 'aria-pressed', String(this.showPct));
     if (!this.compact.active) this.diagram.update(this.t, this.samples);
   }
 

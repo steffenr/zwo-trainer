@@ -271,7 +271,7 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 - **Platform wording:** labels follow the OS via `PLAT` in app.js: *Show in Finder / Explorer / Files*, *Trash / Recycle Bin*, *this Mac / PC / computer*. Never hard-code the macOS terms.
 - **Text:** plain, friendly wording in sentence case, in English, German and French (`ui/js/i18n/`; German "du", French "vous"). Leave room for German, the longest of the three: labels in segmented controls and buttons must still fit at 900 px. Units use a thin space in tables ("250 W", "90 %"), and durations are `m:ss` / `h:mm:ss` (`fmtTime`) or "1h 05m" (`fmtDur`).
 - **Accessibility:**
-  - Icon-only buttons need a `title` and an `aria-label`.
+  - Icon-only buttons need a `title` and an `aria-label` (`tText()`), and their SVG is `aria-hidden="true"`. A button whose action changes names the action it will do now: the ride play button is *Start*, then *Pause* / *Resume*. Toggles that keep their name carry `aria-pressed` (chart overlay toggles, the power gauge for watts ↔ % FTP, the mode switch). Keyboard shortcuts go in `aria-keyshortcuts` as well as the title.
   - Transient messages (toasts, ride hints) are announced with `announce()` in app.js through a polite live region that exists in index.html from the start: `#live` on the page, `#modal-live` inside the dialog (an open modal makes the rest of the page inert). Both are `.sr-only` (utilities.css). Never create a live region together with its text; it is often not read.
   - Status is never shown by colour alone: dots are paired with text in the devices menu and tooltips.
   - Contrast is ≥ 4.5:1 for text (use the zone *ink* tokens for coloured text).

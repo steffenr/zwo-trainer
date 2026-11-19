@@ -444,6 +444,8 @@ export const fr = {
   ftpTest: 'Test FTP',
   weekDayCompact: 'S{w} J{d}',
   live: 'En direct',
+  gaugeAria: 'Afficher la puissance en % de la FTP',
+  chartLines: 'Courbes du graphique',
   gaugeTitle: 'Clic : watts ↔ % FTP',
   watt: 'watts',
   speed: 'Vitesse',

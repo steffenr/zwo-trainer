@@ -212,7 +212,7 @@ Deleting always goes to the system Trash (the Recycle Bin on Windows), so it can
 | + / − | shift gear (virtual gears); during free-ride segments ↑ / ↓ shift too |
 | Esc | end workout (closes an open menu instead) |
 
-Menus work with the keyboard too: arrow keys move between items, Esc closes the menu. Screen readers announce notices (uploads, sync, errors) and the short ride hints (gear, intensity, auto-pause). Recording stays at one sample per second even when the window is hidden or minimised.
+Menus work with the keyboard too: arrow keys move between items, Esc closes the menu. Screen readers announce notices (uploads, sync, errors) and the short ride hints (gear, intensity, auto-pause); every ride button has a spoken name, the play button says whether it starts, pauses or resumes, and the chart line toggles and the power gauge (watts ↔ % FTP) report whether they are on. Recording stays at one sample per second even when the window is hidden or minimised.
 
 If you switch to another app during a ride (a video, a browser) and zwoTrainer might still have the keyboard focus, turn off **Keyboard shortcuts while riding** under Settings → Riding. The on-screen buttons and controllers keep working.
 

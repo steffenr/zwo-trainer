@@ -445,6 +445,8 @@ export const de = {
   weekDayCompact: 'W{w} T{d}',
   live: 'Live',
   gaugeTitle: 'Klick: Watt ↔ % FTP',
+  gaugeAria: 'Leistung in % FTP zeigen',
+  chartLines: 'Linien im Diagramm',
   watt: 'Watt',
   speed: 'Geschw.',
   metricHr: 'Puls',
