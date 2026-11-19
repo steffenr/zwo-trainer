@@ -1461,11 +1461,17 @@ async function unskip(file) {
 // ------------------------------------------------------------------ modals
 const modal = $('#modal');
 let modalCloseTimer = null;
+// The shown dialog's lifetime: aborted when #modal closes or the next openModal replaces the content.
+let modalEnd = new AbortController();
+/** Run fn once when the dialog just opened ends (closed or replaced). Call it right after openModal. */
+const onDialogEnd = (fn) => modalEnd.signal.addEventListener('abort', fn, { once: true });
 /** Show #modal with an html`` fragment and size classes (small, wide, settings …). One dialog at a time; a plain string would show as text. */
 function openModal(markup, cls = '') {
   if (modalCloseTimer) { clearTimeout(modalCloseTimer); modalCloseTimer = null; } // reopened while fading out: keep it open
   modal.className = cls;
   modal.onclick = null;   // the previous dialog's action delegation must not handle this one's buttons
+  modalEnd.abort();       // the previous dialog ends here, even if #modal never closed in between
+  modalEnd = new AbortController();
   mount($('.modal-body', modal), markup);
   // name the dialog after its heading (dialogHead() or a plain <h2>); no heading, no reference
   const head = $('.modal-body h2', modal);
@@ -1484,16 +1490,14 @@ modal.addEventListener('click', (e) => { if (e.target === modal && !modal.classL
 modal.addEventListener('cancel', (e) => { if (modal.classList.contains('sticky')) e.preventDefault(); });
 // a dialog's own clean-up when it closes (Settings redraws the views once)
 let onModalClose = null;
-modal.addEventListener('close', () => { const fn = onModalClose; onModalClose = null; fn?.(); });
+modal.addEventListener('close', () => { modalEnd.abort(); const fn = onModalClose; onModalClose = null; fn?.(); });
 
 /** Yes/no dialog; resolves true when confirmed. Texts are plain text (escaped here). */
 function confirmDialog(title, text, ok = t('ok'), danger = false) {
   return new Promise((resolve) => {
     openModal(html`<h2>${title}</h2><p>${text}</p><div class="modal-actions"><button class="btn ghost" data-r="0">${tHtml('cancel')}</button><button class="btn ${danger ? 'danger' : 'primary'}" data-r="1">${ok}</button></div>`, 'small');
-    const done = (r) => { modal.removeEventListener('close', onClose); closeModal(); resolve(r); };
-    const onClose = () => resolve(false);
-    modal.addEventListener('close', onClose, { once: true });
-    $$('[data-r]', modal).forEach((b) => (b.onclick = () => done(b.dataset.r === '1')));
+    onDialogEnd(() => resolve(false));   // Esc, backdrop or replaced by another dialog
+    $$('[data-r]', modal).forEach((b) => (b.onclick = () => { resolve(b.dataset.r === '1'); closeModal(); }));
   });
 }
 
@@ -1501,12 +1505,11 @@ function confirmDialog(title, text, ok = t('ok'), danger = false) {
 function promptDialog(title, value = '') {
   return new Promise((resolve) => {
     openModal(html`<h2>${title}</h2><form id="pf"><input type="text" name="v" value="${value}" maxlength="40" class="full" autocomplete="off"><div class="modal-actions"><button class="btn ghost" type="button" data-r="0">${tHtml('cancel')}</button><button class="btn primary" type="submit">${tHtml('save')}</button></div></form>`, 'small');
-    let settled = false;
     const f = $('#pf', modal);
     f.v.select();
-    f.onsubmit = (e) => { e.preventDefault(); settled = true; const v = f.v.value.trim(); closeModal(); resolve(v || null); };
-    $('[data-r]', modal).onclick = () => { settled = true; closeModal(); resolve(null); };
-    modal.addEventListener('close', () => { if (!settled) resolve(null); }, { once: true });
+    onDialogEnd(() => resolve(null));
+    f.onsubmit = (e) => { e.preventDefault(); resolve(f.v.value.trim() || null); closeModal(); };
+    $('[data-r]', modal).onclick = () => { resolve(null); closeModal(); };
   });
 }
 
@@ -3394,9 +3397,8 @@ class Ride {
 function choiceDialog(title, text, options) {
   return new Promise((resolve) => {
     openModal(html`<h2>${title}</h2><p>${text}</p><div class="modal-actions">${options.map(([v, l, c]) => html`<button class="btn ${c}" data-v="${v}">${l}</button>`)}</div>`, 'small');
-    let settled = false;
-    modal.addEventListener('close', () => { if (!settled) resolve(null); }, { once: true });
-    $$('[data-v]', modal).forEach((b) => (b.onclick = () => { settled = true; closeModal(); resolve(b.dataset.v); }));
+    onDialogEnd(() => resolve(null));
+    $$('[data-v]', modal).forEach((b) => (b.onclick = () => { resolve(b.dataset.v); closeModal(); }));
   });
 }
 
