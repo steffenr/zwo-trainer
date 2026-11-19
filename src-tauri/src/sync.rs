@@ -175,7 +175,8 @@ pub fn run(store: &Store) -> Result<Value, String> {
             if path.extension().and_then(|x| x.to_str()) != Some("json") {
                 continue;
             }
-            let Some(id) = path.file_stem().and_then(|s| s.to_str()).map(str::to_string) else { continue };
+            // only our own file names: skips "p_x (conflicted copy).json", "p_x 2.json", "...json"
+            let Some(id) = path.file_stem().and_then(|s| s.to_str()).filter(|s| state::is_profile_id(s)).map(str::to_string) else { continue };
             if let Some(v) = std::fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str::<Value>(&s).ok()) {
                 remote.insert(id, v);
             }
@@ -360,5 +361,40 @@ mod tests {
         run(&b).unwrap();
         assert!(b.app_state()["profiles"].as_array().unwrap().iter().all(|p| p["id"] != anna));
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn foreign_file_names_are_ignored() {
+        let base = std::env::temp_dir().join(format!("zt-sync-names-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let cloud = base.join("cloud");
+        std::fs::create_dir_all(&cloud).unwrap();
+        let a = Store::new(&base.join("a"));
+        let b = Store::new(&base.join("b"));
+        for s in [&a, &b] {
+            s.update(|d| { d["sync"] = json!({ "dir": cloud.display().to_string() }); Ok(()) }).unwrap();
+        }
+        let mut p = a.active_profile();
+        p["settings"]["ftp"] = json!(301);
+        a.save_profile(p).unwrap();
+        run(&a).unwrap();
+        // copies a cloud service or a user might leave next to the real file
+        let pdir = root(&cloud).join("profiles");
+        let real = pdir.join(format!("{}.json", a.active_id()));
+        for name in ["...json", "p_1 (conflicted copy 2026-11-19).json", "p_1 2.json", "notes.json"] {
+            std::fs::copy(&real, pdir.join(name)).unwrap();
+        }
+        run(&b).unwrap();
+        let ids: Vec<String> = b.app_state()["profiles"].as_array().unwrap().iter().map(|p| p["id"].as_str().unwrap().to_string()).collect();
+        assert_eq!(ids, vec![a.active_id()]);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn profile_ids() {
+        assert!(state::is_profile_id("p_18a3f0c2b"));
+        for bad in ["..", "", "p_", "p_1 (conflicted copy)", "p_1 2", "P_1", "p_xyz", "p_../x"] {
+            assert!(!state::is_profile_id(bad), "{bad}");
+        }
     }
 }

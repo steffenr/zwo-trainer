@@ -78,6 +78,12 @@ pub fn now_iso() -> String {
     iso_from_unix(unix_now())
 }
 
+/// The shape `new_id` produces (`p_` + hex). Ids from outside (sync file names) must match it:
+/// they become folder names under `activities/` and must never be `..` or a conflict copy.
+pub fn is_profile_id(id: &str) -> bool {
+    id.strip_prefix("p_").is_some_and(|h| (1..=40).contains(&h.len()) && h.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
 fn new_id() -> String {
     let n = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     format!("p_{:x}", n ^ ((std::process::id() as u128) << 64))
@@ -302,7 +308,9 @@ impl Store {
             }
             Ok(())
         });
-        let _ = std::fs::remove_dir_all(self.activities_dir(id));
+        if is_profile_id(id) {
+            let _ = std::fs::remove_dir_all(self.activities_dir(id));
+        }
         Ok(out)
     }
 
