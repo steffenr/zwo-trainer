@@ -61,8 +61,15 @@ fn frac(n: &roxmltree::Node, names: &[&str]) -> Option<f64> {
     names.iter().find_map(|k| num(n, k)).map(|v| if v > 5.0 { v / 100.0 } else { v })
 }
 
+/// Limits against broken or hostile files (`Repeat="1e9"`, `Duration="1e12"`): one element lasts at
+/// most a day, an `IntervalsT` repeats at most 1000 times, and a workout longer than two days is
+/// rejected, which also bounds the segment count and the per-second loops in `zone_seconds`.
+pub const MAX_ELEMENT_SECS: u32 = 86_400;
+pub const MAX_REPS: u32 = 1000;
+pub const MAX_WORKOUT_SECS: u32 = 2 * 86_400;
+
 fn dur(n: &roxmltree::Node, name: &str) -> u32 {
-    num(n, name).map(|v| v.round().max(0.0) as u32).unwrap_or(0)
+    num(n, name).map(|v| v.round().clamp(0.0, MAX_ELEMENT_SECS as f64) as u32).unwrap_or(0)
 }
 
 struct Cad {
@@ -144,11 +151,15 @@ fn parse_doc(doc: &roxmltree::Document) -> Result<Workout, String> {
     let mut block: u32 = 0;
     let mut global_texts: Vec<TextEvent> = vec![];
 
-    let push = |segs: &mut Vec<Segment>, mut s: Segment, texts: Vec<TextEvent>, t: &mut u32| {
+    let push = |segs: &mut Vec<Segment>, mut s: Segment, texts: Vec<TextEvent>, t: &mut u32| -> Result<(), String> {
         s.start = *t;
         s.texts = texts.into_iter().filter(|x| x.t < s.duration as f64).collect();
-        *t += s.duration;
+        *t = t.saturating_add(s.duration);
+        if *t > MAX_WORKOUT_SECS {
+            return Err("Workout is longer than 48 hours".into());
+        }
         segs.push(s);
+        Ok(())
     };
 
     let mut segments = vec![];
@@ -177,7 +188,7 @@ fn parse_doc(doc: &roxmltree::Document) -> Result<Workout, String> {
                 let p = frac(&el, &["Power", "PowerLow"]);
                 let mut s = base("steady", block.to_string(), dur(&el, "Duration"), p, p, cadence_of(&el));
                 s.idx = block;
-                push(&mut segments, s, texts, &mut t);
+                push(&mut segments, s, texts, &mut t)?;
             }
             "warmup" | "cooldown" | "ramp" => {
                 // Zwift semantics: PowerLow is the start value, PowerHigh the end value.
@@ -185,11 +196,11 @@ fn parse_doc(doc: &roxmltree::Document) -> Result<Workout, String> {
                 let kind = match tag.as_str() { "warmup" => "warmup", "cooldown" => "cooldown", _ => "ramp" };
                 let mut s = base(kind, block.to_string(), dur(&el, "Duration"), frac(&el, &["PowerLow"]), frac(&el, &["PowerHigh"]), cadence_of(&el));
                 s.idx = block;
-                push(&mut segments, s, texts, &mut t);
+                push(&mut segments, s, texts, &mut t)?;
             }
             "intervalst" => {
                 block += 1;
-                let reps = num(&el, "Repeat").map(|v| v.round().max(1.0) as u32).unwrap_or(1);
+                let reps = num(&el, "Repeat").map(|v| v.round().clamp(1.0, MAX_REPS as f64) as u32).unwrap_or(1);
                 let on_d = dur(&el, "OnDuration");
                 let off_d = dur(&el, "OffDuration");
                 let on_p = frac(&el, &["OnPower", "PowerOnHigh", "PowerOnLow"]);
@@ -204,12 +215,12 @@ fn parse_doc(doc: &roxmltree::Document) -> Result<Workout, String> {
                     if on_d > 0 {
                         let mut s = base("on", format!("{block}.1"), on_d, on_p, on_p, cadence_of(&el));
                         s.idx = block; s.rep = Some(r + 1); s.reps = Some(reps);
-                        push(&mut segments, s, t_on, &mut t);
+                        push(&mut segments, s, t_on, &mut t)?;
                     }
                     if off_d > 0 {
                         let mut s = base("off", format!("{block}.2"), off_d, off_p, off_p, Cad { cadence: off_cad, low: None, high: None });
                         s.idx = block; s.rep = Some(r + 1); s.reps = Some(reps);
-                        push(&mut segments, s, t_off, &mut t);
+                        push(&mut segments, s, t_off, &mut t)?;
                     }
                 }
             }
@@ -219,7 +230,7 @@ fn parse_doc(doc: &roxmltree::Document) -> Result<Workout, String> {
                 let mut s = base(kind, block.to_string(), dur(&el, "Duration"), None, None, cadence_of(&el));
                 s.idx = block;
                 s.free_ride = true;
-                push(&mut segments, s, texts, &mut t);
+                push(&mut segments, s, texts, &mut t)?;
             }
             _ => {} // unknown element — ignore
         }
@@ -363,5 +374,29 @@ mod tests {
     fn tolerates_stray_ampersand() {
         let w = parse(&SAMPLE.replace("<name>Test</name>", "<name>Fit & Fun</name>")).unwrap();
         assert_eq!(w.name, "Fit & Fun");
+    }
+
+    fn body(inner: &str) -> String {
+        format!("<workout_file><name>X</name><workout>{inner}</workout></workout_file>")
+    }
+
+    #[test]
+    fn huge_values_are_bounded() {
+        // used to allocate ~10⁹ segments and abort the app during the library scan
+        let w = parse(&body(r#"<IntervalsT Repeat="1e9" OnDuration="1" OffDuration="1" OnPower="1" OffPower="0.5"/>"#)).unwrap();
+        assert_eq!(w.segments.len(), 2 * MAX_REPS as usize);
+        // one element is capped at a day, so the per-second zone loop stays small
+        let w = parse(&body(r#"<SteadyState Duration="1e12" Power="0.6"/>"#)).unwrap();
+        assert_eq!(w.duration, MAX_ELEMENT_SECS);
+        assert_eq!(zone_seconds(&w.segments).iter().sum::<u32>(), MAX_ELEMENT_SECS);
+    }
+
+    #[test]
+    fn overlong_workout_is_rejected() {
+        let day = r#"<SteadyState Duration="86400" Power="0.6"/>"#;
+        assert!(parse(&body(&day.repeat(2))).is_ok());
+        assert!(parse(&body(&day.repeat(3))).is_err());
+        let reps = r#"<IntervalsT Repeat="1000" OnDuration="86400" OffDuration="0" OnPower="1"/>"#;
+        assert!(parse(&body(reps)).is_err());
     }
 }

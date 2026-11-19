@@ -383,7 +383,7 @@ Nothing is sent anywhere except what you enable: uploads to the platforms you co
 | ERG doesn't react | Make sure the trainer is connected as **trainer** (FTMS), not as a power meter; "Power only" in the ride header means no ERG. If zwoTrainer warns that another app controls the trainer and ERG doesn't react, close Zwift, the Zwift Companion app and other training apps (also on your phone or tablet), then connect the trainer again. |
 | Zwift Ride buttons do nothing | Connect only the **left** controller; check the *button test* in the Shifter dialog; update the Ride firmware in the Zwift Companion app. |
 | Zwift Click stops after ~1 min | Unlock it once in the Zwift phone app (see above). |
-| A workout is missing | It must be a `.zwo` file inside the workouts folder; use **Settings → App → Rescan**. |
+| A workout is missing | It must be a `.zwo` file inside the workouts folder; use **Settings → App → Rescan**. Files that can't be read, or describe a workout longer than 48 hours, are skipped. |
 | Garmin upload fails | Sign out and in again under Settings → Connections; use *Manual FIT import* meanwhile. |
 | Intervals.icu says the key is wrong | Create a new key under intervals.icu → Settings → Developer Settings and paste it again (no spaces). |
 | COROS import fails | Pick the **.zip** file zwoTrainer highlighted, not the .fit; processing in Training Hub can take a few minutes. |
