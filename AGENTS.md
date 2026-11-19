@@ -74,7 +74,7 @@ site/                       static website (home, features, download) with dark/
   ci.yml                    push/PR: tests + clippy + UI syntax + i18n + CSS + markup checks (Linux), tests (macOS, Windows)
   release.yml               manual: full CI, then bump patch/minor/major, commit, tag vX, push (needs RELEASE_PAT)
   build-app.yml             tag v*: build macOS arm64/x64, Windows, Linux → one GitHub release (+ latest.json for updates)
-  pages.yml                 successful release build, manual: deploy site/ of the latest release (or a given ref) to GitHub Pages
+  pages.yml                 called by build-app.yml after publishing, or manual: deploy site/ of the release (or a given ref) to GitHub Pages
 .github/dependabot.yml      monthly PRs to develop: all Actions in one, Cargo minor+patch in one, each Cargo major alone
 ```
 

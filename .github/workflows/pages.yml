@@ -2,21 +2,26 @@ name: Deploy site
 
 # Publishes the website in site/ to GitHub Pages, always as of the latest release, so the site
 # never describes features that aren't released yet (site changes on develop wait for it).
-#  - after "Build zwoTrainer" has published a release (tag push) -> deploy site/ of that
-#    release, so the download page names the new version once its installers are online
+#  - called by "Build zwoTrainer" (build-app.yml) as its last job, after the release is
+#    published -> deploy site/ of that tag, so the download page names the new version once its
+#    installers are online
 #  - workflow_dispatch -> redeploy the latest release; `ref` (e.g. develop) deploys another
 #    branch or tag instead, for an urgent site fix
 #
-# workflow_run is used instead of a tag trigger: it runs on the default branch, which the
-# github-pages environment allows, and only after the release assets exist. The tag to deploy
-# comes from the releases API, not from the triggering run (CodeQL: untrusted checkout).
+# No workflow_run: a privileged workflow_run that checks out and runs code from another run is
+# what CodeQL's "untrusted checkout" flags. Called from the tag build, the checkout is the
+# release's own tag.
 #
-# One-time setup: Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+# One-time setup: Settings -> Pages -> Build and deployment -> Source: "GitHub Actions"; the
+# github-pages environment admits the branch develop (manual runs) and tags v* (release builds).
 
 on:
-  workflow_run:
-    workflows: ['Build zwoTrainer']
-    types: [completed]
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Tag to deploy'
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       ref:
@@ -29,26 +34,18 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
 jobs:
   deploy:
     name: deploy site
-    # for workflow_run: only successful release builds (tag pushes), not build-only runs
-    if: >-
-      github.event_name != 'workflow_run' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       startsWith(github.event.workflow_run.head_branch, 'v'))
     runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      # The latest release's tag from the API (never the triggering workflow_run's commit: this
-      # job runs with pages/id-token write and must not execute foreign code).
+      # the given tag/branch, else the latest release's tag
       - name: Pick the release to deploy
         id: pick
         shell: bash
