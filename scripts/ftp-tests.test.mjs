@@ -285,9 +285,27 @@ test('evaluateGeneric: short efforts only keep bests, no FTP', () => {
   assert.equal(evaluateGeneric([], w), null);
 });
 
-test('evaluateGeneric: a library ramp gives 75 % of the best minute', () => {
+test('prepareTestWorkout tags a library ramp\'s steps (not the warm-up) as ramp, in ERG', () => {
+  const w = prepareTestWorkout({ segments: [seg(300, 0.4), ...[0.5, 0.6, 0.7, 0.8, 0.9, 1.0].map((p) => seg(60, p)), seg(300, 0.4)] });
+  assert.deepEqual(w.segments.map((s) => s.measure ?? null), [null, 'ramp', 'ramp', 'ramp', 'ramp', 'ramp', 'ramp', null]);
+  assert.ok(w.segments.filter((s) => s.measure === 'ramp').every((s) => s.ramp && s.erg !== false));
+  // four rises are no ramp
+  assert.ok(prepareTestWorkout({ segments: [0.5, 0.6, 0.7, 0.8, 0.9].map((p) => seg(60, p)) }).segments.every((s) => !s.measure));
+});
+
+test('evaluateGeneric: a library ramp gives 75 % of the best ramp minute', () => {
   const w = prepareTestWorkout({ segments: [seg(300, 0.4), ...[0.5, 0.6, 0.7, 0.8, 0.9, 1.0].map((p) => seg(60, p))] });
-  const r = evaluateGeneric(samples([300, 100], [60, 125], [60, 150], [60, 175], [60, 200], [60, 225], [60, 250]), w);
+  const r = evaluateGeneric(samples([300, 100], ...[125, 150, 175, 200, 225, 250].map((p) => [60, p, 'ramp'])), w);
   assert.equal(r.ftp, 188);
   assert.deepEqual(r.vo2, { method: 'ppo', power: 250 });
+});
+
+test('evaluateGeneric: a library ramp never takes the warm-up\'s minute', () => {
+  const w = prepareTestWorkout({ segments: [seg(300, 0.4), ...[0.5, 0.6, 0.7, 0.8, 0.9, 1.0].map((p) => seg(60, p))] });
+  const r = evaluateGeneric(samples([300, 400], [60, 125, 'ramp'], [60, 150, 'ramp']), w);
+  assert.equal(r.ftp, 113, '75 % of 150 W, not of the 400 W warm-up');
+  // stopped before a minute of ramp: incomplete, no FTP from the warm-up
+  const short = evaluateGeneric(samples([300, 400], [45, 125, 'ramp']), w);
+  assert.equal(short.ftp, null);
+  assert.deepEqual([short.incomplete.ridden, short.incomplete.needed], [45, 60]);
 });

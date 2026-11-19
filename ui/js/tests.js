@@ -296,17 +296,37 @@ export function classifyTest(profile, title) {
   return { kind: 'bests', label: t('powerBests') };
 }
 
-/** Prepare a library test workout for riding: efforts leave ERG and are tagged for evaluation. */
+/** Indices of a library workout's ramp steps: runs of ≥ 5 rising steps of ≤ 3 min (as classifyTest);
+ *  a longer block before the first rise (the warm-up) is not part of the ramp. */
+function rampSteps(segs) {
+  const out = new Set();
+  let run = [], rises = 0;
+  const flush = () => { if (rises >= 5) run.forEach((i) => out.add(i)); run = []; rises = 0; };
+  for (let i = 1; i < segs.length; i++) {
+    const a = segs[i], b = segs[i - 1];
+    if (a.p0 !== null && b.p0 !== null && a.p0 > b.p0 && a.duration <= 180) {
+      if (!run.length && b.duration <= 180) run.push(i - 1);
+      run.push(i);
+      rises++;
+    } else flush();
+  }
+  flush();
+  return out;
+}
+
+/** Prepare a library test workout for riding: efforts leave ERG and are tagged for evaluation;
+ *  ramp steps stay in ERG and are tagged `ramp`, like the built-in ramp test's. */
 export function prepareTestWorkout(workout) {
+  const ramp = rampSteps(workout.segments);
   const segments = workout.segments.map((s, i) => (isEffort(s.duration, s.p0, s.type)
     ? { ...s, erg: false, measure: `e${i}`, texts: s.texts.length ? s.texts : [{ t: 0, msg: t('tm.allOutGears', { dur: s.duration >= 60 ? `${Math.round(s.duration / 60)} min` : `${s.duration} s` }) }] }
-    : s));
+    : ramp.has(i) ? { ...s, ramp: true, measure: 'ramp' } : s));
   return { ...workout, segments };
 }
 
 /** Evaluate a library test from the efforts actually ridden. */
 export function evaluateGeneric(samples, workout) {
-  const all = workout.segments.filter((s) => s.measure).map((s) => effort(samples, s.measure, s.duration));
+  const all = workout.segments.filter((s) => s.measure && s.measure !== 'ramp').map((s) => effort(samples, s.measure, s.duration));
   const efforts = all.filter((e) => e.done && e.power).map((e) => ({ dur: e.dur, power: e.power, ridden: e.ridden }));
   // the longest FTP-relevant effort (≥ 8 min) that was started but abandoned
   const abandoned = all.filter((e) => !e.done && e.ridden > 0 && e.dur >= 480).sort((a, b) => b.dur - a.dur)[0];
@@ -315,12 +335,15 @@ export function evaluateGeneric(samples, workout) {
   const long = efforts.filter((e) => e.dur >= 1140).sort((a, b) => b.power - a.power)[0];
   const mid = efforts.filter((e) => e.dur >= 480 && e.dur < 1140).sort((a, b) => b.power - a.power)[0];
   const short = efforts.filter((e) => e.dur >= 150 && e.dur <= 420).sort((a, b) => b.power - a.power)[0];
+  // a ramp counts only from its own tagged steps (never the ride's best minute: the warm-up or
+  // another hard block could be it), like the built-in ramp test
+  const hasRamp = workout.segments.some((s) => s.measure === 'ramp');
+  const rampRidden = samples.filter((s) => s.measure === 'ramp').length;
+  const rampM1 = rampRidden >= 60 ? bestAvg(samples, 60, (s) => s.measure === 'ramp') : null;
   let ftp = null, method = '', isRamp = false;
   if (long) { ftp = Math.round(long.power * 0.95); method = t('method95', { n: 20 }); }
   else if (mid) { ftp = Math.round(mid.power * 0.9); method = t('method90', { n: Math.round(mid.dur / 60) }); }
-  else if (workout.segments.filter((s) => s.p0 !== null).some((s, i, a) => i > 4 && a.slice(i - 5, i + 1).every((x, j, arr) => j === 0 || x.p0 > arr[j - 1].p0)) && bests.m1) {
-    ftp = Math.round(bests.m1 * 0.75); method = t('method75'); isRamp = true;
-  }
+  else if (rampM1) { ftp = Math.round(rampM1 * 0.75); method = t('method75'); isRamp = true; }
   if (method) details.push([t('method'), method]);
   let cp = null, wPrime = null, vo2 = null;
   const other = long || mid;
@@ -329,10 +352,14 @@ export function evaluateGeneric(samples, workout) {
     if (m) { cp = m.cp; wPrime = m.wPrime; vo2 = { method: 'p8', power: m.p8 }; details.push([t('criticalPower'), `${m.cp} W`], [t('wPrime'), `${m.wPrime} kJ`]); }
   }
   if (!vo2 && mid && mid.dur <= 600) vo2 = { method: 'p8', power: mid.power };
-  if (!vo2 && isRamp) vo2 = { method: 'ppo', power: bests.m1 };
+  if (!vo2 && isRamp) vo2 = { method: 'ppo', power: rampM1 };
   const clean = Object.fromEntries(Object.entries(bests).filter(([, v]) => v));
   if (!ftp && abandoned) {
     const r = incomplete(t('effMin', { n: Math.round(abandoned.dur / 60) }), abandoned, clean, details);
+    return { ...r, cp, wPrime, vo2 };
+  }
+  if (!ftp && hasRamp && !long && !mid) {
+    const r = incomplete(t('rampNoun'), { ridden: rampRidden, dur: 60 }, clean, details);
     return { ...r, cp, wPrime, vo2 };
   }
   if (!ftp && !efforts.length && !bests.m1) return null;
