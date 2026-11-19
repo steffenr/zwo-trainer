@@ -1,7 +1,8 @@
 /* Last word: state helpers that must win over every component and view. */
 
 [hidden] { display: none !important; }
-.warn-text { color: var(--danger) !important; }
+/* warnings (connecting, pacing "too fast") vs. errors (failed actions, sync errors) */
+.warn-text { color: var(--warn) !important; }
 .danger-text { color: var(--danger) !important; }
 
 /* keyboard focus, one rule for every control: many buttons are styled with `all: unset`, which also

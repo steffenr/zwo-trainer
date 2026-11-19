@@ -1713,7 +1713,7 @@ function settingsSyncTab(s, { garmin, targets, svcs }) {
   const sp = syncOn() ? syncCfg.provider : 'off';
   const where = PLAT.onThisMachine;
   const syncRow = (id, label, path, found, extra = null) => html`<label class="sync-opt ${found ? '' : 'na'}"><input type="radio" name="syncp" value="${id}" ${sp === id ? 'checked' : ''} ${found ? '' : 'disabled'}><span><b>${label}</b><small class="muted">${extra || (path ? path.replace(/^\/Users\/[^/]+/, '~') : tHtml('syncNotFound', { where }))}</small></span></label>`;
-  const syncState = syncCfg.lastError ? html`<span class="warn-text">${syncCfg.lastError}</span>` : syncCfg.lastSync ? tHtml('lastSynced', { when: agoText(syncCfg.lastSync) }) : tHtml('notSyncedYet');
+  const syncState = syncCfg.lastError ? html`<span class="danger-text">${syncCfg.lastError}</span>` : syncCfg.lastSync ? tHtml('lastSynced', { when: agoText(syncCfg.lastSync) }) : tHtml('notSyncedYet');
   return html`
       <div class="svc">
         <div class="svc-head"><span class="svc-logo sync">${SYNC_ICON}</span>
@@ -2026,7 +2026,7 @@ async function controllerDialog() {
       const found = await ctrls.scan(5);
       if (!list.isConnected) return;
       mount(list, foundDevices(found, (f) => saved.some((x) => x.id === f.id), tHtml('noController')));
-    } catch (e) { mount(list, html`<p class="warn-text">${String(e)}</p>`); }
+    } catch (e) { mount(list, html`<p class="danger-text">${String(e)}</p>`); }
   };
   list.onclick = async (e) => {
     const b = e.target.closest('.dev[data-id]');
@@ -2039,7 +2039,7 @@ async function controllerDialog() {
       await api.saveState();
       toast(t('ctrlConnected', { name: info.name }));
       controllerDialog();
-    } catch (err) { mount(b, html`<span class="warn-text">${tHtml('failedE', { e: String(err) })}</span>`); }
+    } catch (err) { mount(b, html`<span class="danger-text">${tHtml('failedE', { e: String(err) })}</span>`); }
   };
   bindActions(modal, {
     rescan: search,
@@ -2097,7 +2097,7 @@ function deviceDialog(kind) {
       if (!modal.open || !list.isConnected) return;
       mount(list, foundDevices(found, (f) => saved?.id === f.id, tHtml('nothingFound')));
     } catch (e) {
-      mount(list, html`<p class="warn-text">${String(e)}</p><p class="muted small">${raw(PLAT.bt)}</p>`);
+      mount(list, html`<p class="danger-text">${String(e)}</p><p class="muted small">${raw(PLAT.bt)}</p>`);
     }
   };
   list.onclick = async (e) => {
@@ -2112,7 +2112,7 @@ function deviceDialog(kind) {
       if (kind === 'trainer' && info.ergDenied) toast(t('ergDenied'));
       else toast(`${t('nameConnected', { name: info.name })}${kind === 'trainer' ? ` · ${info.erg ? t('ergReady') : t('powerOnly')}` : ''}`);
     } catch (err) {
-      mount(list, html`<p class="warn-text">${tHtml('connectionFailed', { e: String(err) })}</p>`);
+      mount(list, html`<p class="danger-text">${tHtml('connectionFailed', { e: String(err) })}</p>`);
     }
   };
   bindActions(modal, { ...common, rescan: search });
@@ -2307,7 +2307,7 @@ function summaryTest(r) {
   if (r?.details) {
     return html`<div class="ftp-result"><div><span class="k">${tHtml('powerBestsSaved')}</span></div><dl>${detailRows(r.details)}${r.vo2est && html`<dt>${tHtml('vo2Estimate')}</dt><dd>${r.vo2est.rel} ml/kg/min</dd>`}</dl></div>`;
   }
-  return html`<p class="warn-text">${tHtml('notEnoughData')} — ${tHtml('powerSourceQ')}.</p>`;
+  return html`<p class="danger-text">${tHtml('notEnoughData')} — ${tHtml('powerSourceQ')}.</p>`;
 }
 
 /** The six ride numbers (time, average power, NP, HR, cadence, energy); '–' when not recorded. */
@@ -3304,13 +3304,13 @@ class Ride {
     const doGarmin = async () => {
       rowState('garmin-state', html`<span class="spinner"></span> ${tHtml('uploadingGarmin')}`);
       try { rowState('garmin-state', uploaded((await uploadToGarmin(entry)).url)); } catch (e) {
-        rowState('garmin-state', html`<span class="warn-text" title="${String(e)}">${tHtml('uploadFailed')}</span> <button class="btn ghost sm" data-act="garmin-up">${tHtml('retry')}</button> <button class="btn ghost sm" data-act="garmin">${tHtml('manual')}</button>`);
+        rowState('garmin-state', html`<span class="danger-text" title="${String(e)}">${tHtml('uploadFailed')}</span> <button class="btn ghost sm" data-act="garmin-up">${tHtml('retry')}</button> <button class="btn ghost sm" data-act="garmin">${tHtml('manual')}</button>`);
       }
     };
     const doSvc = async (id) => {
       rowState(`svc-${id}`, html`<span class="spinner"></span> ${tHtml('uploading')}`);
       try { rowState(`svc-${id}`, uploaded((await uploadToService(entry, id)).url)); } catch (err) {
-        rowState(`svc-${id}`, html`<span class="warn-text" title="${String(err)}">${tHtml('failed')}</span> <button class="btn ghost sm" data-act="svc-up" data-id="${id}">${tHtml('retry')}</button>`);
+        rowState(`svc-${id}`, html`<span class="danger-text" title="${String(err)}">${tHtml('failed')}</span> <button class="btn ghost sm" data-act="svc-up" data-id="${id}">${tHtml('retry')}</button>`);
       }
     };
     const leave = () => { closeModal(); this.close(); };

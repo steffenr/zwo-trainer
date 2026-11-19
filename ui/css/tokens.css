@@ -18,9 +18,9 @@
   --accent-soft: rgba(0, 118, 144, .10);
   --ok: #2e9e4f;
   --ok-soft: rgba(46, 158, 79, .12);
-  --warn: #b7791f;
-  --warn-soft: rgba(183, 121, 31, .12);
-  --danger: #e0352b;
+  --warn: #8a5a12;         /* text ≥ 4.5:1 on --surface, --surface-2 and --warn-soft */
+  --warn-soft: rgba(138, 90, 18, .12);
+  --danger: #c62f26;       /* on --surface 5.53, on --surface-2 5.06; white on it 5.47 */
   --pos: #1f2328;          /* position line in the diagram */
   --done: #00a3c4;         /* completed bar (brand cyan; graphic only, never text) */
   --trace: #1f2328;        /* actual power trace */

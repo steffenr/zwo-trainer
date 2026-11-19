@@ -50,8 +50,8 @@ Always use tokens (`var(--…)`), never raw hex in components. Dark values apply
 | `--accent-hover` | `#00657b` | `#44d2ee` | hover of accent fills (light: white on it 6.67:1) |
 | `--accent-soft` | 10 % accent | 14 % accent | selected backgrounds |
 | `--ok` / `--ok-soft` | `#2e9e4f` | `#4cd07a` | connected, success, ERG on |
-| `--warn` / `--warn-soft` | `#b7791f` | `#f2c14e` | connecting, ERG off, changed intensity |
-| `--danger` | `#e0352b` | `#ff5a4f` | destructive text and buttons |
+| `--warn` / `--warn-soft` | `#8a5a12` | `#f2c14e` | connecting, ERG off, changed intensity (`.warn-text`); light value ≥ 4.5:1 as text, also on `--warn-soft` |
+| `--danger` | `#c62f26` | `#ff5a4f` | destructive text and buttons, errors (`.danger-text`: failed actions, sync errors); light value ≥ 4.5:1 as text and under white |
 | `--pos`, `--trace`, `--ftp` | text colour | white | chart position line, power trace, FTP line |
 | `--done` | `#00a3c4` (brand cyan) | accent | completed part of the workout; graphic only, never text |
 | `--cad` / `--hrline` | `#8b3dff` / `#e0004d` | `#b98bff` / `#ff4d7d` | cadence and heart-rate traces |
