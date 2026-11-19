@@ -1000,6 +1000,127 @@ mod tests {
         assert_eq!(o["power"], json!(215));
     }
 
+    /// Indoor Bike Data fields in packet order: (flag bit, size, key we read or None if skipped).
+    /// Speed is present when bit 0 ("more data") is *clear*.
+    const BIKE_FIELDS: [(u16, usize, Option<&str>); 10] = [
+        (0x0001, 2, Some("speed")),
+        (0x0002, 2, None),         // average speed
+        (0x0004, 2, Some("cadence")),
+        (0x0008, 2, None),         // average cadence
+        (0x0010, 3, None),         // total distance (uint24)
+        (0x0020, 2, None),         // resistance level
+        (0x0040, 2, Some("power")),
+        (0x0080, 2, None),         // average power
+        (0x0100, 5, None),         // expended energy: total (2), per hour (2), per minute (1)
+        (0x0200, 1, Some("hr")),
+    ];
+
+    fn bike_field_present(flags: u16, bit: u16) -> bool {
+        if bit == 0x0001 { flags & bit == 0 } else { flags & bit != 0 }
+    }
+
+    /// A packet for `flags` with distinct values in the fields we read and 0xEE filler in the
+    /// skipped ones (so a wrong offset reads garbage), plus the expected result.
+    fn bike_packet(flags: u16) -> (Vec<u8>, Map<String, Value>) {
+        let mut v = flags.to_le_bytes().to_vec();
+        let mut want = Map::new();
+        for (bit, size, key) in BIKE_FIELDS {
+            if !bike_field_present(flags, bit) {
+                continue;
+            }
+            match key {
+                Some("speed") => { v.extend(2850u16.to_le_bytes()); want.insert("speed".into(), json!(28.5)); }
+                Some("cadence") => { v.extend(181u16.to_le_bytes()); want.insert("cadence".into(), json!(90.5)); }
+                Some("power") => { v.extend(215i16.to_le_bytes()); want.insert("power".into(), json!(215)); }
+                Some("hr") => { v.push(142); want.insert("hr".into(), json!(142)); }
+                _ => v.extend(std::iter::repeat_n(0xEE, size)),
+            }
+        }
+        (v, want)
+    }
+
+    /// What `parse_bike_data` promises for the first `n` bytes of `bike_packet(flags)`: None when
+    /// the flags or a field we read (speed, cadence, power) is cut; a cut heart rate is left out.
+    fn bike_expected(flags: u16, n: usize, full: &Map<String, Value>) -> Option<Map<String, Value>> {
+        if n < 2 {
+            return None;
+        }
+        let mut o = 2;
+        let mut want = Map::new();
+        for (bit, size, key) in BIKE_FIELDS {
+            if !bike_field_present(flags, bit) {
+                continue;
+            }
+            match key {
+                Some("hr") => {
+                    if o < n {
+                        want.insert("hr".into(), full["hr"].clone());
+                    }
+                }
+                Some(k) => {
+                    if o + size > n {
+                        return None;
+                    }
+                    want.insert(k.into(), full[k].clone());
+                }
+                None => {}
+            }
+            o += size;
+        }
+        Some(want)
+    }
+
+    #[test]
+    fn bike_data_every_flag_combination() {
+        for flags in 0..0x0400u16 {
+            let (v, want) = bike_packet(flags);
+            assert_eq!(parse_bike_data(&v).as_ref(), Some(&want), "flags {flags:#06x}");
+            // reserved bits above the heart rate don't change anything
+            let mut hi = v.clone();
+            hi[1] |= 0xFC;
+            assert_eq!(parse_bike_data(&hi).as_ref(), Some(&want), "flags {flags:#06x} + reserved bits");
+        }
+    }
+
+    #[test]
+    fn bike_data_truncated_at_every_byte() {
+        for flags in 0..0x0400u16 {
+            let (v, want) = bike_packet(flags);
+            for n in 0..v.len() {
+                assert_eq!(parse_bike_data(&v[..n]), bike_expected(flags, n, &want), "flags {flags:#06x}, {n} of {} bytes", v.len());
+            }
+        }
+    }
+
+    #[test]
+    fn bike_data_examples() {
+        // no speed (bit 0), everything else: avg speed, cadence, avg cadence, distance, resistance,
+        // power, avg power, energy, heart rate
+        let mut v = 0x03FFu16.to_le_bytes().to_vec();
+        v.extend([0x10, 0x27]); // avg speed
+        v.extend(170u16.to_le_bytes()); // 85 rpm
+        v.extend([0x00, 0x01]); // avg cadence
+        v.extend([0x01, 0x02, 0x03]); // distance
+        v.extend([0x05, 0x00]); // resistance
+        v.extend((-12i16).to_le_bytes()); // backpedalling: negative power is kept
+        v.extend([0xc8, 0x00]); // avg power
+        v.extend([1, 2, 3, 4, 5]); // energy
+        v.push(155);
+        let o = parse_bike_data(&v).unwrap();
+        assert_eq!(Value::Object(o), json!({ "cadence": 85.0, "power": -12, "hr": 155 }));
+
+        // only the flags: speed is expected but missing
+        assert_eq!(parse_bike_data(&[0x00, 0x00]), None);
+        // "more data" set and nothing else: a valid, empty packet
+        assert_eq!(parse_bike_data(&[0x01, 0x00]), Some(Map::new()));
+        assert_eq!(parse_bike_data(&[0x01]), None);
+        assert_eq!(parse_bike_data(&[]), None);
+
+        // heart rate 0 (no strap contact) is ignored, the rest stays
+        let o = parse_bike_data(&[0x41, 0x02, 0x64, 0x00, 0x00]).unwrap();
+        assert_eq!(Value::Object(o), json!({ "power": 100 }));
+    }
+
     #[test]
     fn heart_rate() {
         assert_eq!(parse_hr(&[0x00, 142]).unwrap()["hr"], json!(142));
