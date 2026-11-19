@@ -1575,7 +1575,7 @@ async function openPreview(file) {
     </div>
     <div class="pv-diagram"></div>
     <div class="seg-info muted">${tHtml('tapSegment', { ftp: ftp() })}</div>
-    ${raw(zoneBreakdown(workout))}
+    ${zoneBreakdown(workout)}
     ${workout.description && html`<p class="pv-desc">${workout.description}</p>`}
     <div class="modal-actions">${actions}</div>`, 'wide');
 
@@ -1606,8 +1606,8 @@ function zoneBreakdown(workout) {
     for (let i = 0; i < n; i++) secs[zoneOf(powerAt(s, ((i + 0.5) / n) * s.duration), bounds()).id - 1] += s.duration / n;
   }
   const total = workout.duration || 1;
-  return `<div class="zones-bar">${ZONES.map((z, i) => secs[i] ? `<i style="flex:${secs[i]};background:${z.color}" title="${z.short} ${z.name}: ${fmtTime(secs[i])}"></i>` : '').join('')}${free ? `<i style="flex:${free};background:${FREE_COLOR}" title="${t('freeRide')} ${fmtTime(free)}"></i>` : ''}</div>
-  <div class="zones-legend">${ZONES.map((z, i) => `<span><i style="background:${z.color}"></i>${z.short} ${z.name} <b>${pct(Math.round((secs[i] / total) * 100))}</b></span>`).join('')}</div>`;
+  return html`<div class="zones-bar">${ZONES.map((z, i) => secs[i] > 0 && html`<i style="flex:${secs[i]};background:${z.color}" title="${z.short} ${z.name}: ${fmtTime(secs[i])}"></i>`)}${free > 0 && html`<i style="flex:${free};background:${FREE_COLOR}" title="${tText('freeRide')} ${fmtTime(free)}"></i>`}</div>
+  <div class="zones-legend">${ZONES.map((z, i) => html`<span><i style="background:${z.color}"></i>${z.short} ${z.name} <b>${pct(Math.round((secs[i] / total) * 100))}</b></span>`)}</div>`;
 }
 
 function targetText(s, mult = 1) {
