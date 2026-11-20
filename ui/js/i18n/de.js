@@ -304,7 +304,7 @@ export const de = {
   optEndChime: 'Klang, wenn ein Workout bis zum Ende gefahren ist',
   optAutoPause: 'Auto-Pause, wenn du aufhörst zu treten (geht automatisch weiter)',
   optCoach: 'Coach-Hinweise während der Fahrt (Trittfrequenz, Pacing, harte Abschnitte)',
-  optKeys: 'Tastenkürzel während der Fahrt (Leertaste, Pfeiltasten, + / −, Esc)',
+  optKeys: 'Tastenkürzel während der Fahrt (Leertaste, Pfeiltasten, + / −, C, Esc)',
   workoutsFolder: 'Workout-Ordner',
   changeDots: 'Ändern…',
   rescanTitle: 'Ordner neu einlesen',

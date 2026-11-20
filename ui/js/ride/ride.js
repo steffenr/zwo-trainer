@@ -208,7 +208,7 @@ class Ride {
           <span class="compact-state" id="cmp-state"><i id="cmp-dot"></i><span id="cmp-status" role="status"></span></span>
           <div class="compact-gears" id="cmp-gears" hidden><button class="icon-btn" data-shift="-1" title="${tText('shiftDownKey')}" aria-label="${tText('shiftDownKey')}">−</button><span id="cmp-gear"></span><button class="icon-btn" data-shift="1" title="${tText('shiftUpKey')}" aria-label="${tText('shiftUpKey')}">+</button></div>
           <span class="compact-short">${cmpWl}${cmpCtl}</span>
-          <button class="icon-btn" data-act="expand" title="${tText('expandView')}" aria-label="${tText('expandView')}">${IC.expand}</button>
+          <button class="icon-btn" data-act="expand" title="${tText('expandView')}" aria-label="${tText('expandView')}" aria-keyshortcuts="C">${IC.expand}</button>
         </header>
         <div class="compact-main">
           <section class="cp cp-live">
@@ -477,6 +477,8 @@ class Ride {
     if ((e.key === ' ' || e.key === 'Enter') && this.keyTarget(e.target)) return;
     const map = { ' ': 'play', ArrowRight: 'next', ArrowLeft: 'prev', Escape: 'stop' };
     if (map[e.key]) { e.preventDefault(); return this.control(map[e.key]); }
+    // C toggles the compact presentation; leave Ctrl/Cmd/Alt combinations alone (copy, …)
+    if ((e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); return this.compact.set(!this.compact.active); }
     if (e.key === '+' || e.key === '=') { e.preventDefault(); return this.shift(1); }
     if (e.key === '-' || e.key === '_') { e.preventDefault(); return this.shift(-1); }
     if (this.freeLike && this.vs.on && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { e.preventDefault(); return this.shift(e.key === 'ArrowUp' ? 1 : -1); }

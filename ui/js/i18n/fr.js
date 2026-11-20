@@ -304,7 +304,7 @@ export const fr = {
   optEndChime: 'Carillon quand une séance est terminée jusqu’au bout',
   optAutoPause: 'Pause auto quand vous arrêtez de pédaler (reprise automatique)',
   optCoach: 'Conseils du coach pendant la sortie (cadence, allure, segments durs)',
-  optKeys: 'Raccourcis clavier pendant la sortie (Espace, flèches, + / −, Échap)',
+  optKeys: 'Raccourcis clavier pendant la sortie (Espace, flèches, + / −, C, Échap)',
   workoutsFolder: 'Dossier de séances',
   changeDots: 'Modifier…',
   rescanTitle: 'Relire le dossier',
