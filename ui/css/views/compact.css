@@ -20,8 +20,6 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
 /* ---------- heading row (vertical layout) ---------- */
 .compact-head {
   display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; min-height: 32px; flex: none;
-  & .icon-btn { flex: none; width: 28px; height: 28px; }
-  & .ic { width: 18px; height: 18px; }
 }
 :root[data-os="mac"] .compact-head { padding-left: 80px; }
 .compact-state {
@@ -36,12 +34,12 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
 }
 /* play + workout-left number in the heading row when the window is short */
 .compact-short { display: none; align-items: center; gap: 8px; }
-.compact-ctl {
-  display: flex; align-items: center; gap: 8px; flex: none;
-  & .ctl { width: 34px; height: 34px; border-radius: var(--r-md); }
-  & .ctl svg { width: 18px; height: 18px; }
+.compact-ctl { display: flex; align-items: center; gap: 6px; flex: none; }
+/* play, stop, expand and the gear buttons are one size everywhere (30 px: three rows of them fit the 150 px rail) */
+.compact-ride :is(.ctl, .icon-btn) {
+  flex: none; width: 30px; height: 30px; border-radius: var(--r-md);
+  & svg, & .ic { width: 18px; height: 18px; }
 }
-.compact-short .compact-ctl .ctl { width: 30px; height: 30px; }
 
 /* ---------- workout left ---------- */
 .cmp-wl {
@@ -145,8 +143,6 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
 /* rail buttons are 28 px so play / stop, expand and the gear row fit 150 px of window height beside the macOS window buttons */
 .compact-rail {
   & .rail-row { display: flex; align-items: center; gap: 6px; }
-  & .icon-btn, & .compact-ctl .ctl { flex: none; width: 28px; height: 28px; }
-  & .compact-ctl { gap: 6px; }
   & .compact-gears { gap: 2px; }
 }
 .cmp-gear-n { min-width: 20px; text-align: center; }

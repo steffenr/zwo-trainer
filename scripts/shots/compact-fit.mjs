@@ -127,6 +127,29 @@ async function graphProblems(page, scenario, layout) {
   }, [scenario, layout]);
 }
 
+/** The window must be draggable: empty spots of the heading row (vertical) or of the rail and the gap (horizontal) carry data-tauri-drag-region, and the buttons are equally sized. */
+async function dragProblems(page, layout) {
+  return page.evaluate((layout) => {
+    const out = [];
+    const spot = (label, x, y) => {
+      const el = document.elementFromPoint(x, y);
+      if (!el?.closest('[data-tauri-drag-region]') || !el.hasAttribute('data-tauri-drag-region')) out.push(`not draggable: ${label} (${el ? `${el.tagName.toLowerCase()}.${el.className}` : 'nothing'})`);
+    };
+    if (layout === 'h') {
+      const r = document.querySelector('.compact-rail').getBoundingClientRect();
+      spot('rail, beside the macOS window buttons', r.left + 6, r.top + 4); // the rail's 32 px top padding stays free even with the gear row shown
+      const g = document.querySelector('.cp-gap').getBoundingClientRect();
+      if (g.width > 12) spot('gap between live block and graph', g.left + g.width / 2, g.top + g.height / 2);
+    } else {
+      const r = document.querySelector('.compact-head').getBoundingClientRect();
+      spot('heading row, beside the window buttons', r.left + 6, r.top + r.height / 2);
+    }
+    const sizes = [...document.querySelectorAll('.compact-ride .ctl, .compact-ride .icon-btn')].filter((b) => b.getClientRects().length).map((b) => `${Math.round(b.getBoundingClientRect().width)}x${Math.round(b.getBoundingClientRect().height)}`);
+    if (new Set(sizes).size > 1) out.push(`buttons differ in size: ${[...new Set(sizes)].join(', ')}`);
+    return out;
+  }, layout);
+}
+
 /** With the paused fake clock the page only renders when asked: a tiny screenshot is a frame, and observers (resize) run in it. */
 async function settle(s) {
   for (let i = 0; i < 3; i++) { await s.tick(300); await s.page.screenshot({ type: 'jpeg', quality: 1 }); }
@@ -161,6 +184,7 @@ for (const theme of themes) {
           const layout = await page.evaluate(() => document.querySelector('.compact-ride')?.dataset.layout);
           const want = compactMode(w, h).layout;
           if (layout !== want) found.unshift(`data-layout is ${layout}, expected ${want}`);
+          found.push(...await dragProblems(page, want));
           if (compactMode(w, h).graph) found.push(...await graphProblems(page, scenario, want));
           report(found.length === 0, label, found);
         }

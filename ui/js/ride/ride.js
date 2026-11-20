@@ -133,7 +133,7 @@ class Ride {
     const cmpCtl = html`<span class="compact-ctl">${cmpPlay}${cmpStop}</span>`;
     const cmpWl = html`<span class="cmp-wl"><small>${tHtml('compactWorkoutLeft')}</small><b class="cmp-wleft" data-fit="14">0:00</b></span>`;
     const cmpWlNum = html`<span class="cmp-wl" title="${tText('compactWorkoutLeft')}"><b class="cmp-wleft" data-fit="12">0:00</b></span>`;
-    const cmpExpand = html`<button class="icon-btn" data-act="expand" title="${tText('expandView')}" aria-label="${tText('expandView')}" aria-keyshortcuts="C">${IC.expand}</button>`;
+    const cmpExpand = html`<button class="ctl" data-act="expand" title="${tText('expandView')}" aria-label="${tText('expandView')}" aria-keyshortcuts="C">${IC.expand}</button>`;
     const cmpGears = html`<div class="compact-gears cmp-gears" role="group" hidden><button class="icon-btn" data-shift="-1" title="${tText('shiftDownKey')}" aria-label="${tText('shiftDownKey')}">−</button><span class="cmp-gear-n"></span><button class="icon-btn" data-shift="1" title="${tText('shiftUpKey')}" aria-label="${tText('shiftUpKey')}">+</button></div>`;
     // the ride title lives in the regular top bar (in place of the mode switch)
     const rt = $('#ride-title');
@@ -208,7 +208,7 @@ class Ride {
           <button class="ctl int-b" data-int="1" title="${tText('intUpTitle')}" aria-label="${tText('btnIntUp')}">+</button>
         </div>
       </div>
-      <section class="compact-ride" aria-label="${tText('compactView')}">
+      <section class="compact-ride" aria-label="${tText('compactView')}" data-tauri-drag-region>
         <header class="compact-head" data-tauri-drag-region>
           <span class="compact-state" id="cmp-state"><i id="cmp-dot"></i><span id="cmp-status" class="sr-only" role="status"></span></span>
           ${cmpGears}
@@ -216,11 +216,11 @@ class Ride {
           ${cmpExpand}
         </header>
         <div class="compact-main">
-          <section class="cp cp-live">
-            <div class="cp-ph"><i></i>${tHtml('live')}</div>
-            <div class="cp-body">
+          <section class="cp cp-live" data-tauri-drag-region>
+            <div class="cp-ph" data-tauri-drag-region><i></i>${tHtml('live')}</div>
+            <div class="cp-body" data-tauri-drag-region>
               <div class="cp-cell"><div class="cp-dial"><div class="cp-mount" id="cmp-gauge"></div><div class="cp-center"><b id="cmp-pow" data-fit="16">–</b><small>W</small></div></div></div>
-              <div class="cp-ex">
+              <div class="cp-ex" data-tauri-drag-region>
                 <div class="cp-tgt" id="cmp-target" data-fit="12">${IC.bolt}<span id="cmp-target-v">–</span></div>
                 <div class="cp-tiles">
                   <div class="cp-tile" role="group" title="${tText('devHr')}" aria-label="${tText('devHr')}">${IC.heart}<b id="cmp-hr" data-fit="14">–</b></div>
@@ -229,17 +229,17 @@ class Ride {
               </div>
             </div>
           </section>
-          <div class="cp-gap"></div>
-          <section class="cp cp-graph">
-            <div class="cp-ph"><i></i>${tHtml('workout')}${cmpWl}</div>
-            <div class="cp-body"><div class="cp-gslot" id="cmp-graph" role="img" aria-label="${tText('compactGraphAria')}"></div></div>
+          <div class="cp-gap" data-tauri-drag-region></div>
+          <section class="cp cp-graph" data-tauri-drag-region>
+            <div class="cp-ph" data-tauri-drag-region><i></i>${tHtml('workout')}${cmpWl}</div>
+            <div class="cp-body" data-tauri-drag-region><div class="cp-gslot" id="cmp-graph" role="img" aria-label="${tText('compactGraphAria')}"></div></div>
           </section>
         </div>
-        <div class="compact-foot">${cmpCtl}${cmpWl}</div>
-        <div class="compact-rail">
-          <div class="rail-row">${cmpCtl}</div>
-          <div class="rail-row">${cmpExpand}</div>
-          <div class="rail-row">${cmpGears}</div>
+        <div class="compact-foot" data-tauri-drag-region>${cmpCtl}${cmpWl}</div>
+        <div class="compact-rail" data-tauri-drag-region>
+          <div class="rail-row" data-tauri-drag-region>${cmpCtl}</div>
+          <div class="rail-row" data-tauri-drag-region>${cmpExpand}</div>
+          <div class="rail-row" data-tauri-drag-region>${cmpGears}</div>
         </div>
       </section>
       <div class="ready" id="ready"><div><b>${tHtml('ready')}</b><span>${tHtml('readyText')}${trainer.connected && html` ${tHtml('readyPedal')}`}.</span></div>
