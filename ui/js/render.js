@@ -230,14 +230,14 @@ export class CompactGraph {
     this.at = 0;
     this.labels = null;
     this.svg = null;
-    this.ro = new ResizeObserver(() => this.schedule());
+    // the drawing is out of the flow (position: absolute), so redrawing never changes the slot's size
+    this.ro = new ResizeObserver(() => this.redraw());
     this.ro.observe(slot);
   }
 
   setWorkout(w) { this.w = w; this.redraw(); }
   setOrientation(o) { if (o !== this.orientation) { this.orientation = o; this.redraw(); } }
-  schedule() { if (!this.raf) this.raf = requestAnimationFrame(() => { this.raf = 0; this.redraw(); }); }
-  destroy() { this.ro.disconnect(); if (this.raf) cancelAnimationFrame(this.raf); }
+  destroy() { this.ro.disconnect(); }
 
   /** Rebuild the SVG for the current size, workout and orientation (nothing is drawn while the slot is hidden or tiny). */
   redraw() {

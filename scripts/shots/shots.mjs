@@ -58,7 +58,7 @@ export default [
   },
   // ---------------------------------------------------------------- compact view (960 × 200 window at 2×)
   {
-    name: 'compact', about: 'Compact ride view next to a video (960 × 200 window)',
+    name: 'compact', about: 'Compact ride view next to a video (960 × 200 window: live block and workout graph)',
     scale: 2, rider: mode('workouts'),
     async run(s) {
       await rideTo(s, SSS, 18 * 60 + 44);
