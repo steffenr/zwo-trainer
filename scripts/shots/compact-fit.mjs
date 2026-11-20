@@ -57,7 +57,7 @@ function inspect() {
   const win = { w: window.innerWidth, h: window.innerHeight };
   for (const el of root.querySelectorAll('*')) {
     if (el.closest('svg') && !(el instanceof SVGTextElement)) continue;
-    if (el.closest('[hidden]')) continue;
+    if (el.closest('[hidden]') || el.classList.contains('cg-measure')) continue;
     const cs = getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden') continue;
     const r = el.getBoundingClientRect();
@@ -76,14 +76,33 @@ function inspect() {
   }
   for (const svg of root.querySelectorAll('svg')) {
     const sr = svg.getBoundingClientRect();
-    for (const tx of svg.querySelectorAll('text')) {
+    for (const tx of svg.querySelectorAll('text:not(.cg-measure)')) {
+      if (getComputedStyle(tx).visibility === 'hidden' || !tx.textContent.trim()) continue;
       const b = tx.getBoundingClientRect();
-      if (b.right > sr.right + 0.5 || b.left < sr.left - 0.5 || b.top < sr.top - 0.5 || b.bottom > sr.bottom + 0.5) out.push(`svg text outside svg: "${tx.textContent.trim().slice(0, 24)}"`);
+      if (b.right > sr.right + 0.5 || b.left < sr.left - 0.5 || b.top < sr.top - 0.5 || b.bottom > sr.bottom + 0.5) out.push(`svg text outside svg: "${tx.textContent.trim().slice(0, 24)}" x ${b.left.toFixed(0)}..${b.right.toFixed(0)} in ${sr.left.toFixed(0)}..${sr.right.toFixed(0)}, y ${b.top.toFixed(0)}..${b.bottom.toFixed(0)} in ${sr.top.toFixed(0)}..${sr.bottom.toFixed(0)}`);
     }
   }
   const bad = /\b(null|NaN|undefined)\b/.exec(root.innerText);
   if (bad) out.push(`text says ${bad[0]}`);
   return out;
+}
+
+/** Runs in the page when the graph is shown: one polygon per segment, the position line inside the drawing, labels only where they belong. */
+async function graphProblems(page, scenario, layout) {
+  return page.evaluate(async ([scenario, layout]) => {
+    const out = [];
+    const { ride } = await import('/js/core.js');
+    const svg = document.querySelector('#cmp-graph svg');
+    if (!svg) return ['no graph drawn'];
+    const n = svg.querySelectorAll('polygon').length;
+    if (n !== ride.w.segments.length) out.push(`graph has ${n} bars for ${ride.w.segments.length} segments`);
+    const sr = svg.getBoundingClientRect(), pr = svg.querySelector('.cg-pos').getBoundingClientRect();
+    if (pr.left < sr.left - 1 || pr.right > sr.right + 1 || pr.top < sr.top - 1 || pr.bottom > sr.bottom + 1) out.push('position line outside the graph');
+    const shown = [...svg.querySelectorAll(layout === 'v' ? 'text.cg-k' : 'text.cg-lab:not(.cg-measure)')].filter((t) => getComputedStyle(t).visibility !== 'hidden' && t.textContent.trim());
+    if (scenario === 'last' && shown.length !== 1) out.push(`last segment: ${shown.length} labels shown, expected only the "now" label`);
+    if (scenario !== 'last' && shown.length < 1) out.push('no label shown');
+    return out;
+  }, [scenario, layout]);
 }
 
 /** With the paused fake clock the page only renders when asked: a tiny screenshot is a frame, and observers (resize) run in it. */
@@ -118,7 +137,7 @@ for (const theme of themes) {
           const layout = await page.evaluate(() => document.querySelector('.compact-ride')?.dataset.layout);
           const want = compactMode(w, h).layout;
           if (layout !== want) found.unshift(`data-layout is ${layout}, expected ${want}`);
-          if (def.check) found.push(...await def.check(page, { w, h }));
+          if (compactMode(w, h).graph) found.push(...await graphProblems(page, scenario, want));
           report(found.length === 0, label, found);
         }
         if (scenario === 'steady' && theme === themes[0] && lang === langs[0]) {

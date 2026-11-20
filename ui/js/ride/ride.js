@@ -9,7 +9,7 @@
 // module is evaluated: only inside functions and methods that run after boot.
 import { CompactView, compactMode, levelView } from '../compact.js';
 import { powerAt, segmentAt } from '../zwo.js';
-import { zoneOf, zoneColor, zoneInk, fmtTime, Diagram, Gauge, ProgressRing, motionOK } from '../render.js';
+import { zoneOf, zoneColor, zoneInk, fmtTime, Diagram, CompactGraph, Gauge, ProgressRing, motionOK } from '../render.js';
 import { invoke } from '../ble.js';
 import { gearTable, virtualSpeed, targetWatts } from '../vshift.js';
 import { protocolById, isTestWorkout, classifyTest, prepareTestWorkout } from '../tests.js';
@@ -109,6 +109,7 @@ class Ride {
       apply: (compact) => {
         document.body.classList.toggle('compact-riding', compact);
         if (!compact) this.diagram.update(this.t, this.samples);
+        else this.render(true); // paint the compact view (graph included) right away
       },
       report: (error) => toast(String(error)),
     });
@@ -247,6 +248,7 @@ class Ride {
     this.gauge = new Gauge($('.gauge-mount', r));
     this.ring = new ProgressRing($('.ring-mount', r));
     this.cGauge = new Gauge($('#cmp-gauge', r), { compact: true });
+    this.cGraph = new CompactGraph($('#cmp-graph', r), this.w, { bounds: bounds() });
     const cmpEl = $('.compact-ride', r);
     const fitCompact = () => {
       // thresholds are window sizes (the ride screen fills the window in compact view)
@@ -256,6 +258,7 @@ class Ride {
       cmpEl.dataset.foot = m.foot;
       cmpEl.dataset.graph = m.graph ? '1' : '0';
       cmpEl.dataset.tiles = m.tiles ? '1' : '0';
+      this.cGraph.setOrientation(m.layout);
     };
     this.cObs = new ResizeObserver(fitCompact);
     this.cObs.observe(cmpEl);
@@ -562,6 +565,7 @@ class Ride {
     this.w.duration = total;
     this.diagram.w = this.w;
     this.diagram.draw();
+    this.cGraph.setWorkout(this.w);
     $('#d-tot').textContent = t('ofTime', { time: fmtTime(total) });
     this.hint(t('rampComplete'));
     this.drive(); this.render(true);
@@ -837,15 +841,24 @@ class Ride {
    * share the same samples and Ride; no DOM is rebuilt on resize. Runs after the full view, whose target, bar and
    * "workout left" it copies.
    */
-  renderCompact({ s, F, freeLike, p, c, hr, gt, cadState, live }) {
+  renderCompact({ s, n, F, rem, freeLike, p, c, hr, gt, cadState, live }) {
     this.cGauge.update({ target: gt, actual: p, ftp: F, bounds: bounds() });
     setText(this.q('cmp-pow'), p ?? '–');
     // target line: the real target (virtual shifting included), a ramp's range, or the free / all-out words
-    const lv = levelView(s, this.mult(), F);
-    const targetText = lv.kind === 'range' ? `${lv.a}–${lv.b} W`
-      : gt != null ? `${gt} W`
-      : t(lv.kind === 'allout' ? 'gAllOut' : lv.kind === 'maxeffort' ? 'maxEffort' : 'gFree');
+    const m = this.mult(), lv = levelView(s, m, F);
+    const word = (v) => (v.kind === 'range' ? `${v.a}–${v.b} W` : v.kind === 'watts' ? `${v.a} W`
+      : t(v.kind === 'allout' ? 'gAllOut' : v.kind === 'maxeffort' ? 'maxEffort' : 'gFree'));
+    const targetText = lv.kind !== 'range' && gt != null ? `${gt} W` : word(lv);
     setText(this.q('cmp-target-v'), targetText);
+    if (this.compact.active) {
+      // the workout graph: now (this segment) and next, from the same values as the target line
+      const time = fmtTime(Math.max(0, Math.ceil(rem))), nxt = n && word(levelView(n, m, F));
+      this.cGraph.update(this.t, {
+        nowKicker: t('compactNow'), now: [`${t('compactNow')} ${targetText}`, targetText], nowSub: t('compactLeft', { time }),
+        nextKicker: t('compactNext'), nextWatts: nxt, nextSub: n ? `${t('compactIn')} ${time}` : null,
+        next: n ? [`${t('compactNext')} ${nxt} · ${t('compactIn')} ${time}`, `${t('compactNext')} ${nxt}`] : null,
+      });
+    }
     const ink = zoneInk(gt != null ? gt / F : null, bounds());
     if (this.cmpInk !== ink) { this.cmpInk = ink; this.q('cmp-target').style.color = ink; }
     setText(this.q('cmp-hr'), hr ?? '–');
@@ -918,6 +931,7 @@ class Ride {
     this.ending = true;
     trainer.setFreeRide(); // release ERG (also on Discard, which skips finish())
     this.cObs?.disconnect();
+    this.cGraph?.destroy();
     invoke('keep_awake', { on: false }).catch(() => {});
     this.wakeLock?.release().catch(() => {});
     this.wakeLock = null;

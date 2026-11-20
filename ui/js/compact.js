@@ -95,7 +95,7 @@ export function segmentPoints(seg, { orientation, total, maxP, length, breadth, 
   return pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
 }
 
-const NOW_MIN = 48, NEXT_3 = 46, NEXT_2 = 31, GAP = 2;
+const NOW_MIN = 48, NEXT_3 = 46, NEXT_2 = 33, GAP = 2; // NEXT_2 includes the descent below the watts baseline
 /**
  * Vertical graph labels. NOW sits above the position line (its bottom, `nowBase`, is at least NOW_MIN from the
  * top), NEXT below the next segment's start (`yNext`, null without a next segment). NEXT is pulled up so it
@@ -113,11 +113,22 @@ export function placeGraphLabels({ height, yNow, yNext }) {
 
 /**
  * Horizontal graph labels. now / next are [full, short] strings; `measure(string)` gives the width in px.
- * Now ends left of the position line (xNow), Next starts right of the next segment's start (xNext).
+ * Now ends left of the position line (xNow); when even its short form does not fit there, it moves to the
+ * right of the line (nowSide 'right', and Next then has to clear it). Next starts right of the next segment's
+ * start (xNext). A label that does not fit becomes ''.
  */
 export function fitHorizontalLabels({ width, xNow, xNext, now, next, measure }) {
-  const nowText = measure(now[0]) <= xNow - 6 ? now[0] : now[1];
-  if (!next) return { now: nowText, next: '' };
-  const fits = (s) => xNext + 6 + measure(s) <= width;
-  return { now: nowText, next: fits(next[0]) ? next[0] : fits(next[1]) ? next[1] : '' };
+  const left = xNow - 6;
+  let nowText, nowSide = 'left', nextFrom = 0;
+  if (measure(now[0]) <= left) nowText = now[0];
+  else if (measure(now[1]) <= left) nowText = now[1];
+  else {
+    nowSide = 'right';
+    const end = xNow + 6 + measure(now[1]);
+    nowText = end <= width ? now[1] : '';
+    if (nowText) nextFrom = end + 8;
+  }
+  if (!next) return { now: nowText, next: '', nowSide };
+  const fits = (s) => xNext + 6 >= nextFrom && xNext + 6 + measure(s) <= width;
+  return { now: nowText, next: fits(next[0]) ? next[0] : fits(next[1]) ? next[1] : '', nowSide };
 }

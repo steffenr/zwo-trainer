@@ -158,7 +158,7 @@ test('placeGraphLabels: clamps, overlap, no next', () => {
   assert.deepEqual(placeGraphLabels({ height: 200, yNow: 60, yNext: 80 }), { nowBase: 60, next: { top: 80, lines: 3 } });
   assert.deepEqual(placeGraphLabels({ height: 200, yNow: 10, yNext: 14 }), { nowBase: 48, next: null });
   assert.deepEqual(placeGraphLabels({ height: 100, yNow: 40, yNext: 70 }), { nowBase: 48, next: { top: 54, lines: 3 } });
-  assert.deepEqual(placeGraphLabels({ height: 100, yNow: 60, yNext: 70 }), { nowBase: 60, next: { top: 69, lines: 2 } });
+  assert.deepEqual(placeGraphLabels({ height: 100, yNow: 60, yNext: 70 }), { nowBase: 60, next: { top: 67, lines: 2 } });
   assert.deepEqual(placeGraphLabels({ height: 80, yNow: 60, yNext: 70 }), { nowBase: 60, next: null });
   assert.deepEqual(placeGraphLabels({ height: 200, yNow: 5, yNext: null }), { nowBase: 48, next: null });
 });
@@ -166,8 +166,12 @@ test('placeGraphLabels: clamps, overlap, no next', () => {
 test('fitHorizontalLabels: shortening ladder', () => {
   const measure = (s) => s.length * 7;
   const now = ['Now 140 W', '140 W'], next = ['Next 220 W · in 8:00', 'Next 220 W'];
-  assert.deepEqual(fitHorizontalLabels({ width: 200, xNow: 67, xNext: 93, now, next, measure }), { now: '140 W', next: 'Next 220 W' });
-  assert.deepEqual(fitHorizontalLabels({ width: 600, xNow: 200, xNext: 260, now, next, measure }), { now: 'Now 140 W', next: 'Next 220 W · in 8:00' });
-  assert.deepEqual(fitHorizontalLabels({ width: 200, xNow: 67, xNext: 190, now, next, measure }), { now: '140 W', next: '' });
-  assert.deepEqual(fitHorizontalLabels({ width: 200, xNow: 67, xNext: 93, now, next: null, measure }), { now: '140 W', next: '' });
+  assert.deepEqual(fitHorizontalLabels({ width: 200, xNow: 67, xNext: 93, now, next, measure }), { now: '140 W', next: 'Next 220 W', nowSide: 'left' });
+  assert.deepEqual(fitHorizontalLabels({ width: 600, xNow: 200, xNext: 260, now, next, measure }), { now: 'Now 140 W', next: 'Next 220 W · in 8:00', nowSide: 'left' });
+  assert.deepEqual(fitHorizontalLabels({ width: 200, xNow: 67, xNext: 190, now, next, measure }), { now: '140 W', next: '', nowSide: 'left' });
+  assert.deepEqual(fitHorizontalLabels({ width: 200, xNow: 67, xNext: 93, now, next: null, measure }), { now: '140 W', next: '', nowSide: 'left' });
+  // the position line is too close to the left edge: Now moves to its right, and Next must clear it
+  assert.deepEqual(fitHorizontalLabels({ width: 200, xNow: 20, xNext: 93, now, next, measure }), { now: '140 W', next: 'Next 220 W', nowSide: 'right' });
+  assert.deepEqual(fitHorizontalLabels({ width: 200, xNow: 20, xNext: 40, now, next, measure }), { now: '140 W', next: '', nowSide: 'right' });
+  assert.deepEqual(fitHorizontalLabels({ width: 60, xNow: 20, xNext: 50, now, next, measure }), { now: '', next: '', nowSide: 'right' }); // nothing fits
 });

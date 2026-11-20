@@ -88,6 +88,21 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
   }
 }
 
+/* the drawing of CompactGraph (render.js) */
+.cg-svg { display: block; position: absolute; left: 0; top: 0; }   /* out of the flow, so the drawing never sizes its own slot */
+.cg-seg {
+  &.done { opacity: .38; }
+  &.cur { stroke: var(--text); stroke-width: 1.5; }
+}
+.cg-ftp { stroke: var(--text-2); stroke-dasharray: 3 4; opacity: .7; }
+.cg-next { stroke: var(--text); stroke-width: 1; stroke-dasharray: 2 3; }
+.cg-pos { stroke: var(--text); stroke-width: 2; }
+.cg-k { fill: var(--text-2); font: 700 11px var(--font); letter-spacing: .08em; text-transform: uppercase; }
+.cg-w { fill: var(--text); font: 700 15px var(--num); font-variant-numeric: tabular-nums; }
+.cg-s { fill: var(--text-2); font: 12px var(--font); font-variant-numeric: tabular-nums; }
+.cg-lab { fill: var(--text); font: 600 12px var(--font); font-variant-numeric: tabular-nums; }
+.cg-measure { visibility: hidden; }
+
 /* graph slot (CompactGraph draws into it) */
 .cp-gslot { flex: 1; min-height: 0; min-width: 0; position: relative; pointer-events: none; }
 .cp-graph {
@@ -101,7 +116,7 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
 /* ---------- vertical layout ---------- */
 .compact-ride[data-layout="v"] {
   & .cp-graph .cp-ph .cmp-wl { display: none; }
-  &[data-live="row"] .cp-body { flex-direction: row; align-items: center; }
+  &[data-live="row"] .cp-live .cp-body { flex-direction: row; align-items: center; }
   &[data-live="row"] .cp-cell { width: 84px; height: 84px; margin-inline: 0; }
   &[data-live="row"] .cp-ex { flex: 1; justify-content: center; }
   &[data-live="row"] .cp-tiles { flex-direction: column; gap: 5px; }

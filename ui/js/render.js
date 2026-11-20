@@ -1,5 +1,6 @@
 // SVG rendering: zone colours, workout diagram, mini profiles and the power gauge.
 import { t } from './i18n/index.js';
+import { maxPOf, segmentPoints, placeGraphLabels, fitHorizontalLabels, fitFontSize } from './compact.js';
 
 // Zone colours follow the classic Zwift / WhatsOnZwift palette.
 // `name` is looked up in the UI language each time it's read (keys zone1…zone5).
@@ -207,6 +208,121 @@ export class Diagram {
       }
       this.traces[k].setAttribute('points', pts);
     }
+  }
+}
+
+const put = (n, k, v) => { if (n.__v?.[k] !== v) { n.setAttribute(k, v); (n.__v ??= {})[k] = v; } };
+const putText = (n, s) => { if (n.textContent !== s) n.textContent = s; };
+
+/**
+ * Workout graph of the compact view (see docs/superpowers/specs/2026-11-20-compact-graph-layout-design.md).
+ * Vertical: time runs down, labels in a left gutter. Horizontal: time runs across, labels above the bars.
+ * Draws into `slot` at its measured pixel size (so text stays crisp) when the workout, the orientation or the
+ * slot size changes; update() only moves the position line and the labels. Geometry and label rules are the
+ * pure functions in compact.js.
+ */
+export class CompactGraph {
+  constructor(slot, workout, { bounds }) {
+    this.slot = slot;
+    this.w = workout;
+    this.bounds = bounds;
+    this.orientation = 'v';
+    this.at = 0;
+    this.labels = null;
+    this.svg = null;
+    this.ro = new ResizeObserver(() => this.schedule());
+    this.ro.observe(slot);
+  }
+
+  setWorkout(w) { this.w = w; this.redraw(); }
+  setOrientation(o) { if (o !== this.orientation) { this.orientation = o; this.redraw(); } }
+  schedule() { if (!this.raf) this.raf = requestAnimationFrame(() => { this.raf = 0; this.redraw(); }); }
+  destroy() { this.ro.disconnect(); if (this.raf) cancelAnimationFrame(this.raf); }
+
+  /** Rebuild the SVG for the current size, workout and orientation (nothing is drawn while the slot is hidden or tiny). */
+  redraw() {
+    const width = Math.floor(this.slot.clientWidth), height = Math.floor(this.slot.clientHeight);
+    this.slot.replaceChildren();
+    this.svg = null;
+    if (width < 20 || height < 20) return;
+    const v = this.orientation === 'v', gutter = 80, top = 20;
+    const total = this.w.duration || 1, maxP = maxPOf(this.w.segments);
+    const geo = { orientation: this.orientation, total, maxP, length: v ? height : width, breadth: v ? width : height, top, gutter };
+    const svg = el('svg', { width, height, viewBox: `0 0 ${width} ${height}`, class: 'cg-svg', 'aria-hidden': 'true' }, this.slot);
+    this.segEls = this.w.segments.map((s) => el('polygon', {
+      points: segmentPoints(s, geo), class: 'cg-seg',
+      fill: s.p0 === null ? FREE_COLOR : zoneColor((s.p0 + s.p1) / 2, this.bounds),
+    }, svg));
+    const ftp = 1 / maxP;
+    if (v) el('line', { class: 'cg-ftp', x1: gutter + ftp * (width - gutter), x2: gutter + ftp * (width - gutter), y1: 0, y2: height }, svg);
+    else el('line', { class: 'cg-ftp', x1: 0, x2: width, y1: height - ftp * (height - top), y2: height - ftp * (height - top) }, svg);
+    this.nextLine = el('line', { class: 'cg-next', ...(v ? { x1: gutter, x2: width } : { y1: top, y2: height }) }, svg);
+    this.pos = el('line', { class: 'cg-pos', ...(v ? { x1: 0, x2: width } : { y1: 0, y2: height }) }, svg);
+    const text = (cls, anchor) => el('text', { class: cls, ...(anchor ? { 'text-anchor': anchor } : {}), x: 0, y: -50 }, svg);
+    this.tx = v
+      ? { nowK: text('cg-k'), nowW: text('cg-w'), nowS: text('cg-s'), nextK: text('cg-k'), nextW: text('cg-w'), nextS: text('cg-s') }
+      : { now: text('cg-lab', 'end'), next: text('cg-lab') };
+    this.measureEl = el('text', { class: 'cg-lab cg-measure', x: 0, y: -50 }, svg);
+    this.svg = svg;
+    this.g = { v, width, height, gutter, top, total };
+    this.idx = -1;
+    this.lastW = {};
+    if (this.labels) this.update(this.at, this.labels);
+  }
+
+  /**
+   * Position line, finished segments and labels. `at`: seconds into the workout. `labels`:
+   * { nowKicker, now: [full, short], nowSub, nextKicker, next: [full, short] | null, nextWatts, nextSub }
+   * (now[1] is the watts alone; next[0] / next[1] already carry the "Next" word).
+   */
+  update(at, labels) {
+    this.at = at;
+    this.labels = labels;
+    if (!this.svg) return;
+    const { v, width, height, gutter, top, total } = this.g, segs = this.w.segments;
+    let idx = segs.findIndex((s) => at < s.start + s.duration);
+    if (idx < 0) idx = segs.length - 1;
+    if (idx !== this.idx) {
+      this.idx = idx;
+      this.segEls.forEach((p, i) => { p.classList.toggle('done', i < idx); p.classList.toggle('cur', i === idx); });
+    }
+    const length = v ? height : width;
+    const pos = Math.max(0, Math.min(1, at / total)) * length;
+    const ns = segs[idx + 1] ? (segs[idx + 1].start / total) * length : null;
+    put(this.pos, v ? 'y1' : 'x1', pos.toFixed(1)); put(this.pos, v ? 'y2' : 'x2', pos.toFixed(1));
+    put(this.nextLine, 'visibility', ns === null ? 'hidden' : 'visible');
+    if (ns !== null) { put(this.nextLine, v ? 'y1' : 'x1', ns.toFixed(1)); put(this.nextLine, v ? 'y2' : 'x2', ns.toFixed(1)); }
+    const x = this.tx;
+    if (v) {
+      const place = placeGraphLabels({ height, yNow: pos, yNext: ns });
+      put(x.nowK, 'y', place.nowBase - 34); put(x.nowW, 'y', place.nowBase - 18); put(x.nowS, 'y', place.nowBase - 6);
+      putText(x.nowK, labels.nowKicker); putText(x.nowS, labels.nowSub);
+      this.fitWatts('now', x.nowW, labels.now[1], gutter);
+      const nx = place.next;
+      for (const k of ['nextK', 'nextW', 'nextS']) put(x[k], 'visibility', nx ? 'visible' : 'hidden');
+      if (nx) {
+        put(x.nextK, 'y', nx.top + 13); put(x.nextW, 'y', nx.top + 29); put(x.nextS, 'y', nx.top + 42);
+        put(x.nextS, 'visibility', nx.lines === 3 ? 'visible' : 'hidden');
+        putText(x.nextK, labels.nextKicker); putText(x.nextS, labels.nextSub ?? '');
+        this.fitWatts('next', x.nextW, labels.nextWatts ?? '', gutter);
+      }
+    } else {
+      const measure = (s) => { putText(this.measureEl, s); return this.measureEl.getComputedTextLength(); };
+      const fit = fitHorizontalLabels({ width, xNow: pos, xNext: ns ?? width, now: labels.now, next: ns === null ? null : labels.next, measure });
+      const left = fit.nowSide === 'left';
+      put(x.now, 'x', (left ? pos - 6 : pos + 6).toFixed(1)); put(x.now, 'y', 13); put(x.now, 'text-anchor', left ? 'end' : 'start'); putText(x.now, fit.now);
+      put(x.next, 'x', ((ns ?? 0) + 6).toFixed(1)); put(x.next, 'y', 13); putText(x.next, fit.next);
+    }
+  }
+
+  /** Watts text in the vertical gutter: shrink 1 px at a time (floor 12 px) when it is wider than the gutter. */
+  fitWatts(which, node, text, gutter) {
+    if (this.lastW[which] === text) return;
+    this.lastW[which] = text;
+    putText(node, text);
+    node.style.fontSize = '';
+    const size = fitFontSize((s) => { node.style.fontSize = `${s}px`; return node.getComputedTextLength(); }, gutter - 6, 12, 15);
+    node.style.fontSize = `${size}px`;
   }
 }
 
