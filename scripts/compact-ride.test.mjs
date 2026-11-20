@@ -156,11 +156,13 @@ test('maxPOf and segmentPoints', () => {
 
 test('placeGraphLabels: clamps, overlap, no next', () => {
   assert.deepEqual(placeGraphLabels({ height: 200, yNow: 60, yNext: 80 }), { nowBase: 60, next: { top: 80, lines: 3 } });
-  assert.deepEqual(placeGraphLabels({ height: 200, yNow: 10, yNext: 14 }), { nowBase: 48, next: null });
-  assert.deepEqual(placeGraphLabels({ height: 100, yNow: 40, yNext: 70 }), { nowBase: 48, next: { top: 54, lines: 3 } });
-  assert.deepEqual(placeGraphLabels({ height: 100, yNow: 60, yNext: 70 }), { nowBase: 60, next: { top: 67, lines: 2 } });
+  assert.deepEqual(placeGraphLabels({ height: 200, yNow: 10, yNext: 14 }), { nowBase: 54, next: null });
+  // the large watts line makes the Next block 52 px high with three lines, 40 with two
+  assert.deepEqual(placeGraphLabels({ height: 100, yNow: 40, yNext: 70 }), { nowBase: 54, next: { top: 60, lines: 2 } });
+  assert.deepEqual(placeGraphLabels({ height: 130, yNow: 40, yNext: 70 }), { nowBase: 54, next: { top: 70, lines: 3 } });
+  assert.deepEqual(placeGraphLabels({ height: 100, yNow: 60, yNext: 70 }), { nowBase: 60, next: null });
   assert.deepEqual(placeGraphLabels({ height: 80, yNow: 60, yNext: 70 }), { nowBase: 60, next: null });
-  assert.deepEqual(placeGraphLabels({ height: 200, yNow: 5, yNext: null }), { nowBase: 48, next: null });
+  assert.deepEqual(placeGraphLabels({ height: 200, yNow: 5, yNext: null }), { nowBase: 54, next: null });
 });
 
 test('fitHorizontalLabels: shortening ladder', () => {

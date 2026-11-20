@@ -300,19 +300,19 @@ export class CompactGraph {
     const x = this.tx;
     if (v) {
       const place = placeGraphLabels({ height, yNow: pos, yNext: ns });
-      put(x.nowK, 'y', place.nowBase - 34); put(x.nowW, 'y', place.nowBase - 18); put(x.nowS, 'y', place.nowBase - 6);
+      put(x.nowK, 'y', place.nowBase - 40); put(x.nowW, 'y', place.nowBase - 20); put(x.nowS, 'y', place.nowBase - 5);
       const avail = gutter - 6;
       this.fitGutter('nowK', x.nowK, labels.nowKicker, 11, 11, avail);
       this.fitGutter('nowS', x.nowS, labels.nowSub, 12, 11, avail);
-      this.fitGutter('nowW', x.nowW, labels.now[1], 15, 12, avail);
+      this.fitGutter('nowW', x.nowW, labels.now[1], 24, 12, avail); // a single value is large, a range shrinks to the gutter
       const nx = place.next;
       for (const k of ['nextK', 'nextW', 'nextS']) put(x[k], 'visibility', nx ? 'visible' : 'hidden');
       if (nx) {
-        put(x.nextK, 'y', nx.top + 13); put(x.nextW, 'y', nx.top + 29); put(x.nextS, 'y', nx.top + 42);
+        put(x.nextK, 'y', nx.top + 13); put(x.nextW, 'y', nx.top + 33); put(x.nextS, 'y', nx.top + 49);
         put(x.nextS, 'visibility', nx.lines === 3 ? 'visible' : 'hidden');
         this.fitGutter('nextK', x.nextK, labels.nextKicker, 11, 11, avail);
         this.fitGutter('nextS', x.nextS, labels.nextSub ?? '', 12, 11, avail);
-        this.fitGutter('nextW', x.nextW, labels.nextWatts ?? '', 15, 12, avail);
+        this.fitGutter('nextW', x.nextW, labels.nextWatts ?? '', 24, 12, avail);
       }
     } else {
       // only when a text or a place (whole px) changed: measuring forces a layout, and the line itself moves above every tick

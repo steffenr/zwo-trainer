@@ -142,6 +142,20 @@ async function graphProblems(page, scenario, layout) {
   }, [scenario, layout]);
 }
 
+/** Vertical layout: the target, the gauge number and a single watts value on the graph are large (a range shrinks to the gutter). */
+async function verticalFontProblems(page) {
+  return page.evaluate(() => {
+    const out = [], px = (sel) => { const e = document.querySelector(sel); return e ? parseFloat(getComputedStyle(e).fontSize) : 0; };
+    const col = document.querySelector('.compact-ride').dataset.live === 'col';
+    const tgt = px('#cmp-target'), pow = px('#cmp-pow');
+    if (tgt < (col ? 26 : 22)) out.push(`vertical ${col ? 'column' : 'row'}: target is ${tgt} px, expected at least ${col ? 26 : 22}`);
+    if (pow < (col ? 34 : 24)) out.push(`vertical ${col ? 'column' : 'row'}: gauge number is ${pow.toFixed(1)} px, expected at least ${col ? 34 : 24}`);
+    const w = [...document.querySelectorAll('.cg-w')].find((t) => getComputedStyle(t).visibility !== 'hidden' && /^\d+ W$/.test(t.textContent.trim()));
+    if (w && parseFloat(getComputedStyle(w).fontSize) < 20) out.push(`vertical graph: "${w.textContent}" is ${getComputedStyle(w).fontSize}, expected at least 20px for a single value`);
+    return out;
+  });
+}
+
 /** The wide bar is read from a distance: its values are large (bigger again when the bar is tall). Narrow windows shrink them to fit, so only >= 900 px wide is checked. */
 async function fontProblems(page, w) {
   if (w < 900) return [];
@@ -244,6 +258,7 @@ for (const theme of themes) {
           if (layout !== want) found.unshift(`data-layout is ${layout}, expected ${want}`);
           found.push(...await dragProblems(page, want));
           if (want === 'h' && scenario !== 'stress') found.push(...await fontProblems(page, w));
+          if (want === 'v' && scenario === 'steady' && h >= 360) found.push(...await verticalFontProblems(page));
           if (compactMode(w, h).graph) found.push(...await graphProblems(page, scenario, want));
           report(found.length === 0, label, found);
         }

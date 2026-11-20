@@ -137,7 +137,8 @@ export function segmentPoints(seg, { orientation, total, maxP, length, breadth, 
   return pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
 }
 
-const NOW_MIN = 48, NEXT_3 = 46, NEXT_2 = 33, GAP = 2; // NEXT_2 includes the descent below the watts baseline
+// Block sizes of the vertical labels with the large (up to 24 px) watts line; the heights include the descent below the last baseline
+const NOW_MIN = 54, NEXT_3 = 52, NEXT_2 = 40, GAP = 2;
 /**
  * Vertical graph labels. NOW sits above the position line (its bottom, `nowBase`, is at least NOW_MIN from the
  * top), NEXT below the next segment's start (`yNext`, null without a next segment). NEXT is pulled up so it

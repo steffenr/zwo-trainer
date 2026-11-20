@@ -120,7 +120,9 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
   &[data-live="row"] .cp-cell { width: 84px; height: 84px; margin-inline: 0; }
   &[data-live="row"] .cp-ex { flex: 1; justify-content: center; }
   &[data-live="row"] .cp-tiles { flex-direction: column; gap: 5px; }
-  &[data-live="col"] .cp-tgt { margin-top: -6px; }
+  &[data-live="col"] .cp-tgt { margin-top: -6px; font-size: 28px; & svg { width: 22px; height: 22px; } }
+  &[data-live="row"] .cp-tgt { font-size: 24px; & svg { width: 19px; height: 19px; } }
+  & .cp-center b { font-size: min(32cqw, 32cqh); }   /* the actual power: large, the ring around it is 116 / 84 px */
   &[data-graph="0"] .cp-graph { display: none; }
   &[data-graph="0"] .cp-live { flex: 1; }
   &[data-foot="head"] .compact-short { display: flex; }
