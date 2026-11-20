@@ -108,6 +108,7 @@ class Ride {
       resize: (compact, leave = false) => invoke('ride_window', { compact, leave }),
       apply: (compact) => {
         document.body.classList.toggle('compact-riding', compact);
+        this.cBar = undefined; // the native side reset the bar height: send it again if the layout needs it
         if (!compact) this.diagram.update(this.t, this.samples);
         else this.render(true); // paint the compact view (graph included) right away
       },
@@ -260,6 +261,11 @@ class Ride {
       cmpEl.dataset.tiles = m.tiles ? '1' : '0';
       this.cGraph.setOrientation(m.layout);
       fitTexts(cmpEl);
+      // the wide bar is held to a window height of 195-200 px, the tall layout is not (the native side resets this on entering / leaving compact)
+      if (this.compact.active) {
+        const bar = m.layout === 'h';
+        if (bar !== this.cBar) { this.cBar = bar; invoke('ride_window_bar', { bar }).catch(() => {}); }
+      }
     };
     this.cObs = new ResizeObserver(fitCompact);
     this.cObs.observe(cmpEl);

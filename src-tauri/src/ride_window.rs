@@ -10,6 +10,21 @@ use tauri::{LogicalSize, PhysicalPosition, PhysicalSize, WebviewWindow};
 /// and flat enough for a bar below it. The full view's minimum is 900 × 640.
 pub(crate) const COMPACT_MIN: (u32, u32) = (240, 150);
 
+/// Window height (min, max) in logical px while the compact view is a wide bar: readable from a distance,
+/// so it is 195 to 200 px high at any width.
+pub(crate) const BAR_HEIGHT: (u32, u32) = (195, 200);
+
+/// Minimum and maximum window size for the compact view: `bar` (the wide, horizontal layout) is held to
+/// `BAR_HEIGHT`; the tall layout keeps the compact minimum and has no maximum.
+pub(crate) fn bar_sizes(bar: bool) -> (LogicalSize<f64>, Option<LogicalSize<f64>>) {
+    let width = f64::from(COMPACT_MIN.0);
+    if bar {
+        (LogicalSize::new(width, f64::from(BAR_HEIGHT.0)), Some(LogicalSize::new(10_000.0, f64::from(BAR_HEIGHT.1))))
+    } else {
+        (LogicalSize::new(width, f64::from(COMPACT_MIN.1)), None)
+    }
+}
+
 const RESIZE_ERROR: &str = "Cannot resize the window. Please try again.";
 const LEAVE_ERROR: &str = "Cannot restore the window size. Please resize the window by hand.";
 
@@ -88,6 +103,7 @@ impl WindowOps for WebviewWindow {
             } else {
                 (900.0, 640.0)
             };
+            self.set_max_size(None::<LogicalSize<f64>>)?; // the wide bar's height limit is set again by the UI
             self.set_min_size(Some(LogicalSize::new(width, height)))?;
             match geometry {
                 Some(saved) => {
@@ -306,6 +322,17 @@ mod tests {
     #[test]
     fn compact_minimum_is_240_by_150() {
         assert_eq!(COMPACT_MIN, (240, 150));
+    }
+
+    #[test]
+    fn the_wide_bar_is_195_to_200_px_high_and_the_tall_layout_is_unlimited() {
+        let (min, max) = bar_sizes(true);
+        assert_eq!((min.width, min.height), (240.0, 195.0));
+        let max = max.expect("a height limit");
+        assert_eq!((max.width, max.height), (10_000.0, 200.0));
+        let (min, max) = bar_sizes(false);
+        assert_eq!((min.width, min.height), (240.0, 150.0));
+        assert!(max.is_none());
     }
 
     #[test]

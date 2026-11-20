@@ -19,7 +19,7 @@ const langs = opt('--lang') ? [opt('--lang')] : ['en', 'de', 'fr'];
 const only = opt('--scenario');
 
 const VERTICAL = [[240, 200], [240, 300], [240, 400], [240, 520], [240, 640], [240, 760], [320, 560]];
-const HORIZONTAL = [[640, 150], [960, 150], [1400, 150], [960, 340]];
+const HORIZONTAL = [[640, 195], [960, 195], [1400, 195], [1800, 200], [2400, 200], [960, 340]]; // the wide bar window is 195-200 px high
 const SIZES = [...VERTICAL, ...HORIZONTAL];
 
 const mode = (m, more) => (p) => { p.settings.mode = m; more?.(p); };
@@ -136,9 +136,25 @@ async function graphProblems(page, scenario, layout) {
     }
     const shown = [...svg.querySelectorAll(layout === 'v' ? 'text.cg-k' : 'text.cg-lab:not(.cg-measure)')].filter((t) => getComputedStyle(t).visibility !== 'hidden' && t.textContent.trim());
     if (scenario === 'last' && shown.length !== 1) out.push(`last segment: ${shown.length} labels shown, expected only the "now" label`);
-    if (scenario !== 'last' && shown.length < 1) out.push('no label shown');
+    // the stress strings are far longer than any real label: in a narrow bar (a 190 px graph) none of them has to fit
+    if (scenario !== 'last' && shown.length < 1 && !(scenario === 'stress' && layout === 'h' && window.innerWidth < 900)) out.push('no label shown');
     return out;
   }, [scenario, layout]);
+}
+
+/** The wide bar is read from a distance: its values are large (bigger again when the bar is tall). Narrow windows shrink them to fit, so only >= 900 px wide is checked. */
+async function fontProblems(page, w) {
+  if (w < 900) return [];
+  return page.evaluate(() => {
+    const out = [], px = (sel) => { const e = document.querySelector(sel); return e ? parseFloat(getComputedStyle(e).fontSize) : 0; };
+    const tall = document.querySelector('.compact-main').getBoundingClientRect().height >= 170;
+    const lab = [...document.querySelectorAll('.cg-lab:not(.cg-measure)')].find((t) => t.textContent.trim());
+    const want = tall ? { tgt: 34, tile: 40, wl: 34, lab: 17 } : { tgt: 24, tile: 30, wl: 26, lab: 14 };
+    const got = { tgt: px('#cmp-target'), tile: px('#cmp-hr'), wl: px('.cp-graph .cmp-wleft'), lab: lab ? parseFloat(getComputedStyle(lab).fontSize) : 0 };
+    const wlText = document.querySelector('.cp-graph .cmp-wleft')?.textContent ?? '';
+    for (const k of Object.keys(want)) if (!(k === 'wl' && wlText.length > 5) && got[k] < want[k] - 0.01) out.push(`${tall ? 'tall' : 'flat'} bar: ${k} is ${got[k]} px, expected at least ${want[k]}`);
+    return out;
+  });
 }
 
 /** The window must be draggable: empty spots of the heading row (vertical) or of the rail and the gap (horizontal) carry data-tauri-drag-region, and the buttons are equally sized. */
@@ -158,6 +174,16 @@ async function dragProblems(page, layout) {
       const r = document.querySelector('.compact-head').getBoundingClientRect();
       spot('heading row, beside the window buttons', r.left + 6, r.top + r.height / 2);
     }
+    if (layout === 'h') { // a wide window is a bar: its panels stop growing and the window height is limited
+      const m = document.querySelector('.compact-main').getBoundingClientRect();
+      if (m.height > 184.5) out.push(`horizontal panels are ${m.height.toFixed(0)} px high, expected at most 184`);
+    }
+    if (layout === 'h') { // live block and graph keep at least 16 px between them
+      const gap = document.querySelector('.cp-gap').getBoundingClientRect().width;
+      if (gap < 15.5) out.push(`gap between live block and graph is ${gap.toFixed(0)} px, expected at least 16`);
+    }
+    const bar = !!window.__shots.bar, wantBar = layout === 'h';
+    if (bar !== wantBar) out.push(`window held to the bar height: ${bar}, expected ${wantBar}`);
     const sizes = [...document.querySelectorAll('.compact-ride .ctl, .compact-ride .icon-btn')].filter((b) => b.getClientRects().length).map((b) => `${Math.round(b.getBoundingClientRect().width)}x${Math.round(b.getBoundingClientRect().height)}`);
     if (new Set(sizes).size > 1) out.push(`buttons differ in size: ${[...new Set(sizes)].join(', ')}`);
     return out;
@@ -199,6 +225,7 @@ for (const theme of themes) {
           const want = compactMode(w, h).layout;
           if (layout !== want) found.unshift(`data-layout is ${layout}, expected ${want}`);
           found.push(...await dragProblems(page, want));
+          if (want === 'h' && scenario !== 'stress') found.push(...await fontProblems(page, w));
           if (compactMode(w, h).graph) found.push(...await graphProblems(page, scenario, want));
           report(found.length === 0, label, found);
         }

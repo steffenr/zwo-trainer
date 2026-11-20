@@ -133,11 +133,26 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
   flex-direction: row; gap: 8px;
   & .compact-head, & .compact-foot { display: none; }
   & .compact-rail { display: flex; flex-direction: column; gap: 6px; flex: none; width: 96px; order: -1; }
-  & .compact-main { display: grid; grid-template-columns: minmax(300px, 420px) minmax(8px, 1fr) minmax(200px, 720px); column-gap: 0; }
+  /* a bar: the window is held to 195-200 px (ride_window_bar, BAR_HEIGHT in ride_window.rs), so the panels stop at 200 minus the 16 px padding */
+  & .compact-main { container-type: size; display: grid; grid-template-columns: minmax(300px, 460px) minmax(16px, 1fr) minmax(190px, 1400px); column-gap: 0; align-self: flex-start; height: min(100%, 184px); width: 100%; }
   & .cp-gap { display: block; min-width: 0; }
   & .cp-live .cp-body { flex-direction: row; align-items: center; gap: 10px; }
   & .cp-live .cp-cell { width: auto; height: 100%; max-height: 150px; aspect-ratio: 1; margin-inline: 0; }
   & .cp-live .cp-ex { flex: 1; justify-content: center; }
+  /* read from a distance: values are large here, and larger again in a tall bar (container = the bar, 134 px or up to 184 px high) */
+  & .cp-ph, & .cmp-wl small { font-size: var(--fs-xs); }
+  & .cp-tgt { font-size: 24px; & svg { width: 21px; height: 21px; } }
+  & .cp-tile { & b { font-size: 30px; } & svg { width: 22px; height: 22px; } }
+  & .cp-center b { font-size: min(30cqw, 30cqh); }
+  & .cp-graph .cp-ph .cmp-wl b { font-size: 26px; }
+  & .cg-lab { font-size: 14px; }
+  @container (min-height: 170px) {
+    & .cp-ph, & .cmp-wl small { font-size: var(--fs-sm); }
+    & .cp-tgt { font-size: 34px; & svg { width: 28px; height: 28px; } }
+    & .cp-tile { & b { font-size: 40px; } & svg { width: 28px; height: 28px; } }
+    & .cp-graph .cp-ph .cmp-wl b { font-size: 34px; }
+    & .cg-lab { font-size: 17px; }
+  }
 }
 :root[data-os="mac"] .compact-ride[data-layout="h"] .compact-rail { padding-top: 32px; }
 /* rail buttons are 28 px so play / stop, expand and the gear row fit 150 px of window height beside the macOS window buttons */

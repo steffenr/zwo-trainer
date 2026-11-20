@@ -636,6 +636,15 @@ fn ride_window(window: tauri::WebviewWindow, app: State<'_, App>, pending: State
     Ok(())
 }
 
+/// The compact view in its wide (horizontal) layout is a bar: while it shows (`bar`), the window is held to
+/// 195–200 px in height; in the tall layout the normal compact minimum applies and there is no maximum.
+/// Entering or leaving the compact view resets this (`ride_window`).
+#[tauri::command]
+fn ride_window_bar(window: tauri::WebviewWindow, bar: bool) -> Res<()> {
+    let (min, max) = ride_window::bar_sizes(bar);
+    window.set_min_size(Some(min)).and_then(|()| window.set_max_size(max)).map_err(|_| "Cannot limit the window height.".to_string())
+}
+
 /// Remember the compact window geometry the rider used (machine-local, never synced).
 fn remember_compact(store: &state::Store, bounds: ride_window::Bounds) {
     let _ = store.update(|doc| {
@@ -757,6 +766,7 @@ pub fn run() {
             garmin_upload,
             keep_awake,
             ride_window,
+        ride_window_bar,
             ble_scan,
             ble_connect,
             ble_disconnect,

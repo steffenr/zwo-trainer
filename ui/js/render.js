@@ -245,10 +245,14 @@ export class CompactGraph {
     this.slot.replaceChildren();
     this.svg = null;
     if (width < 20 || height < 20) return;
-    const v = this.orientation === 'v', gutter = 80, top = 20;
+    const v = this.orientation === 'v', gutter = 80;
+    const svg = el('svg', { width, height, viewBox: `0 0 ${width} ${height}`, class: 'cg-svg', 'aria-hidden': 'true' }, this.slot);
+    // the horizontal labels' size comes from CSS (larger in a tall bar): the strip above the bars follows it
+    this.measureEl = el('text', { class: 'cg-lab cg-measure', x: 0, y: -50 }, svg);
+    const fs = parseFloat(getComputedStyle(this.measureEl).fontSize) || 12;
+    const top = v ? 20 : Math.round(fs * 1.7), labelY = Math.round(fs + 2);
     const total = this.w.duration || 1, maxP = maxPOf(this.w.segments);
     const geo = { orientation: this.orientation, total, maxP, length: v ? height : width, breadth: v ? width : height, top, gutter };
-    const svg = el('svg', { width, height, viewBox: `0 0 ${width} ${height}`, class: 'cg-svg', 'aria-hidden': 'true' }, this.slot);
     this.segEls = this.w.segments.map((s) => el('polygon', {
       points: segmentPoints(s, geo), class: 'cg-seg',
       fill: s.p0 === null ? FREE_COLOR : zoneColor((s.p0 + s.p1) / 2, this.bounds),
@@ -262,9 +266,8 @@ export class CompactGraph {
     this.tx = v
       ? { nowK: text('cg-k'), nowW: text('cg-w'), nowS: text('cg-s'), nextK: text('cg-k'), nextW: text('cg-w'), nextS: text('cg-s') }
       : { now: text('cg-lab', 'end'), next: text('cg-lab') };
-    this.measureEl = el('text', { class: 'cg-lab cg-measure', x: 0, y: -50 }, svg);
     this.svg = svg;
-    this.g = { v, width, height, gutter, top, total };
+    this.g = { v, width, height, gutter, top, total, labelY };
     this.idx = -1;
     this.lastW = {};
     this.hKey = '';
@@ -281,7 +284,7 @@ export class CompactGraph {
     this.at = at;
     this.labels = labels;
     if (!this.svg) return;
-    const { v, width, height, gutter, top, total } = this.g, segs = this.w.segments;
+    const { v, width, height, gutter, total, labelY } = this.g, segs = this.w.segments;
     let idx = segs.findIndex((s) => at < s.start + s.duration);
     if (idx < 0) idx = segs.length - 1;
     if (idx !== this.idx) {
@@ -323,8 +326,8 @@ export class CompactGraph {
       };
       const fit = fitHorizontalLabels({ width, xNow: pos, xNext: ns ?? width, now: labels.now, next: ns === null ? null : labels.next, measure });
       const left = fit.nowSide === 'left';
-      put(x.now, 'x', (left ? pos - 6 : pos + 6).toFixed(1)); put(x.now, 'y', 13); put(x.now, 'text-anchor', left ? 'end' : 'start'); putText(x.now, fit.now);
-      put(x.next, 'x', ((ns ?? 0) + 6).toFixed(1)); put(x.next, 'y', 13); putText(x.next, fit.next);
+      put(x.now, 'x', (left ? pos - 6 : pos + 6).toFixed(1)); put(x.now, 'y', labelY); put(x.now, 'text-anchor', left ? 'end' : 'start'); putText(x.now, fit.now);
+      put(x.next, 'x', ((ns ?? 0) + 6).toFixed(1)); put(x.next, 'y', labelY); putText(x.next, fit.next);
     }
   }
 
