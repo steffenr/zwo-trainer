@@ -48,6 +48,13 @@ const SCENARIOS = {
         set(document.querySelector('#cmp-cad'), '120');
         document.querySelectorAll('.cmp-wleft').forEach((e) => set(e, '10:15:00'));
         (await import('/js/compact.js')).fitTexts(document.querySelector('.compact-ride'));
+        // the longest graph labels (French / German words, ten hours, a wide ramp); the ride repaints them on its next tick
+        const { ride } = await import('/js/core.js');
+        ride.cGraph.update(ride.t, {
+          nowKicker: 'Maintenant', now: ['Maintenant Maximalbelastung', 'Maximalbelastung'], nowSub: '10:15:00 restant',
+          nextKicker: 'Nächstes', nextWatts: '100–1000 W', nextSub: 'dans 10:15:00',
+          next: ['Nächstes 100–1000 W · dans 10:15:00', 'Nächstes 100–1000 W'],
+        });
       });
     },
     /** every shrinkable value stays at or above its floor (data-fit) */
@@ -120,6 +127,13 @@ async function graphProblems(page, scenario, layout) {
     if (n !== ride.w.segments.length) out.push(`graph has ${n} bars for ${ride.w.segments.length} segments`);
     const sr = svg.getBoundingClientRect(), pr = svg.querySelector('.cg-pos').getBoundingClientRect();
     if (pr.left < sr.left - 1 || pr.right > sr.right + 1 || pr.top < sr.top - 1 || pr.bottom > sr.bottom + 1) out.push('position line outside the graph');
+    if (layout === 'v') { // labels live in the 80 px gutter left of the bars
+      for (const tx of svg.querySelectorAll('text:not(.cg-measure)')) {
+        if (getComputedStyle(tx).visibility === 'hidden' || !tx.textContent.trim()) continue;
+        const right = tx.getBoundingClientRect().right - sr.left;
+        if (right > 80.5) out.push(`gutter overflow: "${tx.textContent.trim().slice(0, 24)}" reaches ${right.toFixed(0)} px of 80`);
+      }
+    }
     const shown = [...svg.querySelectorAll(layout === 'v' ? 'text.cg-k' : 'text.cg-lab:not(.cg-measure)')].filter((t) => getComputedStyle(t).visibility !== 'hidden' && t.textContent.trim());
     if (scenario === 'last' && shown.length !== 1) out.push(`last segment: ${shown.length} labels shown, expected only the "now" label`);
     if (scenario !== 'last' && shown.length < 1) out.push('no label shown');
@@ -196,6 +210,12 @@ for (const theme of themes) {
           await s.resize(960, 150); await settle(s);
           const kept = await page.evaluate(() => document.querySelector('.compact-ride').dataset.probe === '1');
           report(kept, `flip 960x150 -> 240x520 -> 960x150 keeps the DOM`, kept ? [] : ['the compact section was rebuilt']);
+          // the horizontal labels are measured when their text or place changes, not on every tick (4 ticks per second)
+          await s.tick(1000); await s.page.screenshot({ type: 'jpeg', quality: 1 }); // warm up: the widths of the unchanged strings get cached
+          await page.evaluate(() => { window.__tl = 0; const f = SVGTextContentElement.prototype.getComputedTextLength; SVGTextContentElement.prototype.getComputedTextLength = function (...a) { window.__tl++; return f.apply(this, a); }; });
+          await s.tick(1000); await s.page.screenshot({ type: 'jpeg', quality: 1 });
+          const measured = await page.evaluate(() => window.__tl);
+          report(measured <= 4, `graph labels measured ${measured}x in 1 s of ticks (limit 4)`, measured <= 4 ? [] : ['text is measured on every tick']);
         }
         if (errors.length) report(false, `page errors ${lang} ${theme} ${scenario}`, errors);
       } catch (e) {

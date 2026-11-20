@@ -267,6 +267,8 @@ export class CompactGraph {
     this.g = { v, width, height, gutter, top, total };
     this.idx = -1;
     this.lastW = {};
+    this.hKey = '';
+    this.widths = new Map();
     if (this.labels) this.update(this.at, this.labels);
   }
 
@@ -296,18 +298,29 @@ export class CompactGraph {
     if (v) {
       const place = placeGraphLabels({ height, yNow: pos, yNext: ns });
       put(x.nowK, 'y', place.nowBase - 34); put(x.nowW, 'y', place.nowBase - 18); put(x.nowS, 'y', place.nowBase - 6);
-      putText(x.nowK, labels.nowKicker); putText(x.nowS, labels.nowSub);
-      this.fitWatts('now', x.nowW, labels.now[1], gutter);
+      const avail = gutter - 6;
+      this.fitGutter('nowK', x.nowK, labels.nowKicker, 11, 11, avail);
+      this.fitGutter('nowS', x.nowS, labels.nowSub, 12, 11, avail);
+      this.fitGutter('nowW', x.nowW, labels.now[1], 15, 12, avail);
       const nx = place.next;
       for (const k of ['nextK', 'nextW', 'nextS']) put(x[k], 'visibility', nx ? 'visible' : 'hidden');
       if (nx) {
         put(x.nextK, 'y', nx.top + 13); put(x.nextW, 'y', nx.top + 29); put(x.nextS, 'y', nx.top + 42);
         put(x.nextS, 'visibility', nx.lines === 3 ? 'visible' : 'hidden');
-        putText(x.nextK, labels.nextKicker); putText(x.nextS, labels.nextSub ?? '');
-        this.fitWatts('next', x.nextW, labels.nextWatts ?? '', gutter);
+        this.fitGutter('nextK', x.nextK, labels.nextKicker, 11, 11, avail);
+        this.fitGutter('nextS', x.nextS, labels.nextSub ?? '', 12, 11, avail);
+        this.fitGutter('nextW', x.nextW, labels.nextWatts ?? '', 15, 12, avail);
       }
     } else {
-      const measure = (s) => { putText(this.measureEl, s); return this.measureEl.getComputedTextLength(); };
+      // only when a text or a place (whole px) changed: measuring forces a layout, and the line itself moves above every tick
+      const key = [width, Math.round(pos), ns === null ? '-' : Math.round(ns), labels.now.join('|'), labels.next ? labels.next.join('|') : ''].join(',');
+      if (key === this.hKey) return;
+      this.hKey = key;
+      const measure = (s) => {
+        let w = this.widths.get(s);
+        if (w === undefined) { putText(this.measureEl, s); w = this.measureEl.getComputedTextLength(); this.widths.set(s, w); }
+        return w;
+      };
       const fit = fitHorizontalLabels({ width, xNow: pos, xNext: ns ?? width, now: labels.now, next: ns === null ? null : labels.next, measure });
       const left = fit.nowSide === 'left';
       put(x.now, 'x', (left ? pos - 6 : pos + 6).toFixed(1)); put(x.now, 'y', 13); put(x.now, 'text-anchor', left ? 'end' : 'start'); putText(x.now, fit.now);
@@ -315,14 +328,24 @@ export class CompactGraph {
     }
   }
 
-  /** Watts text in the vertical gutter: shrink 1 px at a time (floor 12 px) when it is wider than the gutter. */
-  fitWatts(which, node, text, gutter) {
+  /**
+   * Text in the vertical gutter: shrink 1 px at a time from `max` down to `floor` while it is wider than `avail`,
+   * then cut it with an ellipsis, so it never reaches the bars. Measured only when the text changes.
+   */
+  fitGutter(which, node, text, max, floor, avail) {
     if (this.lastW[which] === text) return;
-    this.lastW[which] = text;
     putText(node, text);
     node.style.fontSize = '';
-    const size = fitFontSize((s) => { node.style.fontSize = `${s}px`; return node.getComputedTextLength(); }, gutter - 6, 12, 15);
+    node.style.transition = 'none'; // a font size set a moment ago must read as set (Reduce motion's 0.01 ms transition still delays it)
+    // not rendered (the graph is hidden in a short window): nothing to measure, so try again when it shows
+    if (!node.getComputedTextLength()) { this.lastW[which] = undefined; return; }
+    this.lastW[which] = text;
+    const size = fitFontSize((s) => { node.style.fontSize = `${s}px`; return node.getComputedTextLength(); }, avail, floor, max);
     node.style.fontSize = `${size}px`;
+    for (let cut = text; cut.length > 1 && node.getComputedTextLength() > avail;) {
+      cut = cut.slice(0, -1);
+      node.textContent = `${cut.trimEnd()}…`;
+    }
   }
 }
 
