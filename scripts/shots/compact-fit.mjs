@@ -19,7 +19,7 @@ const langs = opt('--lang') ? [opt('--lang')] : ['en', 'de', 'fr'];
 const only = opt('--scenario');
 
 const VERTICAL = [[240, 200], [240, 300], [240, 400], [240, 520], [240, 640], [240, 760], [320, 560]];
-const HORIZONTAL = [[640, 195], [960, 195], [1400, 195], [1800, 200], [2400, 200], [960, 340]]; // the wide bar window is 195-200 px high
+const HORIZONTAL = [[640, 195], [960, 195], [1400, 195], [1800, 195], [2400, 195]]; // the wide bar window is 195 px high and at least 640 wide
 const SIZES = [...VERTICAL, ...HORIZONTAL];
 
 const mode = (m, more) => (p) => { p.settings.mode = m; more?.(p); };
@@ -195,6 +195,24 @@ async function settle(s) {
   for (let i = 0; i < 3; i++) { await s.tick(300); await s.page.screenshot({ type: 'jpeg', quality: 1 }); }
 }
 
+/** The switch button and the V key flip between the wide bar and the tall column, each at the size it had last (defaults 960x195 and 300x640). */
+async function switchProblems(page, s) {
+  const out = [];
+  const click = () => page.evaluate(() => { const b = [...document.querySelectorAll('.compact-ride [data-act="layout"]')].find((e) => e.getClientRects().length); if (b) b.click(); return !!b; });
+  const asked = () => page.evaluate(() => ({ size: window.__shots.size, bar: window.__shots.bar }));
+  const expect = async (label, size, bar) => { const a = await asked(); if (JSON.stringify(a.size) !== JSON.stringify(size) || a.bar !== bar) out.push(`${label}: asked for ${JSON.stringify(a)}, expected size ${JSON.stringify(size)} and bar ${bar}`); };
+  await s.resize(960, 195); await settle(s);
+  if (!await click()) return ['no visible layout switch button in the bar'];
+  await s.tick(300); await expect('bar -> column', [300, 640], false);
+  await s.resize(280, 500); await settle(s); // the rider drags the column to another size
+  if (!await click()) return [...out, 'no visible layout switch button in the column'];
+  await s.tick(300); await expect('column -> bar', [960, 195], true);
+  await s.resize(960, 195); await settle(s);
+  await page.keyboard.press('v'); await s.tick(300); await expect('V key, bar -> column (remembered size)', [280, 500], false);
+  await s.resize(280, 500); await settle(s);
+  return out;
+}
+
 const { chromium } = loadPlaywright('scripts/shots/compact-fit.mjs');
 const server = await startServer();
 const fixture = loadFixture();
@@ -237,6 +255,9 @@ for (const theme of themes) {
           await s.resize(960, 150); await settle(s);
           const kept = await page.evaluate(() => document.querySelector('.compact-ride').dataset.probe === '1');
           report(kept, `flip 960x150 -> 240x520 -> 960x150 keeps the DOM`, kept ? [] : ['the compact section was rebuilt']);
+          const sw = await switchProblems(page, s);
+          report(sw.length === 0, 'layout switch (button and V key) between bar and column, remembering sizes', sw);
+          await s.resize(960, 195); await settle(s);
           // the horizontal labels are measured when their text or place changes, not on every tick (4 ticks per second)
           await s.tick(1000); await s.page.screenshot({ type: 'jpeg', quality: 1 }); // warm up: the widths of the unchanged strings get cached
           await page.evaluate(() => { window.__tl = 0; const f = SVGTextContentElement.prototype.getComputedTextLength; SVGTextContentElement.prototype.getComputedTextLength = function (...a) { window.__tl++; return f.apply(this, a); }; });

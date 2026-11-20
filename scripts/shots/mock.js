@@ -82,6 +82,7 @@ export function tauriMock(data) {
     keep_awake: () => null,
     ride_window: () => null,
     ride_window_bar: (a) => { shots.bar = !!a.bar; return null; },
+    ride_window_size: (a) => { shots.size = [a.width, a.height]; return null; },
   };
   window.__TAURI__ = {
     core: {

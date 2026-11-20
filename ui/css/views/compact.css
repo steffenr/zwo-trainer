@@ -161,7 +161,11 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
   & .compact-gears { gap: 2px; }
 }
 .cmp-gear-n { min-width: 20px; text-align: center; }
-/* below 244 px of height the heading row has no room for the status dot or the gears (keyboard and controller still shift) */
+/* below 244 px of height the heading row has no room for the status dot, the gears or the layout switch (keyboard and controller still shift, V still switches) */
 .compact-ride[data-foot="head"] .compact-head {
-  & .cmp-gears, & .compact-state { display: none; }
+  & .cmp-gears, & .compact-state, & .cmp-layout { display: none; }
+}
+/* in a free-like segment the gear buttons take the place of the status dot and the layout switch (V still switches) */
+.compact-head:has(.cmp-gears:not([hidden])) {
+  & .compact-state, & .cmp-layout { display: none; }
 }

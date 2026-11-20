@@ -10,6 +10,7 @@ export const fr = {
   compactNow: 'Maintenant',
   compactLeft: '{time} restant',
   compactGraphAria: 'Profil de l’entraînement',
+  compactSwitchLayout: 'Passer de la vue large à la vue haute',
   couldNotSave: 'Enregistrement impossible : {e}',
   nWorkouts: { one: '{n} séance', other: '{n} séances' },
   nWeeks: { one: '{n} semaine', other: '{n} semaines' },

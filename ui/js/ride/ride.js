@@ -135,6 +135,7 @@ class Ride {
     const cmpWl = html`<span class="cmp-wl"><small>${tHtml('compactWorkoutLeft')}</small><b class="cmp-wleft" data-fit="14">0:00</b></span>`;
     const cmpWlNum = html`<span class="cmp-wl" title="${tText('compactWorkoutLeft')}"><b class="cmp-wleft" data-fit="12">0:00</b></span>`;
     const cmpExpand = html`<button class="ctl" data-act="expand" title="${tText('expandView')}" aria-label="${tText('expandView')}" aria-keyshortcuts="C">${IC.expand}</button>`;
+    const cmpLayout = html`<button class="ctl cmp-layout" data-act="layout" title="${tText('compactSwitchLayout')} (V)" aria-label="${tText('compactSwitchLayout')}" aria-keyshortcuts="V"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="6" rx="1.5"/></svg></button>`;
     const cmpGears = html`<div class="compact-gears cmp-gears" role="group" hidden><button class="icon-btn" data-shift="-1" title="${tText('shiftDownKey')}" aria-label="${tText('shiftDownKey')}">−</button><span class="cmp-gear-n"></span><button class="icon-btn" data-shift="1" title="${tText('shiftUpKey')}" aria-label="${tText('shiftUpKey')}">+</button></div>`;
     // the ride title lives in the regular top bar (in place of the mode switch)
     const rt = $('#ride-title');
@@ -214,7 +215,7 @@ class Ride {
           <span class="compact-state" id="cmp-state"><i id="cmp-dot"></i><span id="cmp-status" class="sr-only" role="status"></span></span>
           ${cmpGears}
           <span class="compact-short">${cmpWlNum}<span class="compact-ctl">${cmpPlay}</span></span>
-          ${cmpExpand}
+          ${cmpLayout}${cmpExpand}
         </header>
         <div class="compact-main">
           <section class="cp cp-live" data-tauri-drag-region>
@@ -239,7 +240,7 @@ class Ride {
         <div class="compact-foot" data-tauri-drag-region>${cmpCtl}${cmpWl}</div>
         <div class="compact-rail" data-tauri-drag-region>
           <div class="rail-row" data-tauri-drag-region>${cmpCtl}</div>
-          <div class="rail-row" data-tauri-drag-region>${cmpExpand}</div>
+          <div class="rail-row" data-tauri-drag-region>${cmpExpand}${cmpLayout}</div>
           <div class="rail-row" data-tauri-drag-region>${cmpGears}</div>
         </div>
       </section>
@@ -434,6 +435,7 @@ class Ride {
     switch (c) {
       case 'play': return this.toggle();
       case 'expand': return this.compact.set(false);
+      case 'layout': return this.switchLayout();
       case 'stop': return this.stop();
       case 'back': return this.go(this.t - 60);
       case 'fwd': return this.go(this.t + 60);
@@ -501,6 +503,8 @@ class Ride {
     if (map[e.key]) { e.preventDefault(); return this.control(map[e.key]); }
     // C toggles the compact presentation; leave Ctrl/Cmd/Alt combinations alone (copy, …)
     if ((e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); return this.compact.set(!this.compact.active); }
+    // V switches the compact window between the wide bar and the tall column
+    if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); return this.switchLayout(); }
     if (e.key === '+' || e.key === '=') { e.preventDefault(); return this.shift(1); }
     if (e.key === '-' || e.key === '_') { e.preventDefault(); return this.shift(-1); }
     if (this.freeLike && this.vs.on && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { e.preventDefault(); return this.shift(e.key === 'ArrowUp' ? 1 : -1); }
@@ -897,6 +901,23 @@ class Ride {
     });
     setAttr(this.q('gauge'), 'aria-pressed', String(this.showPct));
     if (!this.compact.active) this.diagram.update(this.t, this.samples);
+  }
+
+  /**
+   * Flip the compact window between the wide bar and the tall column, each at the size it had last (defaults 960 × 195
+   * and 300 × 640). The two layouts' window limits never overlap (bar: 195 px high, from 640 wide; column: 240–320
+   * wide), so this button / the V key is the way from one to the other: the limits are set first, then the size.
+   */
+  async switchLayout() {
+    if (!this.compact.active) return;
+    const from = compactMode(window.innerWidth, window.innerHeight).layout, bar = from === 'v';
+    (this.cSizes ??= {})[from] = [window.innerWidth, window.innerHeight];
+    const [width, height] = this.cSizes[bar ? 'h' : 'v'] || (bar ? [960, 195] : [300, 640]);
+    try {
+      this.cBar = bar; // fitCompact need not announce the new layout again
+      await invoke('ride_window_bar', { bar });
+      await invoke('ride_window_size', { width, height });
+    } catch (err) { toast(String(err)); }
   }
 
   /** Stop button / Esc: expand from compact and pause; a ride that never started just closes, otherwise the rider decides how to end it. */

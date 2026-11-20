@@ -11,6 +11,7 @@ export const en = {
   compactNow: 'Now',
   compactLeft: '{time} left',
   compactGraphAria: 'Workout profile',
+  compactSwitchLayout: 'Switch between wide and tall view',
   couldNotSave: 'Could not save: {e}',
   nWorkouts: { one: '{n} workout', other: '{n} workouts' },
   nWeeks: { one: '{n} week', other: '{n} weeks' },
