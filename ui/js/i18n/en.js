@@ -305,7 +305,7 @@ export const en = {
   optEndChime: 'Chime when a workout is ridden to the end',
   optAutoPause: 'Auto-pause when you stop pedalling (resumes automatically)',
   optCoach: 'Coach hints while riding (cadence, pacing, hard segments)',
-  optKeys: 'Keyboard shortcuts while riding (Space, arrow keys, + / −, Esc)',
+  optKeys: 'Keyboard shortcuts while riding (Space, arrow keys, + / −, C, Esc)',
   workoutsFolder: 'Workouts folder',
   changeDots: 'Change…',
   rescanTitle: 'Re-read the folder',
