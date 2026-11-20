@@ -1,0 +1,350 @@
+<title>Compact Ride Tiers</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: report page. Layout map, a drag-to-resize live window, then a gallery of both layouts at real sizes.
+   Mockups: vertical layout (time-down graph) for narrow windows, horizontal layout (time-across graph) for wide ones. */
+:root {
+  --bg:#ffffff; --surface:#ffffff; --surface-2:#f5f6f8; --surface-3:#eceef2; --line:#e5e7eb; --line-strong:#cfd3da;
+  --text:#1f2328; --text-2:#555555; --muted:#646b75; --accent:#007690; --accent-soft:rgba(0,118,144,.10);
+  --ok:#2e9e4f; --danger:#c62f26; --track:#eceef2; --page:#f0f2f5; --warnbg:rgba(138,90,18,.12); --warn:#8a5a12;
+  --z1-ink:#6b6b6b; --z2-ink:#1f74e0; --z3-ink:#2f9a3a; --z4-ink:#b88a00; --z5-ink:#e4501f;
+  --r-v:#bfe6c9; --r-vc:#d4ecd9; --r-vn:#f3efb8; --r-vt:#f7dcc2; --r-h:#c9d8f5;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",Roboto,sans-serif;
+  --num:"SF Pro Rounded",ui-rounded,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#000000; --surface:#0b0b0c; --surface-2:#141416; --surface-3:#1c1c1f; --line:#232326; --line-strong:#34343a;
+    --text:#f2f2f3; --text-2:#cccccc; --muted:#85858d; --accent:#1cc4e6; --accent-soft:rgba(28,196,230,.14);
+    --ok:#4cd07a; --danger:#ff5a4f; --track:#1c1c1f; --page:#101012; --warnbg:rgba(242,193,78,.12); --warn:#f2c14e;
+    --z1-ink:#a6a6a6; --z2-ink:#5aa4ff; --z3-ink:#6fd06f; --z4-ink:#ffcc3f; --z5-ink:#ff7a52;
+    --r-v:#1f4a2c; --r-vc:#2a5a38; --r-vn:#4f4c1f; --r-vt:#5a3d22; --r-h:#26385c; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#000000; --surface:#0b0b0c; --surface-2:#141416; --surface-3:#1c1c1f; --line:#232326; --line-strong:#34343a;
+  --text:#f2f2f3; --text-2:#cccccc; --muted:#85858d; --accent:#1cc4e6; --accent-soft:rgba(28,196,230,.14);
+  --ok:#4cd07a; --danger:#ff5a4f; --track:#1c1c1f; --page:#101012; --warnbg:rgba(242,193,78,.12); --warn:#f2c14e;
+  --z1-ink:#a6a6a6; --z2-ink:#5aa4ff; --z3-ink:#6fd06f; --z4-ink:#ffcc3f; --z5-ink:#ff7a52;
+  --r-v:#1f4a2c; --r-vc:#2a5a38; --r-vn:#4f4c1f; --r-vt:#5a3d22; --r-h:#26385c; color-scheme:dark;
+}
+* { box-sizing:border-box; }
+body { background:var(--page); color:var(--text); font:15px/1.5 var(--font); padding-block:28px 64px; padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); }
+.wrap { max-width:1100px; margin:0 auto; display:flex; flex-direction:column; gap:36px; }
+h1 { font-size:28px; line-height:1.15; margin:0 0 8px; letter-spacing:-.01em; text-wrap:balance; }
+h2 { font-size:21px; margin:0 0 6px; text-wrap:balance; }
+h3 { font-size:13px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+p { margin:0 0 10px; max-width:70ch; } .lead { color:var(--text-2); }
+ul.tight { margin:0; padding-left:18px; font-size:14px; max-width:90ch; } ul.tight li { margin-bottom:4px; }
+section { display:flex; flex-direction:column; gap:14px; min-width:0; }
+.bar { display:flex; gap:10px 18px; flex-wrap:wrap; align-items:center; font-size:13px; color:var(--muted); }
+.sticky { position:sticky; top:0; z-index:5; background:var(--page); padding:8px 0; border-bottom:1px solid var(--line); margin-top:12px; }
+.seg { display:inline-flex; border:1px solid var(--line-strong); border-radius:8px; overflow:hidden; background:var(--surface); }
+.seg button { font:600 13px var(--font); padding:6px 12px; border:0; background:none; color:var(--text-2); cursor:pointer; }
+.seg button[aria-pressed="true"] { background:var(--accent); color:var(--bg); }
+button:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+#chk.ok { color:var(--ok); } #chk.bad { color:var(--danger); font-weight:700; }
+.tier { background:var(--surface-2); border:1px solid var(--line); border-radius:14px; padding:18px 20px; display:flex; flex-direction:column; gap:14px; min-width:0; }
+.tier-head { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+.chip { font:700 12px var(--font); padding:2px 8px; border-radius:6px; color:var(--text); }
+.rowmocks { display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start; }
+.cap { font-size:13px; color:var(--muted); margin-top:6px; max-width:300px; }
+.scroll { overflow-x:auto; max-width:100%; padding-bottom:6px; }
+.note { background:var(--warnbg); border-radius:10px; padding:10px 14px; font-size:14px; max-width:84ch; }
+.tm { display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; }
+.tm svg text { font:12px var(--font); fill:var(--text); }
+.sliders { display:flex; flex-direction:column; gap:10px; min-width:260px; max-width:300px; font-size:14px; }
+.sliders label { display:flex; flex-direction:column; gap:4px; } .sliders input { width:100%; accent-color:var(--accent); }
+.flags { font-size:13px; color:var(--muted); }
+
+/* ---------- mock window (real px) ---------- */
+.win { position:relative; background:var(--bg); border:1px solid var(--line-strong); border-radius:12px; overflow:hidden; flex:none; }
+.win .tl { position:absolute; left:12px; top:10px; display:flex; gap:7px; z-index:2; }
+.win .tl i { width:12px; height:12px; border-radius:50%; display:block; }
+.win .tl i:nth-child(1){ background:#ff5f57; } .win .tl i:nth-child(2){ background:#febc2e; } .win .tl i:nth-child(3){ background:#28c840; }
+.app { position:absolute; inset:0; padding:8px 12px; display:flex; flex-direction:column; gap:6px; }
+.app.hz { flex-direction:row; gap:8px; }
+.head { display:flex; align-items:center; gap:10px; min-width:0; min-height:32px; flex:none; padding-left:80px; justify-content:flex-end; }
+.dot { width:6px; height:6px; border-radius:50%; background:var(--ok); display:block; flex:none; }
+.ib { width:32px; height:32px; border-radius:10px; display:grid; place-items:center; color:var(--text-2); border:1px solid var(--line); background:var(--surface); flex:none; }
+.ib svg { width:18px; height:18px; } .ib.fill { background:var(--accent); color:var(--bg); border-color:var(--accent); width:34px; height:34px; } .ib.sm { width:30px; height:30px; }
+.ctl { display:flex; align-items:center; gap:8px; flex:none; }
+.wl { display:flex; align-items:baseline; gap:6px; color:var(--text-2); white-space:nowrap; min-width:0; }
+.wl small { font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+.wl b { font:700 16px var(--num); font-variant-numeric:tabular-nums; color:var(--text); }
+.wl.big { flex-direction:column; align-items:flex-end; gap:0; } .wl.big b { font-size:22px; line-height:1.1; }
+.wl.hd b { font-size:20px; }
+.vmain { flex:1; min-height:0; display:flex; flex-direction:column; gap:6px; }
+.foot { display:flex; align-items:center; justify-content:space-between; gap:12px; flex:none; min-width:0; }
+.rail { display:flex; flex-direction:column; gap:8px; flex:none; width:96px; padding-top:32px; }
+.rail .row { display:flex; gap:6px; align-items:center; }
+.hmain { flex:1; min-width:0; display:grid; grid-template-columns:minmax(300px,420px) minmax(0,1fr) minmax(200px,720px); column-gap:8px; }
+.spacer { min-width:0; }
+.cp { display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; padding:6px 8px 8px; background:var(--surface); border:1px solid var(--line); border-radius:10px; }
+.cp-ph { display:flex; align-items:center; gap:6px; flex:none; margin-bottom:2px; font-size:11px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--text-2); white-space:nowrap; overflow:hidden; }
+.cp-ph i { width:6px; height:6px; border-radius:50%; background:var(--accent); display:block; flex:none; } .cp-ph.g i { background:var(--text-2); }
+.cp-ph .sp { margin-left:auto; text-transform:none; }
+.cp.prof { container-type:inline-size; }
+@container (max-width: 290px) { .cp-ph .sp small { display:none; } }
+.cp-body { flex:1; min-height:0; min-width:0; display:flex; gap:6px; flex-direction:column; }
+.cp-body.row { flex-direction:row; align-items:center; gap:10px; }
+.cell { flex:1 1 0; min-height:0; container-type:size; display:grid; place-items:center; }
+.row .cell { flex:none; height:100%; max-height:150px; aspect-ratio:1; }
+.dial { position:relative; width:min(100cqw,100cqh); height:min(100cqw,100cqh); }
+.dial svg, .fixg svg { position:absolute; inset:0; width:100%; height:100%; }
+.ctr { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; line-height:1.05; }
+.ctr b { font:700 min(25cqw,25cqh)/1 var(--num); font-variant-numeric:tabular-nums; letter-spacing:-.01em; }
+.ctr small { font-size:max(11px,min(9cqw,9cqh)); color:var(--text-2); }
+.fixg { position:relative; flex:none; margin:0 auto; container-type:size; }
+.ex { display:flex; flex-direction:column; gap:6px; min-width:0; flex:1; justify-content:center; align-items:stretch; }
+.tgt { display:flex; align-items:center; justify-content:center; gap:4px; font:700 19px/1 var(--num); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.tgt svg { width:17px; height:17px; flex:none; }
+.tiles { display:flex; gap:8px; min-width:0; } .tiles.col { flex-direction:column; gap:5px; }
+.tile { flex:1 1 0; min-width:0; display:flex; align-items:center; justify-content:center; gap:8px; padding:6px 8px; border-radius:8px; background:var(--surface-2); }
+.tile svg { width:18px; height:18px; color:var(--text-2); flex:none; }
+.tile b { font:700 24px/1.05 var(--num); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.gslot { flex:1; min-height:0; min-width:0; position:relative; }
+.gslot svg { position:absolute; left:0; top:0; }
+.pf-sub { fill:var(--text-2); font:12px var(--font); } .pf-k { fill:var(--text-2); font:700 11px var(--font); letter-spacing:.08em; } .pf-lab { fill:var(--text); font:600 12px var(--font); }
+.ovf { outline:2px solid #ff00aa !important; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Compact ride view: both layouts</h1>
+    <p class="lead">One compact view with the workout graph, in two orientations: a <b>vertical layout</b> for narrow windows (time runs down) and a <b>horizontal layout</b> for wide windows (time runs across). The live block has a maximum width; on a very wide window the extra space sits between it and the graph. All mockups are drawn at real pixel size.</p>
+    <div class="sticky"><div class="bar">
+      <span>Labels</span><span class="seg"><button id="l-en" aria-pressed="true">English</button><button id="l-de" aria-pressed="false">Deutsch</button></span>
+      <span>Workout</span><span class="seg"><button id="w-60" aria-pressed="true">60 min</button><button id="w-120" aria-pressed="false">120 min</button></span>
+      <span>Ramp</span><span class="seg"><button id="r-0" aria-pressed="true">Steady</button><button id="r-1" aria-pressed="false">Next ramp 70–210 W</button></span>
+      <span id="chk" class="ok">Overflow check…</span>
+    </div></div>
+  </header>
+
+  <section>
+    <h2>Which layout at which window size</h2>
+    <div class="tm">
+      <div id="map"></div>
+      <div class="sliders">
+        <h3>Try a size</h3>
+        <label>Width <b id="vw">320</b> px<input id="sw" type="range" min="240" max="1600" step="10" value="320"></label>
+        <label>Height <b id="vh">560</b> px<input id="sh" type="range" min="140" max="800" step="10" value="560"></label>
+        <div id="tinfo"></div><div class="flags" id="tflags"></div>
+      </div>
+      <div class="scroll" style="flex:1 1 300px"><div id="live"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Gallery</h2>
+    <div class="tier"><div class="tier-head"><span class="chip" style="background:var(--r-v)">Vertical</span><b>narrow windows</b><span class="muted">graph, time runs down</span></div>
+      <div class="rowmocks" id="g-v"></div></div>
+    <div class="tier"><div class="tier-head"><span class="chip" style="background:var(--r-vn)">Vertical, short</span><b>not everything fits</b><span class="muted">the graph and then the footer give way</span></div>
+      <div class="rowmocks" id="g-vs"></div></div>
+    <div class="tier"><div class="tier-head"><span class="chip" style="background:var(--r-h)">Horizontal</span><b>wide windows</b><span class="muted">graph, time runs across; live block max 420 px</span></div>
+      <div class="scroll"><div class="rowmocks" id="g-h" style="flex-direction:column"></div></div></div>
+  </section>
+
+  <section>
+    <h2>Rules shown here</h2>
+    <ul class="tight" id="rules"></ul>
+  </section>
+  <section>
+    <h2>Fit check</h2>
+    <div class="note" id="findings"></div>
+  </section>
+</div>
+
+<script>
+const FTP = 250;
+const DATA = {
+  60:  { total:60,  elapsed:20, segs:[[8,50,70],[6,80,80],[14,56,56],[10,88,88],[5,50,50],[10,88,88],[7,50,40]] },
+  120: { total:120, elapsed:45, segs:[[10,50,70],[15,70,70],[12,88,88],[4,50,50],[12,88,88],[4,50,50],[12,88,88],[4,50,50],[12,88,88],[5,50,50],[20,65,65],[10,50,40]] }
+};
+let len = 60, lang = 'en', rampNext = false, D;
+const L = {
+  en:{ live:'Live', next:'Next', hr:'Heart rate', cad:'Cadence', left:'Workout left', in:'in', now:'Now', workout:'Workout', segLeft:'left' },
+  de:{ live:'Live', next:'Nächstes', hr:'Herzfrequenz', cad:'Trittfrequenz', left:'Training übrig', in:'in', now:'Jetzt', workout:'Training', segLeft:'übrig' }
+};
+const T = k => L[lang][k];
+const zc = p => p < 55 ? '#9aa3ad' : p < 76 ? '#3b82f6' : p < 91 ? '#34a853' : p < 106 ? '#f2b705' : '#f06a2f';
+const zink = p => `var(--z${p < 55 ? 1 : p < 76 ? 2 : p < 91 ? 3 : p < 106 ? 4 : 5}-ink)`;
+const pad = n => String(n).padStart(2,'0');
+const fmt = m => m >= 60 ? `${Math.floor(m/60)}:${pad(m%60)}:00` : `${m}:00`;
+function derive() {
+  const S = DATA[len]; let t = 0, i = 0;
+  while (t + S.segs[i][0] <= S.elapsed) t += S.segs[i++][0];
+  const cur = S.segs[i], nxt = S.segs[i+1];
+  D = { S, total:S.total, elapsed:S.elapsed, cStart:t, cPct:cur[1], cW:Math.round(FTP*cur[1]/100), actual:Math.round(FTP*cur[1]/100) - 2,
+        left:S.total - S.elapsed, nPct:nxt[1], nW:Math.round(FTP*nxt[1]/100), nIn:t+cur[0]-S.elapsed, nStart:t+cur[0], segLeft:t+cur[0]-S.elapsed };
+  D.nTxt = rampNext ? '70–210' : String(D.nW);
+}
+/* layout choice (mock defaults; tune on real hardware) */
+const layoutOf = (w, h) => (w >= 640 && w >= 1.5*h) ? 'h' : 'v';
+const V_COL = 520, V_GRAPH = 360, V_FOOT = 244;   // vertical: column LIVE from 520, graph from 360, footer joins heading below 244
+const IC = {
+  heart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
+  cad:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.5-5.8"/><path d="M20 4v4h-4"/></svg>',
+  bolt:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>',
+  pause:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>',
+  stop:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>',
+  exp:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>'
+};
+const pol = (a, r=40) => [50 + r*Math.cos(a*Math.PI/180), 50 + r*Math.sin(a*Math.PI/180)];
+function arc(a0, a1, r=40) { const [x0,y0]=pol(a0,r), [x1,y1]=pol(a1,r); return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 ${(a1-a0)>180?1:0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`; }
+const gaugeSvg = () => { const max = FTP*1.5, a = 135 + 270*Math.min(1, D.actual/max), at = 135 + 270*(D.cW/max), [x0,y0]=pol(at,34), [x1,y1]=pol(at,46);
+  return `<svg viewBox="0 0 100 100"><path d="${arc(135,405)}" fill="none" stroke="var(--track)" stroke-width="9" stroke-linecap="round"/><path d="${arc(135,a)}" fill="none" stroke="${zc(D.cPct)}" stroke-width="9" stroke-linecap="round"/><line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="var(--text)" stroke-width="2.5"/></svg>`; };
+const gaugeCell = () => `<div class="cell"><div class="dial">${gaugeSvg()}<div class="ctr"><b>${D.actual}</b><small>W</small></div></div></div>`;
+const gaugeFixed = d => `<div class="fixg" style="width:${d}px;height:${d}px">${gaugeSvg()}<div class="ctr"><b style="font-size:${Math.round(d*.25)}px">${D.actual}</b><small>W</small></div></div>`;
+const tgt = () => `<div class="tgt" data-fit="12,19" style="color:${zink(D.cPct)}">${IC.bolt}<span>${D.cW} W</span></div>`;
+const tiles = col => `<div class="tiles ${col?'col':''}"><div class="tile" title="${T('hr')}">${IC.heart}<b data-fit="14,24">128</b></div><div class="tile" title="${T('cad')}">${IC.cad}<b data-fit="14,24">91</b></div></div>`;
+const win = (w, h, inner, cls='') => `<div class="win" data-lay="${cls}" style="width:${w}px;height:${h}px"><div class="tl"><i></i><i></i><i></i></div><div class="app ${cls==='h'?'hz':''}">${inner}</div></div>`;
+const expandBtn = `<span class="ib">${IC.exp}</span>`;
+const wlBig = () => `<div class="wl big"><small>${T('left')}</small><b data-fit="14,22">${fmt(D.left)}</b></div>`;
+const gslot = (kind, panelH) => `<div class="gslot" data-g="${kind}"></div>`;
+
+function build(W, H) {
+  const lay = layoutOf(W, H);
+  if (lay === 'h') {
+    const rail = `<div class="rail"><div class="row"><span class="ib fill">${IC.pause}</span>${expandBtn}</div></div>`;
+    const live = `<div class="cp"><div class="cp-ph"><i></i>${T('live')}</div><div class="cp-body row">${gaugeCell()}<div class="ex">${tgt()}${tiles(false)}</div></div></div>`;
+    const prof = `<div class="cp prof"><div class="cp-ph g"><i></i>${T('workout')}<span class="sp wl" title="${T('left')}"><small>${T('left')}</small><b data-fit="14,20" style="font-size:20px">${fmt(D.left)}</b></span></div><div class="cp-body">${gslot('h')}</div></div>`;
+    return win(W, H, `${rail}<div class="hmain">${live}<div class="spacer"></div>${prof}</div>`, 'h');
+  }
+  const col = H >= V_COL, graph = H >= V_GRAPH, footInHead = H < V_FOOT;
+  const head = `<div class="head">${footInHead ? `<div class="wl"><b data-fit="12,16">${fmt(D.left)}</b></div><span class="ib fill sm">${IC.pause}</span>` : `<span class="dot" style="margin-right:auto"></span>`}${expandBtn}</div>`;
+  const body = col
+    ? `<div class="cp-body" style="align-items:stretch">${gaugeFixed(116)}<div style="margin-top:-6px">${tgt()}</div>${tiles(false)}</div>`
+    : `<div class="cp-body row">${gaugeFixed(84)}<div class="ex">${tgt()}${tiles(true)}</div></div>`;
+  const live = `<div class="cp" ${graph ? '' : 'style="flex:1"'}><div class="cp-ph"><i></i>${T('live')}</div>${body}</div>`;
+  const prof = graph ? `<div class="cp" style="flex:1"><div class="cp-ph g"><i></i>${T('workout')}</div><div class="cp-body">${gslot('v')}</div></div>` : '';
+  const foot = footInHead ? '' : `<div class="foot"><div class="ctl"><span class="ib fill">${IC.pause}</span><span class="ib">${IC.stop}</span></div>${wlBig()}</div>`;
+  return win(W, H, `${head}<div class="vmain">${live}${prof}</div>${foot}`, 'v');
+}
+
+/* ----- graphs, drawn into measured slots ----- */
+function polys(w, h, top, vertical, gut) {
+  const y = t => t/D.total*h, usable = h - top;
+  let s = '', t0 = 0;
+  D.S.segs.forEach(([d,a,b], i) => { const t1 = t0+d, past = t1 <= D.elapsed, cur = t0 === D.cStart, isNext = t0 === D.nStart;
+    if (isNext && rampNext) { a = 28; b = 84; }
+    const col = zc((a+b)/2), op = past ? .38 : 1, st = cur ? 'stroke="var(--text)" stroke-width="1.5"' : '';
+    if (vertical) { const bw = w - gut, x = p => gut + p/110*bw; s += `<polygon points="${gut},${y(t0)} ${x(a)},${y(t0)} ${x(b)},${y(t1)} ${gut},${y(t1)}" fill="${col}" opacity="${op}" ${st}/>`; }
+    else { const x = tt => tt/D.total*w, yy = p => h - p/110*usable; s += `<polygon points="${x(t0)},${h} ${x(t0)},${yy(a)} ${x(t1)},${yy(b)} ${x(t1)},${h}" fill="${col}" opacity="${op}" ${st}/>`; }
+    t0 = t1; });
+  return s;
+}
+function graphV(w, h) {
+  const gut = 80, y = t => t/D.total*h, x = p => gut + p/110*(w-gut);
+  let s = polys(w, h, 0, true, gut);
+  s += `<line x1="${x(100)}" y1="0" x2="${x(100)}" y2="${h}" stroke="var(--text-2)" stroke-dasharray="3 4" opacity=".7"/>`;
+  s += `<line x1="${gut}" y1="${y(D.nStart)}" x2="${w}" y2="${y(D.nStart)}" stroke="var(--text)" stroke-dasharray="2 3"/>`;
+  s += `<line x1="0" y1="${y(D.elapsed)}" x2="${w}" y2="${y(D.elapsed)}" stroke="var(--text)" stroke-width="2"/>`;
+  const yn = Math.max(y(D.elapsed), 48), ye = y(D.nStart);
+  s += `<text class="pf-k" x="0" y="${yn-34}">${T('now').toUpperCase()}</text><text class="pf-big" x="0" y="${yn-18}" fill="var(--text)" style="font:700 15px var(--num)">${D.cW} W</text><text class="pf-sub" x="0" y="${yn-6}">${fmt(D.segLeft)} ${T('segLeft')}</text>`;
+  s += `<text class="pf-k" x="0" y="${ye+13}">${T('next').toUpperCase()}</text><text class="pf-big" x="0" y="${ye+29}" fill="var(--text)" style="font:700 15px var(--num)">${D.nTxt} W</text><text class="pf-sub" x="0" y="${ye+42}">${T('in')} ${fmt(D.nIn)}</text>`;
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img">${s}</svg>`;
+}
+function graphH(w, h) {
+  const top = 20, x = t => t/D.total*w, yy = p => h - p/110*(h-top);
+  let s = polys(w, h, top, false, 0);
+  s += `<line x1="0" y1="${yy(100)}" x2="${w}" y2="${yy(100)}" stroke="var(--text-2)" stroke-dasharray="3 4" opacity=".7"/>`;
+  s += `<line x1="${x(D.nStart)}" y1="${top}" x2="${x(D.nStart)}" y2="${h}" stroke="var(--text)" stroke-dasharray="2 3"/>`;
+  s += `<line x1="${x(D.elapsed)}" y1="0" x2="${x(D.elapsed)}" y2="${h}" stroke="var(--text)" stroke-width="2"/>`;
+  const nowFull = `${T('now')} ${D.cW} W`, nowRoom = x(D.elapsed) - 6;
+  s += `<text class="pf-lab" x="${x(D.elapsed)-6}" y="13" text-anchor="end">${nowFull.length * 7.6 <= nowRoom ? nowFull : `${D.cW} W`}</text>`;
+  const full = `${T('next')} ${D.nTxt} W · ${T('in')} ${fmt(D.nIn)}`, short = `${T('next')} ${D.nTxt} W`, room = w - (x(D.nStart) + 6);
+  const label = full.length * 7.2 <= room ? full : short.length * 7.2 <= room ? short : '';
+  if (label) s += `<text class="pf-lab" x="${x(D.nStart)+6}" y="13">${label}</text>`;
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img">${s}</svg>`;
+}
+function fillGraphs() {
+  document.querySelectorAll('.win .gslot').forEach(sl => {
+    const w = Math.floor(sl.clientWidth), h = Math.floor(sl.clientHeight);
+    if (w < 20 || h < 20) return;
+    sl.innerHTML = sl.dataset.g === 'v' ? graphV(w, h) : graphH(w, h);
+  });
+}
+
+/* ----- fit + overflow check ----- */
+function fitText(el, avail, min, max) { for (let s = max; s >= min; s--) { el.style.fontSize = s + 'px'; if (el.getBoundingClientRect().width <= avail + .5) break; } }
+function fitAll() {
+  document.querySelectorAll('.win [data-fit]').forEach(el => {
+    const [min, max] = el.dataset.fit.split(',').map(Number);
+    if (el.classList.contains('tgt')) { fitText(el, el.parentElement.clientWidth - 2, min, max); return; }
+    if (el.tagName === 'B' && el.closest('.tile')) { const t = el.closest('.tile'); fitText(el, t.clientWidth - 16 - 18 - 8, min, max); return; }
+    const box = el.closest('.foot, .head, .cp-ph'); if (box) fitText(el, Math.max(30, box.clientWidth * .3), min, max);
+  });
+  document.querySelectorAll('.win svg text.pf-big').forEach(tx => { for (let s = 15; s >= 12; s--) { tx.style.fontSize = s + 'px'; if (tx.getComputedTextLength() <= 74) break; } });
+}
+let issues = [];
+function check() {
+  issues = [];
+  document.querySelectorAll('.ovf').forEach(e => e.classList.remove('ovf'));
+  document.querySelectorAll('.win').forEach(w => {
+    const app = w.querySelector('.app').getBoundingClientRect(); let n = 0;
+    w.querySelectorAll('*').forEach(el => {
+      if ((el.closest('svg') && !(el instanceof SVGTextElement)) || el.closest('.tl')) return;
+      const r = el.getBoundingClientRect(); if (!r.width && !r.height) return;
+      const box = (el.closest('.cp') || el.closest('.foot') || el.closest('.head') || el.closest('.rail') || w.querySelector('.app')).getBoundingClientRect();
+      const out = r.right > box.right + .5 || r.left < box.left - .5 || r.bottom > box.bottom + .5 || r.top < box.top - .5 || r.right > app.right + .5 || r.bottom > app.bottom + .5;
+      let clipped = false; if (!(el instanceof SVGElement)) clipped = el.scrollWidth > el.clientWidth + 1 && el.children.length === 0 && getComputedStyle(el).display !== 'inline';
+      if (out || clipped) { el.classList.add('ovf'); n++; }
+    });
+    w.querySelectorAll('svg').forEach(s => { const sr = s.getBoundingClientRect(); s.querySelectorAll('text').forEach(tx => { const b = tx.getBoundingClientRect(); if (b.right > sr.right + .5 || b.left < sr.left - .5 || b.top < sr.top - .5 || b.bottom > sr.bottom + .5) { tx.classList.add('ovf'); n++; } }); });
+    if (n) issues.push(`${w.style.width.replace('px','')} × ${w.style.height.replace('px','')}: ${n}`);
+  });
+  const c = document.getElementById('chk');
+  c.className = issues.length ? 'bad' : 'ok';
+  c.textContent = issues.length ? `Overflow check: ${issues.length} window${issues.length>1?'s':''} overflow (pink)` : 'Overflow check: nothing overflows or clips';
+}
+
+/* ----- layout map ----- */
+function layoutMap(cw, ch) {
+  const X0 = 240, X1 = 1600, Y0 = 140, Y1 = 800, S = .3, ox = 46, oy = 12;
+  const px = x => ox + (x - X0) * S, py = y => oy + (y - Y0) * S;
+  const rect = (x0, y0, x1, y1, c) => `<rect x="${px(x0)}" y="${py(y0)}" width="${(x1-x0)*S}" height="${(y1-y0)*S}" fill="var(--r-${c})" stroke="var(--line-strong)"/>`;
+  const hx = Math.min(X1, Y1 * 1.5);
+  let s = rect(240,140,1600,800,'v') + rect(240,Y0,1600,520,'vc').replace('var(--r-vc)','var(--r-v)')   // vertical area
+        + rect(240,360,1600,520,'v').replace('var(--r-v)','var(--r-vc)') + rect(240,244,1600,360,'vn') + rect(240,140,1600,244,'vt');
+  s += `<polygon points="${px(640)},${py(Y0)} ${px(X1)},${py(Y0)} ${px(X1)},${py(Math.min(Y1, X1/1.5))} ${px(640)},${py(640/1.5)}" fill="var(--r-h)" stroke="var(--line-strong)"/>`;
+  const T_ = (x, y, a, b) => `<text x="${px(x)}" y="${py(y)}" style="font-weight:700">${a}</text><text x="${px(x)}" y="${py(y)+14}" style="font-size:11px;fill:var(--text-2)">${b}</text>`;
+  s += T_(260, 590, 'Vertical', 'column live block') + T_(260, 440, 'Vertical', 'row live block, graph') + T_(260, 305, 'Vertical', 'no graph') + T_(260, 190, 'Vertical', 'footer in heading') + T_(700, 300, 'Horizontal', 'graph across');
+  for (const x of [240,640,1000,1600]) s += `<text x="${px(x)}" y="${py(Y1)+16}" text-anchor="middle" style="font-size:11px;fill:var(--text-2)">${x}</text>`;
+  for (const y of [140,244,360,520,800]) s += `<text x="${ox-6}" y="${py(y)+4}" text-anchor="end" style="font-size:11px;fill:var(--text-2)">${y}</text>`;
+  s += `<circle cx="${px(cw)}" cy="${py(ch)}" r="6" fill="var(--text)" stroke="var(--bg)" stroke-width="2"/>`;
+  return `<svg width="${ox+(X1-X0)*S+10}" height="${oy+(Y1-Y0)*S+26}" role="img" aria-label="Layout map by window width and height"><text x="${ox}" y="${oy+(Y1-Y0)*S+22}" style="font-size:11px;fill:var(--muted)">width (px) →   height (px) ↑</text>${s}</svg>`;
+}
+
+const GAL = { v:[[240,520],[240,640],[320,560],[240,400]], vs:[[240,300],[240,200]], h:[[640,150],[960,150],[1400,150],[960,340]] };
+let cw = 320, ch = 560;
+const info = () => { const l = layoutOf(cw, ch); document.getElementById('tinfo').innerHTML = `Layout <b>${l === 'h' ? 'horizontal' : 'vertical'}</b>`;
+  document.getElementById('tflags').textContent = l === 'h' ? 'live block max 420 px, graph max 720 px, extra space between them' : `live block: ${ch >= V_COL ? 'column' : 'row'} · graph: ${ch >= V_GRAPH ? 'yes' : 'no'} · controls: ${ch < V_FOOT ? 'in heading' : 'footer'}`; };
+function paint(id, html) { document.getElementById(id).innerHTML = html; }
+function renderAll() {
+  derive();
+  for (const [t, sizes] of Object.entries(GAL)) paint('g-' + t, sizes.map(([w, h]) => `<div>${build(w, h)}<div class="cap">${w} × ${h}</div></div>`).join(''));
+  paint('live', build(cw, ch)); paint('map', layoutMap(cw, ch)); info();
+  fillGraphs(); fitAll(); check();
+  document.getElementById('rules').innerHTML = `
+    <li><b>Layout choice:</b> horizontal when width ≥ 640 and width ≥ 1.5 × height, otherwise vertical (mock default, tune on hardware).</li>
+    <li><b>Vertical:</b> live block as a column (gauge on top) from 520 px high, as a row (gauge left, target and tiles right) below that; graph from 360 px high; below 244 px the play button and workout left move into the heading row.</li>
+    <li><b>Horizontal:</b> left rail (play, expand), live block (gauge, target, heart rate, cadence), graph with "workout left" in its header. The live block is at most 420 px wide, the graph at most 720 px; on a window wider than about 1260 px the leftover space sits between them (see 1400 × 150).</li>
+    <li><b>Graph labels, horizontal:</b> "Now" left of the position line, "Next … · in m:ss" right of the next segment's start; the "in m:ss" part drops first when there is no room, then the label.</li>`;
+  document.getElementById('findings').innerHTML = issues.length
+    ? `<b>Overflows (pink in the mockups; elements per window):</b> ${issues.join('; ')}.`
+    : 'Nothing overflows or clips in any mockup on this page, in the current language and workout length.';
+}
+const press = (a, on) => a.forEach(k => document.getElementById(k[0]).setAttribute('aria-pressed', k[1] === on));
+document.getElementById('l-en').onclick = () => { lang = 'en'; press([['l-en','en'],['l-de','de']], 'en'); renderAll(); };
+document.getElementById('l-de').onclick = () => { lang = 'de'; press([['l-en','en'],['l-de','de']], 'de'); renderAll(); };
+document.getElementById('w-60').onclick = () => { len = 60; press([['w-60',60],['w-120',120]], 60); renderAll(); };
+document.getElementById('w-120').onclick = () => { len = 120; press([['w-60',60],['w-120',120]], 120); renderAll(); };
+document.getElementById('r-0').onclick = () => { rampNext = false; press([['r-0',0],['r-1',1]], 0); renderAll(); };
+document.getElementById('r-1').onclick = () => { rampNext = true; press([['r-0',0],['r-1',1]], 1); renderAll(); };
+const sl = () => { cw = +document.getElementById('sw').value; ch = +document.getElementById('sh').value; document.getElementById('vw').textContent = cw; document.getElementById('vh').textContent = ch;
+  paint('live', build(cw, ch)); paint('map', layoutMap(cw, ch)); info(); fillGraphs(); fitAll(); };
+document.getElementById('sw').oninput = sl; document.getElementById('sh').oninput = sl;
+window.__set = (l, n, r) => { lang = l; len = n; rampNext = !!r; renderAll(); return issues; };
+renderAll();
+</script>
