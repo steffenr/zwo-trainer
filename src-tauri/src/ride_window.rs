@@ -6,6 +6,10 @@ use serde_json::{json, Value};
 use std::sync::Mutex;
 use tauri::{LogicalSize, PhysicalPosition, PhysicalSize, WebviewWindow};
 
+/// Smallest compact window in logical px (width, height): narrow enough for a tall column beside a video
+/// and flat enough for a bar below it. The full view's minimum is 900 × 640.
+pub(crate) const COMPACT_MIN: (u32, u32) = (240, 150);
+
 const RESIZE_ERROR: &str = "Cannot resize the window. Please try again.";
 const LEAVE_ERROR: &str = "Cannot restore the window size. Please resize the window by hand.";
 
@@ -80,7 +84,7 @@ impl WindowOps for WebviewWindow {
         let resize = || -> tauri::Result<()> {
             self.unmaximize()?;
             let (width, height) = if compact {
-                (320.0, 200.0)
+                (f64::from(COMPACT_MIN.0), f64::from(COMPACT_MIN.1))
             } else {
                 (900.0, 640.0)
             };
@@ -147,7 +151,7 @@ impl WindowState {
     }
 
     /// Leaving the ride: restore the full view like `set(false)`, retrying once. If both tries fail,
-    /// the ride screen closes anyway, so give up the geometry but never keep the lowered 320 × 200
+    /// the ride screen closes anyway, so give up the geometry but never keep the lowered compact
     /// minimum or a stale snapshot: the window stays resizable and the next compact entry starts fresh.
     fn leave(&mut self, window: &impl WindowOps) -> Result<Option<Bounds>, String> {
         if self.saved.is_none() {
@@ -254,7 +258,7 @@ mod tests {
         }
         fn apply(&self, compact: bool, geometry: Option<&Bounds>) -> Result<(), String> {
             self.calls.borrow_mut().push(compact);
-            *self.minimum.borrow_mut() = if compact { (320, 200) } else { (900, 640) };
+            *self.minimum.borrow_mut() = if compact { COMPACT_MIN } else { (900, 640) };
             if self.fail.borrow_mut().take() == Some(compact) {
                 return Err("resize failed".into());
             }
@@ -300,6 +304,11 @@ mod tests {
     }
 
     #[test]
+    fn compact_minimum_is_240_by_150() {
+        assert_eq!(COMPACT_MIN, (240, 150));
+    }
+
+    #[test]
     fn leaving_after_two_failed_restores_resets_the_minimum_and_forgets_the_snapshot() {
         let window = FakeWindow::new(original());
         let mut state = WindowState::default();
@@ -312,7 +321,7 @@ mod tests {
         assert!(state.saved.is_none());
         // the next ride's compact toggle snapshots the current window and works normally
         state.set(&window, true, None).unwrap();
-        assert_eq!(*window.minimum.borrow(), (320, 200));
+        assert_eq!(*window.minimum.borrow(), COMPACT_MIN);
         state.set(&window, false, None).unwrap();
         assert_eq!(*window.bounds.borrow(), compact_bounds());
         assert_eq!(*window.minimum.borrow(), (900, 640));
@@ -331,7 +340,7 @@ mod tests {
         let window = FakeWindow::new(original());
         let mut state = WindowState::default();
         state.set(&window, true, None).unwrap();
-        assert_eq!(*window.minimum.borrow(), (320, 200));
+        assert_eq!(*window.minimum.borrow(), COMPACT_MIN);
         window.bounds.borrow_mut().size = PhysicalSize::new(640, 1040);
         window.bounds.borrow_mut().position = Some(PhysicalPosition::new(300, 200));
         state.set(&window, false, None).unwrap();
@@ -391,7 +400,7 @@ mod tests {
         *window.fail.borrow_mut() = Some(false);
         assert!(state.set(&window, false, None).is_err());
         assert_eq!(*window.bounds.borrow(), compact);
-        assert_eq!(*window.minimum.borrow(), (320, 200));
+        assert_eq!(*window.minimum.borrow(), COMPACT_MIN);
         assert_eq!(state.saved, Some(original()));
         state.set(&window, false, None).unwrap();
         assert_eq!(*window.bounds.borrow(), original());
@@ -406,7 +415,7 @@ mod tests {
         let window = FakeWindow::new(saved);
         let mut state = WindowState::default();
         state.set(&window, true, None).unwrap();
-        assert_eq!(*window.minimum.borrow(), (320, 200));
+        assert_eq!(*window.minimum.borrow(), COMPACT_MIN);
         state.set(&window, false, None).unwrap();
         assert_eq!(window.bounds.borrow().size, saved.size);
         assert_eq!(*window.minimum.borrow(), (900, 640));
