@@ -19,7 +19,7 @@ The reporter rides with the compact view as their *main* view, with a video play
 ## Non-goals / anti-goals
 
 - No seeking or clicking on the compact graph, no zoom, no scrolling, no live traces (power, cadence, heart rate) on it.
-- No new setting, no persistence, no Rust command, no Tauri permission, no crate, no dependency, no bundler. Do not rebuild the ride DOM on resize. Do not change the full ride screen.
+- No new setting, no persistence, no Tauri permission, no crate, no dependency, no bundler. (The only Rust additions are the window size limits of the two layouts, see "Changes made while building".) Do not rebuild the ride DOM on resize. Do not change the full ride screen.
 - The gauge shows power only: no ring or arc besides the existing target marker (the reporter found the double ring "counterintuitive"). No timer ring in compact; the segment countdown is text on the graph.
 - No change to the window lifecycle, `CompactView`, or the remembered compact geometry.
 
@@ -152,6 +152,18 @@ New keys in `en.js`, `de.js`, `fr.js` (French typography rules; `node scripts/ch
 8. **Shrink floors** (12 / 14 / 16 px) and the en-dash ramp range (`70–210 W`, the full view uses `70 → 210 W`) are my choice.
 9. **The gauge scale is not changed** for ramps or very high watts (the mockup page showed a plain gauge).
 10. **Label placement** in the horizontal graph uses character-count estimates in the mockup; the implementation should measure text.
+
+## Changes made while building (after the owner tried the app)
+
+These decisions were taken during testing and supersede the sections above where they differ.
+
+- **Window sizes, explicit layout choice.** The wide bar is a fixed **195 px** high window (from 640 px wide); the tall column is **240–320 px** wide at any height (minimum height 150). The ranges never overlap, so the layout is chosen with a switch button (rail and heading row) or the **V** key; `Ride.switchLayout()` sets the other layout's limits (`ride_window_bar`) and resizes (`ride_window_size`) to the size that layout had last (defaults 960 × 195 and 300 × 640). The first-time size is 960 × 195. The switch gives way to the gears in free-like segments and below 244 px high (V still works).
+- **Drag regions.** The wide layout has no heading row, so `data-tauri-drag-region` is on the rail, the gap, the footer and the panels.
+- **Equal buttons.** Play, stop, expand, layout switch and gear buttons are one 30 px size.
+- **Wide bar sizes.** Live block 300–460 px, at least 16 px gap, graph 190–1400 px (the graph takes the width of large screens). Values are large for reading from a distance: target 24 px, heart rate / cadence 30 px, workout left 26 px, graph labels 14 px, captions 12 px, and 34 / 40 / 34 / 17 / 13 px in a bar of 170 px and more (always the case at 195 px). The graph's label strip follows the CSS label size.
+- **Tall column values.** Target 28 px (24 px in the row variant), gauge number 32 % of the dial, a single watts value on the graph up to 24 px (a range shrinks to the 80 px gutter, then an ellipsis). The label blocks were re-measured (NOW_MIN 54, NEXT_3 52, NEXT_2 40).
+- **Labels.** Gutter texts (kicker, watts, sub-line) shrink and are cut with an ellipsis, so French and German never reach the bars; the horizontal labels are measured only when a text or place changes.
+- **Gear buttons / status dot** are hidden below 244 px high in the tall layout (`data-foot="head"`).
 
 ## Left to the builder
 
