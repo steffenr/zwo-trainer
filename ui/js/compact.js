@@ -6,6 +6,7 @@ export class CompactView {
     this.apply = apply;
     this.report = report;
     this.active = false;
+    this.busy = false; // true while the native window resizes: its in-between sizes are not the rider's choice
     this.pending = Promise.resolve();
   }
 
@@ -14,15 +15,20 @@ export class CompactView {
   set(active) {
     this.pending = this.pending.then(async () => {
       if (this.active === active) return true;
+      this.busy = true;
       try {
-        await this.resize(active);
-      } catch (error) {
-        this.report(error);
-        return false;
+        try {
+          await this.resize(active);
+        } catch (error) {
+          this.report(error);
+          return false;
+        }
+        this.active = active;
+        this.apply(active);
+        return true;
+      } finally {
+        this.busy = false;
       }
-      this.active = active;
-      this.apply(active);
-      return true;
     });
     return this.pending;
   }
@@ -33,6 +39,7 @@ export class CompactView {
   leave() {
     this.pending = this.pending.then(async () => {
       if (!this.active) return true;
+      this.busy = true;
       let ok = true;
       try {
         await this.resize(false, true);
@@ -42,6 +49,7 @@ export class CompactView {
       }
       this.active = false;
       this.apply(false);
+      this.busy = false;
       return ok;
     });
     return this.pending;

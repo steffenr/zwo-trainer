@@ -227,6 +227,27 @@ async function switchProblems(page, s) {
   return out;
 }
 
+/**
+ * Leaving compact: while the native window resizes it passes through sizes of both layouts. The UI must not set
+ * window limits for them (they would fight the resize and leave the full view with a 320 px maximum width), and the
+ * compact view is gone afterwards. Entering again works.
+ */
+async function exitProblems(page, s) {
+  const out = [];
+  await s.resize(960, 195); await settle(s);
+  await page.evaluate(() => { window.__shots.windowDelay = 600; window.__shots.mark = window.__shots.calls.length; });
+  await page.evaluate(() => [...document.querySelectorAll('.compact-ride [data-act="expand"]')].find((e) => e.getClientRects().length).click());
+  for (const [w, h] of [[960, 400], [900, 640], [900, 900]]) { await s.resize(w, h); await s.tick(40); await page.screenshot({ type: 'jpeg', quality: 1 }); }
+  const during = await page.evaluate(() => window.__shots.calls.slice(window.__shots.mark).filter((c) => c === 'ride_window_bar').length);
+  if (during) out.push(`${during} ride_window_bar call(s) while the native window was resizing`);
+  await s.tick(800); await settle(s);
+  if (await page.evaluate(() => document.body.classList.contains('compact-riding'))) out.push('the compact view is still showing after leaving');
+  await page.evaluate(() => { window.__shots.windowDelay = 0; });
+  await s.click('#btn-compact'); await s.resize(960, 195); await settle(s);
+  if (!await page.evaluate(() => document.body.classList.contains('compact-riding'))) out.push('entering compact again did not work');
+  return out;
+}
+
 const { chromium } = loadPlaywright('scripts/shots/compact-fit.mjs');
 const server = await startServer();
 const fixture = loadFixture();
@@ -279,6 +300,8 @@ for (const theme of themes) {
           await s.tick(1000); await s.page.screenshot({ type: 'jpeg', quality: 1 });
           const measured = await page.evaluate(() => window.__tl);
           report(measured <= 4, `graph labels measured ${measured}x in 1 s of ticks (limit 4)`, measured <= 4 ? [] : ['text is measured on every tick']);
+          const exit = await exitProblems(page, s);
+          report(exit.length === 0, 'leaving compact: no window limits fight the native resize', exit);
         }
         if (errors.length) report(false, `page errors ${lang} ${theme} ${scenario}`, errors);
       } catch (e) {

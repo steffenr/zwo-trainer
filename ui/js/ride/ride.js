@@ -105,7 +105,11 @@ class Ride {
     loadSounds(['up', 'down', 'done']);
     this.autoStartCount = 0;
     this.compact = new CompactView({
-      resize: (compact, leave = false) => invoke('ride_window', { compact, leave }),
+      resize: async (compact, leave = false) => {
+        // nothing is shown while the native window resizes: both views would be squeezed or stretched through the animation
+        document.body.classList.add('compact-switching');
+        try { await invoke('ride_window', { compact, leave }); } finally { document.body.classList.remove('compact-switching'); }
+      },
       apply: (compact) => {
         document.body.classList.toggle('compact-riding', compact);
         this.cBar = undefined; // the native side reset the bar height: send it again if the layout needs it
@@ -263,7 +267,8 @@ class Ride {
       this.cGraph.setOrientation(m.layout);
       fitTexts(cmpEl);
       // the wide bar is held to a window height of 195-200 px, the tall layout is not (the native side resets this on entering / leaving compact)
-      if (this.compact.active) {
+      // (not while the native window resizes: its in-between sizes would set limits that fight the resize)
+      if (this.compact.active && !this.compact.busy) {
         const bar = m.layout === 'h';
         if (bar !== this.cBar) { this.cBar = bar; invoke('ride_window_bar', { bar }).catch(() => {}); }
       }

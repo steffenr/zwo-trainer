@@ -128,6 +128,8 @@ impl WindowOps for WebviewWindow {
     }
 
     fn reset_minimum(&self) -> Result<(), String> {
+        // the compact layouts' maximum size goes too, or the full view would stay capped at 320 px wide
+        self.set_max_size(None::<LogicalSize<f64>>).map_err(|_| RESIZE_ERROR.to_string())?;
         self.set_min_size(Some(LogicalSize::new(900.0, 640.0)))
             .map_err(|_| RESIZE_ERROR.to_string())
     }

@@ -107,6 +107,34 @@ test('leaving the full view does not touch the window', async () => {
   assert.deepEqual(f.applied, []);
 });
 
+// While the native window resizes (entering, leaving) the window passes through sizes of both layouts; the UI must not
+// react to them (it would set window limits that fight the resize), so the view says when it is busy.
+test('busy while the native resize runs, also after a failure and when leaving', async () => {
+  let release;
+  const f = fixture(() => new Promise((resolve) => { release = resolve; }));
+  assert.equal(f.view.busy, false);
+  const entering = f.view.set(true);
+  await Promise.resolve();
+  assert.equal(f.view.busy, true);
+  release();
+  await entering;
+  assert.equal(f.view.busy, false);
+
+  const failing = fixture(async () => { throw new Error('Native resize failed'); });
+  await failing.view.set(true);
+  assert.equal(failing.view.busy, false);
+
+  let finish;
+  const g = fixture(async (on) => { if (!on) await new Promise((resolve) => { finish = resolve; }); });
+  await g.view.set(true);
+  const leaving = g.view.leave();
+  await Promise.resolve();
+  assert.equal(g.view.busy, true);
+  finish();
+  await leaving;
+  assert.equal(g.view.busy, false);
+});
+
 import { compactMode, fitFontSize, levelView, maxPOf, segmentPoints, placeGraphLabels, fitHorizontalLabels } from '../ui/js/compact.js';
 
 test('compactMode: layout choice', () => {
