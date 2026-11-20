@@ -39,8 +39,10 @@ const SCENARIOS = {
     rider: mode('workouts'),
     async setup(s) {
       await rideTo(s, SSS, 18 * 60 + 44);
-      await s.page.evaluate(async () => { const { ride } = await import('/js/core.js'); ride.go(ride.w.duration - 20); });
-      await s.tick(1500);
+      // jump to the last 60 s and pause, so the ride does not end while the sizes are walked through
+      await s.page.evaluate(async () => { const { ride } = await import('/js/core.js'); ride.go(ride.w.duration - 60); });
+      await s.page.evaluate(() => document.querySelector('#ride [data-act="play"]').click());
+      await s.tick(500);
     },
   },
 };
@@ -61,7 +63,12 @@ function inspect() {
     const r = el.getBoundingClientRect();
     if (r.width <= 1 && r.height <= 1) continue; // visually hidden helpers
     const parent = (el.matches(boxes) ? el.parentElement : el).closest(boxes) || root;
-    const b = parent.getBoundingClientRect();
+    let b = parent.getBoundingClientRect();
+    // the heading row and the rail keep the macOS window buttons free: compare with their content box
+    if (parent.matches('.compact-head, .compact-rail')) {
+      const pcs = getComputedStyle(parent);
+      b = { left: b.left + parseFloat(pcs.paddingLeft), top: b.top + parseFloat(pcs.paddingTop), right: b.right, bottom: b.bottom };
+    }
     const outside = r.right > b.right + 0.5 || r.left < b.left - 0.5 || r.bottom > b.bottom + 0.5 || r.top < b.top - 0.5;
     const offscreen = r.right > win.w + 0.5 || r.bottom > win.h + 0.5;
     const clipped = !(el instanceof SVGElement) && el.children.length === 0 && cs.display !== 'inline' && el.scrollWidth > el.clientWidth + 1;
@@ -77,6 +84,11 @@ function inspect() {
   const bad = /\b(null|NaN|undefined)\b/.exec(root.innerText);
   if (bad) out.push(`text says ${bad[0]}`);
   return out;
+}
+
+/** With the paused fake clock the page only renders when asked: a tiny screenshot is a frame, and observers (resize) run in it. */
+async function settle(s) {
+  for (let i = 0; i < 3; i++) { await s.tick(300); await s.page.screenshot({ type: 'jpeg', quality: 1 }); }
 }
 
 const { chromium } = loadPlaywright('scripts/shots/compact-fit.mjs');
@@ -100,7 +112,7 @@ for (const theme of themes) {
         await s.click('#btn-compact');
         for (const [w, h] of SIZES) {
           await s.resize(w, h);
-          await s.tick(600);
+          await settle(s);
           const label = `${w}x${h} ${lang} ${theme} ${scenario}`;
           const found = await page.evaluate(inspect);
           const layout = await page.evaluate(() => document.querySelector('.compact-ride')?.dataset.layout);
@@ -111,10 +123,10 @@ for (const theme of themes) {
         }
         if (scenario === 'steady' && theme === themes[0] && lang === langs[0]) {
           // resizing across the layout switch must not rebuild the compact DOM
-          await s.resize(960, 150); await s.tick(300);
+          await s.resize(960, 150); await settle(s);
           await page.evaluate(() => { document.querySelector('.compact-ride').dataset.probe = '1'; });
-          await s.resize(240, 520); await s.tick(300);
-          await s.resize(960, 150); await s.tick(300);
+          await s.resize(240, 520); await settle(s);
+          await s.resize(960, 150); await settle(s);
           const kept = await page.evaluate(() => document.querySelector('.compact-ride').dataset.probe === '1');
           report(kept, `flip 960x150 -> 240x520 -> 960x150 keeps the DOM`, kept ? [] : ['the compact section was rebuilt']);
         }

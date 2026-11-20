@@ -5,7 +5,6 @@ export const en = {
   compactView: 'Compact view',
   compactAutoPaused: 'Auto-paused',
   expandView: 'Return to full view',
-  compactCurrent: 'Current',
   compactNext: 'Next',
   compactIn: 'in',
   compactWorkoutLeft: 'Workout left',

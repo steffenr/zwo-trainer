@@ -220,13 +220,20 @@ export const motionOK = () => !window.matchMedia?.('(prefers-reduced-motion: red
 /** Ring gauge: outer = target, inner = actual, blue tick = FTP. The arcs glide to new values
  *  (a light spring, ~0.45 s) unless reduced motion is on; then they jump. */
 export class Gauge {
-  constructor(container) {
+  /** `compact`: one arc for the actual power and a short tick for the target (no target arc, inner track or FTP tick). */
+  constructor(container, { compact = false } = {}) {
     this.c = container;
     const S = 200, cx = 100, cy = 100;
     this.cx = cx; this.cy = cy;
     this.start = 135; this.sweep = 270;
     const svg = el('svg', { viewBox: `0 0 ${S} ${S}`, class: 'gauge-svg' }, container);
     this.svg = svg;
+    if (compact) {
+      el('path', { d: this.arc(80, 0, 1), class: 'g-track' }, svg);
+      this.actual = el('path', { d: '', class: 'g-actual' }, svg);
+      this.tick = el('line', { class: 'g-tick' }, svg);
+      return;
+    }
     el('path', { d: this.arc(86, 0, 1), class: 'g-track' }, svg);
     this.innerTrack = el('path', { d: this.arc(68, 0, 1), class: 'g-track inner' }, svg);
     this.target = el('path', { d: '', class: 'g-target' }, svg);
@@ -279,6 +286,15 @@ export class Gauge {
   paint() {
     const { ftp, bounds } = this.cfg, { target, actual } = this.cur, goal = this.goal;
     const max = Math.max(ftp * 1.5, goal.target * 1.1, goal.actual * 1.05) || 1;
+    if (this.tick) {
+      if (actual >= 0.5) {
+        this.actual.setAttribute('d', this.arc(80, 0, actual / max));
+        this.actual.style.stroke = zoneColor((goal.actual || actual) / ftp, bounds);
+      } else this.actual.setAttribute('d', '');
+      const [x0, y0] = this.pt(70, target / max), [x1, y1] = this.pt(92, target / max);
+      Object.entries({ x1: x0, y1: y0, x2: x1, y2: y1 }).forEach(([k, v]) => this.tick.setAttribute(k, target >= 0.5 ? v : 0));
+      return;
+    }
     if (target >= 0.5) {
       this.target.setAttribute('d', this.arc(86, 0, target / max));
       this.target.style.stroke = zoneColor((goal.target || target) / ftp, bounds);

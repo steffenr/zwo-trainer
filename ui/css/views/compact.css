@@ -1,27 +1,29 @@
-/* Optional compact ride presentation (compact.js): same Ride, small native window.
-   Three mini panels LIVE | CURRENT | NEXT. Tiers come from compactMode() as data-* on .compact-ride:
-   ws wide+short, wt wide+tall, nt narrow+tall (stacked), ns narrow+short (tiny columns);
-   data-short / data-tiny / data-narrow / data-xs drop text first, the gauges stay.
-   Text uses the type scale only, never below --fs-2xs (11 px): what doesn't fit at that size is hidden, not shrunk. */
+/* Optional compact ride presentation (compact.js, ride.js): same Ride, small native window.
+   A live block (gauge, target, heart rate, cadence) and a workout graph. compactMode() writes the layout as
+   data-* on .compact-ride: data-layout "v" (narrow: live block on top, graph below, controls in the footer) or
+   "h" (wide: rail on the left, live block, empty space, graph), data-live "col" | "row" (gauge above or beside
+   target and tiles), data-graph, data-foot "foot" | "head" | "rail", data-tiles.
+   Text uses the type scale only, never below --fs-2xs (11 px); long values shrink in JS (fitTexts) to a floor. */
 
-.compact-ride { display: none; }
+.compact-ride { display: none; flex-direction: column; gap: 6px; }
 body.compact-riding {
   & .topbar { display: none; }
   & .ride { inset: 0; display: block; padding: 8px 12px; overflow: hidden; }
-  & .compact-ride { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 6px; }
+  & .compact-ride { display: flex; height: 100%; min-height: 0; }
   & .ride-hint { top: 40px; max-width: calc(100% - 24px); font-size: var(--fs-xs); text-align: center; }
 }
 body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
+.compact-ride button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* ---------- heading row (vertical layout) ---------- */
 .compact-head {
-  display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 32px; flex: none;
-  & .icon-btn { flex: none; width: 32px; height: 32px; }
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; min-height: 32px; flex: none;
+  & .icon-btn { flex: none; width: 28px; height: 28px; }
   & .ic { width: 18px; height: 18px; }
 }
 :root[data-os="mac"] .compact-head { padding-left: 80px; }
-.compact-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); }
 .compact-state {
-  display: flex; align-items: center; gap: 6px; flex: none; margin-right: auto; color: var(--text-2); font-size: var(--fs-2xs);
+  display: flex; align-items: center; margin-right: auto;
   & i {
     width: 6px; height: 6px; border-radius: 50%; background: var(--muted);
     &.on { background: var(--ok); }
@@ -29,98 +31,109 @@ body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
 }
 .compact-gears {
   display: flex; align-items: center; gap: 2px; color: var(--text-2); font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
-  & .icon-btn { width: 32px; height: 32px; }
 }
-.compact-ride button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-/* play/stop + "workout left": in the heading row when short, in the footer otherwise */
-.compact-short { display: none; align-items: center; gap: 10px; }
+/* play + workout-left number in the heading row when the window is short */
+.compact-short { display: none; align-items: center; gap: 8px; }
 .compact-ctl {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 8px; flex: none;
   & .ctl { width: 34px; height: 34px; border-radius: var(--r-md); }
   & .ctl svg { width: 18px; height: 18px; }
 }
-.cmp-wl {
-  display: flex; align-items: baseline; gap: 6px; color: var(--text-2); white-space: nowrap;
-  & small { font-size: var(--fs-2xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
-  & b { font: 700 var(--fs-md) var(--num); font-variant-numeric: tabular-nums; color: var(--text); }
-}
-.compact-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; }
+.compact-short .compact-ctl .ctl { width: 30px; height: 30px; }
 
-/* ---------- mini panels ---------- */
-.compact-main { flex: 1; min-height: 0; display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); }
-.compact-ride[data-mode="nt"] .compact-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.25fr) minmax(0, 1.25fr) minmax(0, .75fr); }
+/* ---------- workout left ---------- */
+.cmp-wl {
+  display: flex; flex-direction: column; align-items: flex-end; min-width: 0; color: var(--text-2); white-space: nowrap;
+  & small { font-size: var(--fs-2xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  & b { font: 700 22px/1.1 var(--num); font-variant-numeric: tabular-nums; color: var(--text); }
+}
+.compact-short .cmp-wl b { font-size: 20px; }
+.compact-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; min-width: 0; }
+
+/* ---------- panels ---------- */
+.compact-main { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.cp-gap { display: none; }
 .cp { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; padding: 6px 8px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
 .cp-ph {
   display: flex; align-items: center; gap: 6px; flex: none; margin-bottom: 2px; font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .09em;
-  text-transform: uppercase; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-transform: uppercase; color: var(--text-2); white-space: nowrap; overflow: hidden;
   & i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
 }
-.cp-cur .cp-ph i { background: var(--text-2); }
-.cp-next .cp-ph i { background: var(--zc, var(--line-strong)); }
-.cp-body { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-/* the dial cell is a size container: gauge and numbers scale with the smaller side */
-.cp-cell { flex: 1 1 0; min-height: 0; container-type: size; display: grid; place-items: center; }
+.cp-graph .cp-ph i { background: var(--text-2); }
+.cp-body { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+
+/* the dial cell is a size container: gauge and number scale with it */
+.cp-cell { container-type: size; display: grid; place-items: center; flex: none; margin-inline: auto; width: 116px; height: 116px; }
 .cp-dial { position: relative; width: min(100cqw, 100cqh); height: min(100cqw, 100cqh); }
 .cp-mount { position: absolute; inset: 0; }
 .cp-center {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; line-height: 1.05;
-  & b { font: 700 min(23cqw, 23cqh)/1 var(--num); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  & b { font: 700 min(25cqw, 25cqh)/1 var(--num); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  & small { font-size: max(var(--fs-2xs), min(9cqw, 9cqh)); color: var(--text-2); }
 }
-.cp-cur .cp-center b { font-size: min(19cqw, 19cqh); }
-.cp-center small {
-  font-size: max(var(--fs-2xs), min(9cqw, 9cqh)); color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap;
-  @container (max-height: 84px) or (max-width: 84px) { display: none; }
+
+/* target line, heart rate and cadence */
+.cp-ex { display: flex; flex-direction: column; gap: 6px; min-width: 0; align-items: stretch; }
+.cp-tgt {
+  display: flex; align-items: center; justify-content: center; gap: 4px; font: 700 19px/1 var(--num); font-variant-numeric: tabular-nums; white-space: nowrap;
+  & svg { width: 17px; height: 17px; flex: none; }
 }
-.cp-meta {
-  display: flex; justify-content: center; gap: 12px; flex: none;
-  & span { display: flex; align-items: baseline; gap: 5px; }
-  & small { font-size: var(--fs-2xs); font-weight: 600; letter-spacing: .06em; color: var(--text-2); text-transform: uppercase; }
+.cp-tiles { display: flex; gap: 8px; min-width: 0; }
+.cp-tile {
+  flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 6px 8px; border-radius: var(--r-sm); background: var(--surface-2);
+  & svg { width: 18px; height: 18px; flex: none; color: var(--text-2); }
   & b {
-    font: 700 var(--fs-base) var(--num); font-variant-numeric: tabular-nums;
+    font: 700 24px/1.05 var(--num); font-variant-numeric: tabular-nums; white-space: nowrap;
     &.off-target { color: var(--danger); }
   }
 }
-.cp-info {
-  display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: none;
-  & b { font: 700 var(--fs-base) var(--num); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-}
-.cp-bar {
-  height: 5px; border-radius: var(--r-2xs); background: var(--track); overflow: hidden;
-  & i { display: block; height: 100%; width: 0; border-radius: var(--r-2xs); background: var(--text-2); }
-}
-.cp-nx {
-  position: relative; flex: 1; min-width: 0; display: flex; align-items: center; padding-left: 14px;
-  &::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 5px; border-radius: var(--r-2xs); background: var(--zc, var(--line-strong)); }
-  & .nc-txt { gap: 3px; }
-  & .nc-txt b { font-size: 24px; }
-  & .nc-v { font-size: var(--fs-xs); font-weight: 600; }
-}
 
-/* ---------- tiers ---------- */
-/* gauge/ring on the left, text on the right when there is width but little height (and in stacked rows) */
-.compact-ride:is([data-mode="ws"], [data-mode="nt"]) {
-  & .cp-body { flex-direction: row; align-items: center; gap: 10px; }
-  & .cp-cell { flex: none; height: 100%; aspect-ratio: 1; }
-  & .cp-meta { flex-direction: column; gap: 3px; justify-content: center; align-items: flex-start; flex: 1; }
-  & .cp-info { flex: 1; justify-content: center; }
+/* graph slot (CompactGraph draws into it) */
+.cp-gslot { flex: 1; min-height: 0; min-width: 0; position: relative; pointer-events: none; }
+.cp-graph {
+  container-type: inline-size; flex: 1;
+  & .cp-ph .cmp-wl { margin-left: auto; flex-direction: row; align-items: baseline; gap: 6px; text-transform: none; }
+  & .cp-ph .cmp-wl b { font-size: 20px; }
+  @container (max-width: 290px) { & .cp-ph .cmp-wl small { display: none; } }
 }
-/* stacked: NEXT is the low third row, so its values sit on one line (wrapping) instead of a column that would run under the header */
-.compact-ride[data-mode="nt"] .cp-nx .nc-txt { flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 10px; row-gap: 2px; }
-/* narrow + short: three small columns, gauges and numbers only */
-.compact-ride[data-mode="ns"] {
-  & .compact-main { gap: 5px; }
-  & .cp { padding: 4px 5px 5px; }
-  & .cp-ph { letter-spacing: .05em; }
-  & .cp-nx { padding-left: 10px; }
-  & .cp-nx .nc-txt b { font-size: var(--fs-lg); }
-  & .cp-nx .nc-v { font-size: var(--fs-2xs); }
+.compact-rail { display: none; }
+
+/* ---------- vertical layout ---------- */
+.compact-ride[data-layout="v"] {
+  & .cp-graph .cp-ph .cmp-wl { display: none; }
+  &[data-live="row"] .cp-body { flex-direction: row; align-items: center; }
+  &[data-live="row"] .cp-cell { width: 84px; height: 84px; margin-inline: 0; }
+  &[data-live="row"] .cp-ex { flex: 1; justify-content: center; }
+  &[data-live="row"] .cp-tiles { flex-direction: column; gap: 5px; }
+  &[data-live="col"] .cp-tgt { margin-top: -6px; }
+  &[data-graph="0"] .cp-graph { display: none; }
+  &[data-graph="0"] .cp-live { flex: 1; }
+  &[data-foot="head"] .compact-short { display: flex; }
+  &[data-foot="head"] .compact-foot { display: none; }
 }
-.compact-ride[data-mode="ns"] .cp-opt, .compact-ride[data-tiny="1"] .cp-opt { display: none; }
-.compact-ride[data-short="1"] {
-  & .compact-foot { display: none; }
-  & .compact-short { display: flex; }
-  & .compact-ctl .ctl { width: 30px; height: 30px; }
+.compact-ride[data-tiles="0"] .cp-tiles { display: none; }
+
+/* ---------- horizontal layout ---------- */
+.compact-ride[data-layout="h"] {
+  flex-direction: row; gap: 8px;
+  & .compact-head, & .compact-foot { display: none; }
+  & .compact-rail { display: flex; flex-direction: column; gap: 6px; flex: none; width: 96px; order: -1; }
+  & .compact-main { display: grid; grid-template-columns: minmax(300px, 420px) minmax(8px, 1fr) minmax(200px, 720px); column-gap: 0; }
+  & .cp-gap { display: block; min-width: 0; }
+  & .cp-live .cp-body { flex-direction: row; align-items: center; gap: 10px; }
+  & .cp-live .cp-cell { width: auto; height: 100%; max-height: 150px; aspect-ratio: 1; margin-inline: 0; }
+  & .cp-live .cp-ex { flex: 1; justify-content: center; }
 }
-.compact-ride[data-narrow="1"] .compact-name { display: none; }
-.compact-ride[data-xs="1"] .cmp-wl { display: none; }
+:root[data-os="mac"] .compact-ride[data-layout="h"] .compact-rail { padding-top: 32px; }
+/* rail buttons are 28 px so play / stop, expand and the gear row fit 150 px of window height beside the macOS window buttons */
+.compact-rail {
+  & .rail-row { display: flex; align-items: center; gap: 6px; }
+  & .icon-btn, & .compact-ctl .ctl { flex: none; width: 28px; height: 28px; }
+  & .compact-ctl { gap: 6px; }
+  & .compact-gears { gap: 2px; }
+}
+.cmp-gear-n { min-width: 20px; text-align: center; }
+/* below 244 px of height the heading row has no room for the status dot or the gears (keyboard and controller still shift) */
+.compact-ride[data-foot="head"] .compact-head {
+  & .cmp-gears, & .compact-state { display: none; }
+}

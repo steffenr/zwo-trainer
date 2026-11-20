@@ -4,7 +4,6 @@ export const fr = {
   compactView: 'Vue compacte',
   compactAutoPaused: 'Pause auto',
   expandView: 'Revenir à la vue complète',
-  compactCurrent: 'En cours',
   compactNext: 'Suivant',
   compactIn: 'dans',
   compactWorkoutLeft: 'Séance restante',

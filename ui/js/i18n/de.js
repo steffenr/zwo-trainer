@@ -4,7 +4,6 @@ export const de = {
   compactView: 'Kompakte Ansicht',
   compactAutoPaused: 'Auto-Pause',
   expandView: 'Zur vollständigen Ansicht',
-  compactCurrent: 'Aktuell',
   compactNext: 'Nächstes',
   compactIn: 'in',
   compactWorkoutLeft: 'Training übrig',
