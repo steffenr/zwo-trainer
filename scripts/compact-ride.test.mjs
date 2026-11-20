@@ -107,31 +107,67 @@ test('leaving the full view does not touch the window', async () => {
   assert.deepEqual(f.applied, []);
 });
 
-import { compactMode } from '../ui/js/compact.js';
+import { compactMode, fitFontSize, levelView, maxPOf, segmentPoints, placeGraphLabels, fitHorizontalLabels } from '../ui/js/compact.js';
 
-test('compactMode: wide tiers', () => {
-  assert.equal(compactMode(960, 200).mode, 'ws');
-  assert.equal(compactMode(900, 640).mode, 'wt');
-  assert.equal(compactMode(560, 259).mode, 'ws');
-  assert.equal(compactMode(560, 260).mode, 'wt');
+test('compactMode: layout choice', () => {
+  assert.equal(compactMode(639, 150).layout, 'v');
+  assert.equal(compactMode(640, 150).layout, 'h');
+  assert.equal(compactMode(640, 426).layout, 'h');
+  assert.equal(compactMode(640, 427).layout, 'v'); // 640 < 1.5 * 427
+  assert.equal(compactMode(1400, 150).layout, 'h');
+  assert.equal(compactMode(960, 340).layout, 'h');
+  assert.equal(compactMode(700, 700).layout, 'v');
 });
 
-test('compactMode: narrow tiers', () => {
-  assert.equal(compactMode(320, 200).mode, 'ns');
-  assert.equal(compactMode(240, 520).mode, 'nt');
-  assert.equal(compactMode(559, 299).mode, 'ns');
-  assert.equal(compactMode(559, 300).mode, 'nt');
+test('compactMode: horizontal is fixed, vertical thresholds', () => {
+  assert.deepEqual(compactMode(960, 150), { layout: 'h', live: 'row', graph: true, foot: 'rail', tiles: true });
+  assert.equal(compactMode(240, 519).live, 'row'); assert.equal(compactMode(240, 520).live, 'col');
+  assert.equal(compactMode(240, 359).graph, false); assert.equal(compactMode(240, 360).graph, true);
+  assert.equal(compactMode(240, 243).foot, 'head'); assert.equal(compactMode(240, 244).foot, 'foot');
+  assert.equal(compactMode(240, 189).tiles, false); assert.equal(compactMode(240, 190).tiles, true);
 });
 
-test('compactMode: flag boundaries', () => {
-  assert.equal(compactMode(600, 239).short, true);
-  assert.equal(compactMode(600, 240).short, false);
-  assert.equal(compactMode(259, 400).tiny, true);
-  assert.equal(compactMode(260, 400).tiny, false);
-  assert.equal(compactMode(600, 169).tiny, true);
-  assert.equal(compactMode(600, 170).tiny, false);
-  assert.equal(compactMode(419, 400).narrow, true);
-  assert.equal(compactMode(420, 400).narrow, false);
-  assert.equal(compactMode(299, 400).xs, true);
-  assert.equal(compactMode(300, 400).xs, false);
+test('fitFontSize: largest size that fits, clamped', () => {
+  const m = (s) => s * 5;
+  assert.equal(fitFontSize(m, 60, 11, 24), 12);
+  assert.equal(fitFontSize(m, 59, 11, 24), 11);
+  assert.equal(fitFontSize(m, 10, 14, 24), 14); // never below the floor
+  assert.equal(fitFontSize(m, 1000, 14, 24), 24); // never above the cap
+});
+
+test('levelView: watts, ramp, free, max effort, all-out, intensity', () => {
+  assert.deepEqual(levelView({ p0: 0.56, p1: 0.56 }, 1, 250), { kind: 'watts', a: 140, b: 140 });
+  assert.deepEqual(levelView({ p0: 0.28, p1: 0.84 }, 1, 250), { kind: 'range', a: 70, b: 210 });
+  assert.deepEqual(levelView({ p0: 0.5, p1: 0.5 }, 1.2, 250), { kind: 'watts', a: 150, b: 150 });
+  assert.equal(levelView({ p0: null, p1: null, type: 'freeride' }, 1, 250).kind, 'free');
+  assert.equal(levelView({ p0: null, p1: null, type: 'maxeffort' }, 1, 250).kind, 'maxeffort');
+  assert.equal(levelView({ p0: 1, p1: 1, erg: false }, 1, 250).kind, 'allout');
+});
+
+test('maxPOf and segmentPoints', () => {
+  assert.ok(Math.abs(maxPOf([{ p0: 0.5, p1: 0.5 }, { p0: 1, p1: 1.3 }]) - 1.404) < 1e-9);
+  assert.ok(Math.abs(maxPOf([{ p0: 0.5, p1: 0.5 }]) - 1.296) < 1e-9);
+  const h = { orientation: 'h', total: 60, maxP: 1.1, length: 200, breadth: 110, top: 10 };
+  assert.equal(segmentPoints({ start: 10, duration: 10, p0: 0.5, p1: 1.1 }, h), '33.33,110.00 33.33,64.55 66.67,10.00 66.67,110.00');
+  const v = { orientation: 'v', total: 60, maxP: 1.1, length: 120, breadth: 100, gutter: 20 };
+  assert.equal(segmentPoints({ start: 30, duration: 30, p0: 1.1, p1: 0.55 }, v), '20.00,60.00 100.00,60.00 60.00,120.00 20.00,120.00');
+  assert.equal(segmentPoints({ start: 0, duration: 60, p0: null, p1: null }, v), '20.00,0.00 56.36,0.00 56.36,120.00 20.00,120.00'); // free block drawn at 0.5
+});
+
+test('placeGraphLabels: clamps, overlap, no next', () => {
+  assert.deepEqual(placeGraphLabels({ height: 200, yNow: 60, yNext: 80 }), { nowBase: 60, next: { top: 80, lines: 3 } });
+  assert.deepEqual(placeGraphLabels({ height: 200, yNow: 10, yNext: 14 }), { nowBase: 48, next: null });
+  assert.deepEqual(placeGraphLabels({ height: 100, yNow: 40, yNext: 70 }), { nowBase: 48, next: { top: 54, lines: 3 } });
+  assert.deepEqual(placeGraphLabels({ height: 100, yNow: 60, yNext: 70 }), { nowBase: 60, next: { top: 69, lines: 2 } });
+  assert.deepEqual(placeGraphLabels({ height: 80, yNow: 60, yNext: 70 }), { nowBase: 60, next: null });
+  assert.deepEqual(placeGraphLabels({ height: 200, yNow: 5, yNext: null }), { nowBase: 48, next: null });
+});
+
+test('fitHorizontalLabels: shortening ladder', () => {
+  const measure = (s) => s.length * 7;
+  const now = ['Now 140 W', '140 W'], next = ['Next 220 W · in 8:00', 'Next 220 W'];
+  assert.deepEqual(fitHorizontalLabels({ width: 200, xNow: 67, xNext: 93, now, next, measure }), { now: '140 W', next: 'Next 220 W' });
+  assert.deepEqual(fitHorizontalLabels({ width: 600, xNow: 200, xNext: 260, now, next, measure }), { now: 'Now 140 W', next: 'Next 220 W · in 8:00' });
+  assert.deepEqual(fitHorizontalLabels({ width: 200, xNow: 67, xNext: 190, now, next, measure }), { now: '140 W', next: '' });
+  assert.deepEqual(fitHorizontalLabels({ width: 200, xNow: 67, xNext: 93, now, next: null, measure }), { now: '140 W', next: '' });
 });

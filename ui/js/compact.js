@@ -48,15 +48,76 @@ export class CompactView {
   }
 }
 
-// Size tiers for the compact ride panels (see docs/superpowers/specs/2026-11-16-compact-three-panels-design.md).
-// mode: w/n = wide/narrow (560 px), t/s = tall/short. short: controls move into the heading row.
+// Pure logic of the compact ride view (see docs/superpowers/specs/2026-11-20-compact-graph-layout-design.md).
+// No DOM and no imports, so node can test it. The DOM glue lives in ride.js, render.js and (fitTexts) below.
+
+/**
+ * Layout and what fits at a window size. layout: 'h' (wide: rail, live block, graph across) or 'v' (narrow:
+ * live block on top, graph down). live: gauge on top ('col') or beside the target and tiles ('row').
+ * foot: where play / workout left sit ('foot' bottom row, 'head' heading row when short, 'rail' horizontal).
+ */
 export function compactMode(width, height) {
-  const wide = width >= 560;
-  return {
-    mode: wide ? (height < 260 ? 'ws' : 'wt') : (height < 300 ? 'ns' : 'nt'),
-    short: height < 240,
-    tiny: width < 260 || height < 170,
-    narrow: width < 420,
-    xs: width < 300,
-  };
+  if (width >= 640 && width >= 1.5 * height) return { layout: 'h', live: 'row', graph: true, foot: 'rail', tiles: true };
+  return { layout: 'v', live: height >= 520 ? 'col' : 'row', graph: height >= 360, foot: height < 244 ? 'head' : 'foot', tiles: height >= 190 };
+}
+
+/** Largest font size in [min, max] at which `measure(size)` (width in px) still fits `avail`. */
+export function fitFontSize(measure, avail, min, max) {
+  for (let size = max; size > min; size--) if (measure(size) <= avail) return size;
+  return min;
+}
+
+/**
+ * What a segment asks of the rider, with the intensity multiplier m and FTP F applied.
+ * kind: 'allout' (erg === false), 'maxeffort' / 'free' (no target), 'range' (ramp, a → b), 'watts' (a).
+ */
+export function levelView(seg, m, F) {
+  if (seg.erg === false) return { kind: 'allout' };
+  if (seg.p0 === null) return { kind: seg.type === 'maxeffort' ? 'maxeffort' : 'free' };
+  const a = Math.round(seg.p0 * F * m), b = Math.round(seg.p1 * F * m);
+  return seg.p0 === seg.p1 ? { kind: 'watts', a, b } : { kind: 'range', a, b };
+}
+
+/** Scale of the compact graph: the same rule as the full view's Diagram. */
+export const maxPOf = (segments) => Math.max(1.2, ...segments.flatMap((s) => [s.p0 ?? 0, s.p1 ?? 0])) * 1.08;
+
+/**
+ * Corner points of one segment's bar as an SVG polygon string. Horizontal: time runs left to right over
+ * `length`, power grows upwards in `breadth` below `top`. Vertical: time runs down over `length`, power grows
+ * to the right of `gutter` within `breadth`. Free segments (no p) are drawn at 0.5.
+ */
+export function segmentPoints(seg, { orientation, total, maxP, length, breadth, top = 0, gutter = 0 }) {
+  const a = seg.p0 ?? 0.5, b = seg.p1 ?? 0.5;
+  const t0 = (seg.start / total) * length, t1 = ((seg.start + seg.duration) / total) * length;
+  const pts = orientation === 'h'
+    ? (() => { const y = (p) => breadth - (p / maxP) * (breadth - top); return [[t0, breadth], [t0, y(a)], [t1, y(b)], [t1, breadth]]; })()
+    : (() => { const x = (p) => gutter + (p / maxP) * (breadth - gutter); return [[gutter, t0], [x(a), t0], [x(b), t1], [gutter, t1]]; })();
+  return pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
+}
+
+const NOW_MIN = 48, NEXT_3 = 46, NEXT_2 = 31, GAP = 2;
+/**
+ * Vertical graph labels. NOW sits above the position line (its bottom, `nowBase`, is at least NOW_MIN from the
+ * top), NEXT below the next segment's start (`yNext`, null without a next segment). NEXT is pulled up so it
+ * fits the bottom; if it would then touch NOW, its third line goes, then the whole label.
+ */
+export function placeGraphLabels({ height, yNow, yNext }) {
+  const nowBase = Math.max(yNow, NOW_MIN);
+  if (yNext === null) return { nowBase, next: null };
+  for (const [lines, h] of [[3, NEXT_3], [2, NEXT_2]]) {
+    const top = Math.min(yNext, height - h);
+    if (top >= nowBase + GAP) return { nowBase, next: { top, lines } };
+  }
+  return { nowBase, next: null };
+}
+
+/**
+ * Horizontal graph labels. now / next are [full, short] strings; `measure(string)` gives the width in px.
+ * Now ends left of the position line (xNow), Next starts right of the next segment's start (xNext).
+ */
+export function fitHorizontalLabels({ width, xNow, xNext, now, next, measure }) {
+  const nowText = measure(now[0]) <= xNow - 6 ? now[0] : now[1];
+  if (!next) return { now: nowText, next: '' };
+  const fits = (s) => xNext + 6 + measure(s) <= width;
+  return { now: nowText, next: fits(next[0]) ? next[0] : fits(next[1]) ? next[1] : '' };
 }
