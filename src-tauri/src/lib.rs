@@ -624,8 +624,38 @@ async fn trainer_resume(app: State<'_, App>) -> Res<()> {
 // ---------------------------------------------------------------- compact ride window
 
 #[tauri::command]
-fn ride_window(window: tauri::WebviewWindow, pending: State<'_, ride_window::Pending>, compact: bool, leave: Option<bool>) -> Res<()> {
-    pending.set(&window, compact, leave.unwrap_or(false))
+fn ride_window(window: tauri::WebviewWindow, app: State<'_, App>, pending: State<'_, ride_window::Pending>, compact: bool, leave: Option<bool>) -> Res<()> {
+    let remembered = if compact {
+        app.store.read(|doc| doc["compact"].clone()).ok().and_then(|v| ride_window::Bounds::from_json(&v))
+    } else {
+        None
+    };
+    if let Some(bounds) = pending.set(&window, compact, leave.unwrap_or(false), remembered)? {
+        remember_compact(&app.store, bounds);
+    }
+    Ok(())
+}
+
+/// Remember the compact window geometry the rider used (machine-local, never synced).
+fn remember_compact(store: &state::Store, bounds: ride_window::Bounds) {
+    let _ = store.update(|doc| {
+        doc["compact"] = bounds.to_json();
+        Ok(())
+    });
+}
+
+/// The app closes mid-ride in the compact view: remember the geometry without a toggle back.
+fn save_compact_on_close(handle: &tauri::AppHandle) {
+    let (Some(pending), Some(app), Some(window)) = (
+        handle.try_state::<ride_window::Pending>(),
+        handle.try_state::<App>(),
+        handle.get_webview_window("main"),
+    ) else {
+        return;
+    };
+    if let Some(bounds) = pending.compact_geometry(&window) {
+        remember_compact(&app.store, bounds);
+    }
 }
 
 // ---------------------------------------------------------------- virtual shifting controllers
@@ -671,6 +701,14 @@ pub fn run() {
             });
             app.manage(updater::Pending::default());
             app.manage(ride_window::Pending::default());
+            if let Some(window) = app.get_webview_window("main") {
+                let handle = app.handle().clone();
+                window.on_window_event(move |event| {
+                    if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                        save_compact_on_close(&handle);
+                    }
+                });
+            }
             #[cfg(target_os = "macos")]
             {
                 app.set_menu(app_menu(app.handle())?)?;

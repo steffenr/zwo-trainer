@@ -1,5 +1,8 @@
 // Machine-local geometry for the optional compact presentation of the main ride window.
 // Physical snapshots preserve position/size across monitors; requested sizes are logical.
+// The compact geometry the rider last used is persisted (state.json root key `compact`) and
+// restored on the next compact entry; it never leaves the machine and is never synced.
+use serde_json::{json, Value};
 use std::sync::Mutex;
 use tauri::{LogicalSize, PhysicalPosition, PhysicalSize, WebviewWindow};
 
@@ -7,16 +10,54 @@ const RESIZE_ERROR: &str = "Cannot resize the window. Please try again.";
 const LEAVE_ERROR: &str = "Cannot restore the window size. Please resize the window by hand.";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct Bounds {
+pub(crate) struct Bounds {
     size: PhysicalSize<u32>,
     position: Option<PhysicalPosition<i32>>,
     maximized: bool,
     fullscreen: bool,
 }
 
+impl Bounds {
+    /// Persisted form: only the compact window's size and (where the OS reports it) position.
+    pub(crate) fn to_json(self) -> Value {
+        json!({
+            "width": self.size.width,
+            "height": self.size.height,
+            "x": self.position.map(|p| p.x),
+            "y": self.position.map(|p| p.y),
+        })
+    }
+
+    /// Remembered compact geometry; nonsense (a missing, tiny or absurd size) is ignored rather
+    /// than taken as a window size, so a damaged entry falls back to the default bar.
+    pub(crate) fn from_json(v: &Value) -> Option<Self> {
+        let width = u32::try_from(v["width"].as_u64()?).ok().filter(|w| (200..=20_000).contains(w))?;
+        let height = u32::try_from(v["height"].as_u64()?).ok().filter(|h| (120..=20_000).contains(h))?;
+        let position = match (v["x"].as_i64(), v["y"].as_i64()) {
+            (Some(x), Some(y)) => Some(PhysicalPosition::new(i32::try_from(x).ok()?, i32::try_from(y).ok()?)),
+            _ => None,
+        };
+        Some(Self { size: PhysicalSize::new(width, height), position, maximized: false, fullscreen: false })
+    }
+}
+
+/// Is enough of the window on one of the monitors? A remembered position from a since-disconnected
+/// screen would otherwise put the compact window where the rider can't see or drag it.
+fn visible_on_screen(position: PhysicalPosition<i32>, monitors: &[(PhysicalPosition<i32>, PhysicalSize<u32>)]) -> bool {
+    monitors.iter().any(|(corner, size)| {
+        let left = position.x.max(corner.x);
+        let top = position.y.max(corner.y);
+        let right = (position.x + 160).min(corner.x + size.width as i32);
+        let bottom = (position.y + 80).min(corner.y + size.height as i32);
+        right - left >= 80 && bottom - top >= 40
+    })
+}
+
 trait WindowOps {
     fn snapshot(&self) -> Result<Bounds, String>;
-    fn apply(&self, compact: bool, restore: Option<&Bounds>) -> Result<(), String>;
+    /// Apply `compact` (or the full view) with `geometry`: the remembered compact bounds, the full
+    /// snapshot to restore, or None for a fresh compact bar / full window.
+    fn apply(&self, compact: bool, geometry: Option<&Bounds>) -> Result<(), String>;
     /// Only the normal 900 × 640 minimum: the last resort when the full geometry can't be restored.
     fn reset_minimum(&self) -> Result<(), String>;
 }
@@ -35,7 +76,7 @@ impl WindowOps for WebviewWindow {
         read().map_err(|_| RESIZE_ERROR.to_string())
     }
 
-    fn apply(&self, compact: bool, restore: Option<&Bounds>) -> Result<(), String> {
+    fn apply(&self, compact: bool, geometry: Option<&Bounds>) -> Result<(), String> {
         let resize = || -> tauri::Result<()> {
             self.unmaximize()?;
             let (width, height) = if compact {
@@ -44,16 +85,19 @@ impl WindowOps for WebviewWindow {
                 (900.0, 640.0)
             };
             self.set_min_size(Some(LogicalSize::new(width, height)))?;
-            if let Some(saved) = restore {
-                self.set_size(saved.size)?;
-                if let Some(position) = saved.position {
-                    let _ = self.set_position(position);
+            match geometry {
+                Some(saved) => {
+                    self.set_size(saved.size)?;
+                    if let Some(position) = saved.position {
+                        let _ = self.set_position(position);
+                    }
+                    // A compact window is never maximized, whatever the remembered bounds say.
+                    if !compact && saved.maximized {
+                        self.maximize()?;
+                    }
                 }
-                if saved.maximized {
-                    self.maximize()?;
-                }
-            } else {
-                self.set_size(LogicalSize::new(960.0, 200.0))?;
+                None if compact => self.set_size(LogicalSize::new(960.0, 200.0))?,
+                None => self.set_size(LogicalSize::new(900.0, 640.0))?,
             }
             Ok(())
         };
@@ -72,31 +116,47 @@ struct WindowState {
 }
 
 impl WindowState {
-    fn set(&mut self, window: &impl WindowOps, compact: bool) -> Result<(), String> {
+    /// `target`: the remembered compact geometry (None: the default 960 × 200 bar). Returns the compact
+    /// geometry the rider actually used when leaving it, so the caller can remember it.
+    fn set(&mut self, window: &impl WindowOps, compact: bool, target: Option<&Bounds>) -> Result<Option<Bounds>, String> {
         if compact == self.saved.is_some() {
-            return Ok(());
+            return Ok(None);
         }
         let current = window.snapshot()?;
         if current.fullscreen {
             return Err("Leave full screen before switching the ride view.".into());
         }
-        let restore = if compact { None } else { self.saved.as_ref() };
-        if let Err(error) = window.apply(compact, restore) {
-            // Roll back partial changes (including the minimum size); keep the original
-            // snapshot on failed exit so the rider can retry without losing the full view.
-            let _ = window.apply(!compact, Some(&current));
-            return Err(error);
+        if compact {
+            if let Err(error) = window.apply(true, target) {
+                // Roll back partial changes (including the minimum size).
+                let _ = window.apply(false, Some(&current));
+                return Err(error);
+            }
+            self.saved = Some(current);
+            Ok(None)
+        } else {
+            if let Err(error) = window.apply(false, self.saved.as_ref()) {
+                // Roll back to the compact geometry the rider was just using; keep the original
+                // full snapshot so a retry still restores it.
+                let _ = window.apply(true, Some(&current));
+                return Err(error);
+            }
+            self.saved = None;
+            Ok(Some(current))
         }
-        self.saved = if compact { Some(current) } else { None };
-        Ok(())
     }
 
     /// Leaving the ride: restore the full view like `set(false)`, retrying once. If both tries fail,
     /// the ride screen closes anyway, so give up the geometry but never keep the lowered 320 × 200
     /// minimum or a stale snapshot: the window stays resizable and the next compact entry starts fresh.
-    fn leave(&mut self, window: &impl WindowOps) -> Result<(), String> {
-        if self.saved.is_none() || self.set(window, false).is_ok() || self.set(window, false).is_ok() {
-            return Ok(());
+    fn leave(&mut self, window: &impl WindowOps) -> Result<Option<Bounds>, String> {
+        if self.saved.is_none() {
+            return Ok(None);
+        }
+        for _ in 0..2 {
+            if let Ok(used) = self.set(window, false, None) {
+                return Ok(used);
+            }
         }
         let _ = window.reset_minimum();
         self.saved = None;
@@ -108,8 +168,9 @@ impl WindowState {
 pub struct Pending(Mutex<WindowState>);
 
 impl Pending {
-    /// `leave`: the ride screen is closing (see `WindowState::leave`); only used with `compact == false`.
-    pub fn set(&self, window: &WebviewWindow, compact: bool, leave: bool) -> Result<(), String> {
+    /// `target`: remembered compact geometry from state.json. `leave`: the ride screen is closing (see
+    /// `WindowState::leave`); only used with `compact == false`. Returns the compact geometry to remember.
+    pub fn set(&self, window: &WebviewWindow, compact: bool, leave: bool, target: Option<Bounds>) -> Result<Option<Bounds>, String> {
         if window.label() != "main" {
             return Err("Compact view is only available in the main window.".into());
         }
@@ -117,7 +178,35 @@ impl Pending {
         if leave && !compact {
             state.leave(window)
         } else {
-            state.set(window, compact)
+            let target = target.map(|b| match b.position {
+                Some(position) => {
+                    let visible = match window.available_monitors() {
+                        Ok(monitors) => {
+                            let list: Vec<_> = monitors.iter().map(|m| (*m.position(), *m.size())).collect();
+                            visible_on_screen(position, &list)
+                        }
+                        Err(_) => true, // can't tell: keep the remembered position
+                    };
+                    if visible {
+                        b
+                    } else {
+                        Bounds { position: None, ..b }
+                    }
+                }
+                None => b,
+            });
+            state.set(window, compact, target.as_ref())
+        }
+    }
+
+    /// The compact geometry in use, for the window-close path (persist without toggling back to the
+    /// full view). None when the window isn't in the compact presentation.
+    pub fn compact_geometry(&self, window: &WebviewWindow) -> Option<Bounds> {
+        let state = self.0.lock().ok()?;
+        if state.saved.is_some() {
+            window.snapshot().ok()
+        } else {
+            None
         }
     }
 }
@@ -163,7 +252,7 @@ mod tests {
         fn snapshot(&self) -> Result<Bounds, String> {
             Ok(*self.bounds.borrow())
         }
-        fn apply(&self, compact: bool, restore: Option<&Bounds>) -> Result<(), String> {
+        fn apply(&self, compact: bool, geometry: Option<&Bounds>) -> Result<(), String> {
             self.calls.borrow_mut().push(compact);
             *self.minimum.borrow_mut() = if compact { (320, 200) } else { (900, 640) };
             if self.fail.borrow_mut().take() == Some(compact) {
@@ -175,7 +264,7 @@ mod tests {
                 return Err("resize failed".into());
             }
             let mut bounds = self.bounds.borrow_mut();
-            if let Some(saved) = restore {
+            if let Some(saved) = geometry {
                 *bounds = *saved;
             } else {
                 bounds.size = PhysicalSize::new(960, 200);
@@ -201,7 +290,7 @@ mod tests {
     fn leaving_retries_a_failed_restore_once() {
         let window = FakeWindow::new(original());
         let mut state = WindowState::default();
-        state.set(&window, true).unwrap();
+        state.set(&window, true, None).unwrap();
         *window.bounds.borrow_mut() = compact_bounds();
         *window.fail_exits.borrow_mut() = 1;
         state.leave(&window).unwrap();
@@ -214,7 +303,7 @@ mod tests {
     fn leaving_after_two_failed_restores_resets_the_minimum_and_forgets_the_snapshot() {
         let window = FakeWindow::new(original());
         let mut state = WindowState::default();
-        state.set(&window, true).unwrap();
+        state.set(&window, true, None).unwrap();
         *window.bounds.borrow_mut() = compact_bounds();
         *window.fail_exits.borrow_mut() = 2;
         assert!(state.leave(&window).is_err());
@@ -222,9 +311,9 @@ mod tests {
         assert_eq!(*window.minimum.borrow(), (900, 640));
         assert!(state.saved.is_none());
         // the next ride's compact toggle snapshots the current window and works normally
-        state.set(&window, true).unwrap();
+        state.set(&window, true, None).unwrap();
         assert_eq!(*window.minimum.borrow(), (320, 200));
-        state.set(&window, false).unwrap();
+        state.set(&window, false, None).unwrap();
         assert_eq!(*window.bounds.borrow(), compact_bounds());
         assert_eq!(*window.minimum.borrow(), (900, 640));
     }
@@ -241,11 +330,11 @@ mod tests {
     fn entry_and_exit_restore_physical_geometry() {
         let window = FakeWindow::new(original());
         let mut state = WindowState::default();
-        state.set(&window, true).unwrap();
+        state.set(&window, true, None).unwrap();
         assert_eq!(*window.minimum.borrow(), (320, 200));
         window.bounds.borrow_mut().size = PhysicalSize::new(640, 1040);
         window.bounds.borrow_mut().position = Some(PhysicalPosition::new(300, 200));
-        state.set(&window, false).unwrap();
+        state.set(&window, false, None).unwrap();
         assert_eq!(*window.bounds.borrow(), original());
         assert_eq!(*window.minimum.borrow(), (900, 640));
     }
@@ -254,12 +343,12 @@ mod tests {
     fn repeated_entry_preserves_the_first_snapshot() {
         let window = FakeWindow::new(original());
         let mut state = WindowState::default();
-        state.set(&window, false).unwrap();
-        state.set(&window, true).unwrap();
+        state.set(&window, false, None).unwrap();
+        state.set(&window, true, None).unwrap();
         window.bounds.borrow_mut().size = PhysicalSize::new(640, 1040);
-        state.set(&window, true).unwrap();
-        state.set(&window, false).unwrap();
-        state.set(&window, false).unwrap();
+        state.set(&window, true, None).unwrap();
+        state.set(&window, false, None).unwrap();
+        state.set(&window, false, None).unwrap();
         assert_eq!(*window.bounds.borrow(), original());
         assert_eq!(*window.calls.borrow(), [true, false]);
     }
@@ -272,9 +361,9 @@ mod tests {
         };
         let window = FakeWindow::new(saved);
         let mut state = WindowState::default();
-        state.set(&window, true).unwrap();
+        state.set(&window, true, None).unwrap();
         assert!(!window.bounds.borrow().maximized);
-        state.set(&window, false).unwrap();
+        state.set(&window, false, None).unwrap();
         assert_eq!(*window.bounds.borrow(), saved);
     }
 
@@ -283,12 +372,12 @@ mod tests {
         let window = FakeWindow::new(original());
         let mut state = WindowState::default();
         *window.fail.borrow_mut() = Some(true);
-        assert!(state.set(&window, true).is_err());
+        assert!(state.set(&window, true, None).is_err());
         assert_eq!(*window.bounds.borrow(), original());
         assert_eq!(*window.minimum.borrow(), (900, 640));
         assert!(state.saved.is_none());
-        state.set(&window, true).unwrap();
-        state.set(&window, false).unwrap();
+        state.set(&window, true, None).unwrap();
+        state.set(&window, false, None).unwrap();
         assert_eq!(*window.bounds.borrow(), original());
     }
 
@@ -296,15 +385,15 @@ mod tests {
     fn failed_exit_preserves_compact_geometry_and_the_saved_full_view() {
         let window = FakeWindow::new(original());
         let mut state = WindowState::default();
-        state.set(&window, true).unwrap();
+        state.set(&window, true, None).unwrap();
         let compact = compact_bounds();
         *window.bounds.borrow_mut() = compact;
         *window.fail.borrow_mut() = Some(false);
-        assert!(state.set(&window, false).is_err());
+        assert!(state.set(&window, false, None).is_err());
         assert_eq!(*window.bounds.borrow(), compact);
         assert_eq!(*window.minimum.borrow(), (320, 200));
         assert_eq!(state.saved, Some(original()));
-        state.set(&window, false).unwrap();
+        state.set(&window, false, None).unwrap();
         assert_eq!(*window.bounds.borrow(), original());
     }
 
@@ -316,9 +405,9 @@ mod tests {
         };
         let window = FakeWindow::new(saved);
         let mut state = WindowState::default();
-        state.set(&window, true).unwrap();
+        state.set(&window, true, None).unwrap();
         assert_eq!(*window.minimum.borrow(), (320, 200));
-        state.set(&window, false).unwrap();
+        state.set(&window, false, None).unwrap();
         assert_eq!(window.bounds.borrow().size, saved.size);
         assert_eq!(*window.minimum.borrow(), (900, 640));
     }
@@ -332,11 +421,72 @@ mod tests {
         let window = FakeWindow::new(saved);
         let mut state = WindowState::default();
         assert!(state
-            .set(&window, true)
+            .set(&window, true, None)
             .unwrap_err()
             .contains("full screen"));
         assert_eq!(*window.bounds.borrow(), saved);
         assert!(window.calls.borrow().is_empty());
         assert!(state.saved.is_none());
     }
+    #[test]
+    fn remembered_compact_geometry_is_restored_and_handed_back() {
+        let window = FakeWindow::new(original());
+        let mut state = WindowState::default();
+        let remembered = compact_bounds();
+        state.set(&window, true, Some(&remembered)).unwrap();
+        assert_eq!(*window.bounds.borrow(), remembered);
+        // the rider resizes and moves it; leaving hands that geometry back for persistence
+        let used = Bounds {
+            size: PhysicalSize::new(800, 300),
+            position: Some(PhysicalPosition::new(40, 60)),
+            ..remembered
+        };
+        *window.bounds.borrow_mut() = used;
+        assert_eq!(state.set(&window, false, None).unwrap(), Some(used));
+        assert_eq!(*window.bounds.borrow(), original());
+        assert_eq!(*window.minimum.borrow(), (900, 640));
+    }
+
+    #[test]
+    fn leaving_the_compact_view_reports_its_geometry() {
+        let window = FakeWindow::new(original());
+        let mut state = WindowState::default();
+        state.set(&window, true, None).unwrap();
+        *window.bounds.borrow_mut() = compact_bounds();
+        assert_eq!(state.leave(&window).unwrap(), Some(compact_bounds()));
+        assert_eq!(*window.bounds.borrow(), original());
+    }
+
+    #[test]
+    fn compact_geometry_round_trips_through_json() {
+        let bounds = compact_bounds();
+        assert_eq!(Bounds::from_json(&bounds.to_json()), Some(bounds));
+        let no_position = Bounds { position: None, ..bounds };
+        assert_eq!(Bounds::from_json(&no_position.to_json()), Some(no_position));
+        // a compact window is never restored maximized
+        let value = json!({ "width": 640, "height": 320, "x": 5, "y": 6, "maximized": true });
+        assert!(!Bounds::from_json(&value).unwrap().maximized);
+    }
+
+    #[test]
+    fn damaged_compact_geometry_falls_back_to_the_default_bar() {
+        for value in [json!({}), json!({ "width": 10, "height": 200 }), json!({ "width": 640, "height": 0 }), json!("compact")] {
+            assert_eq!(Bounds::from_json(&value), None, "{value}");
+        }
+    }
+
+    #[test]
+    fn remembered_position_must_be_on_a_connected_screen() {
+        let monitors = [
+            (PhysicalPosition::new(0, 0), PhysicalSize::new(1920, 1080)),
+            (PhysicalPosition::new(1920, 0), PhysicalSize::new(1280, 720)),
+        ];
+        assert!(visible_on_screen(PhysicalPosition::new(100, 100), &monitors));
+        assert!(visible_on_screen(PhysicalPosition::new(3100, 600), &monitors));
+        assert!(!visible_on_screen(PhysicalPosition::new(-300, 100), &monitors));
+        assert!(!visible_on_screen(PhysicalPosition::new(0, 2000), &monitors));
+        // barely peeking in (less than 80 × 40) counts as off-screen
+        assert!(!visible_on_screen(PhysicalPosition::new(1880, -100), &monitors));
+    }
+
 }
