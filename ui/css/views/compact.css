@@ -14,6 +14,8 @@ body.compact-riding {
 }
 body.compact-riding .ride > :not(.compact-ride, .ride-hint) { display: none; }
 .compact-ride button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* fitTexts() measures sizes it has just set: no transition may delay them (this beats the global Reduce motion rule) */
+.compact-ride.fit-measuring, .compact-ride.fit-measuring * { transition: none !important; }
 
 /* ---------- heading row (vertical layout) ---------- */
 .compact-head {

@@ -7,7 +7,7 @@
 // ./summary.js (finishRide here, startRide there), and through app.js (api, route) and the views, which
 // start rides and tests from here. They are safe because nothing from those modules is used while this
 // module is evaluated: only inside functions and methods that run after boot.
-import { CompactView, compactMode, levelView } from '../compact.js';
+import { CompactView, compactMode, levelView, fitTexts } from '../compact.js';
 import { powerAt, segmentAt } from '../zwo.js';
 import { zoneOf, zoneColor, zoneInk, fmtTime, Diagram, CompactGraph, Gauge, ProgressRing, motionOK } from '../render.js';
 import { invoke } from '../ble.js';
@@ -131,8 +131,8 @@ class Ride {
     const cmpPlay = html`<button class="ctl play" data-act="play" title="${tText('start')} (${tText('spaceKey')})" aria-label="${tText('start')}" aria-keyshortcuts="Space"><svg viewBox="0 0 24 24" class="i-play" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg><svg viewBox="0 0 24 24" class="i-pause" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg></button>`;
     const cmpStop = html`<button class="ctl" data-act="stop" title="${tText('endWorkout')}" aria-label="${tText('endWorkout')}" aria-keyshortcuts="Escape"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>`;
     const cmpCtl = html`<span class="compact-ctl">${cmpPlay}${cmpStop}</span>`;
-    const cmpWl = html`<span class="cmp-wl"><small>${tHtml('compactWorkoutLeft')}</small><b class="cmp-wleft" data-fit="14,22">0:00</b></span>`;
-    const cmpWlNum = html`<span class="cmp-wl" title="${tText('compactWorkoutLeft')}"><b class="cmp-wleft" data-fit="12,20">0:00</b></span>`;
+    const cmpWl = html`<span class="cmp-wl"><small>${tHtml('compactWorkoutLeft')}</small><b class="cmp-wleft" data-fit="14">0:00</b></span>`;
+    const cmpWlNum = html`<span class="cmp-wl" title="${tText('compactWorkoutLeft')}"><b class="cmp-wleft" data-fit="12">0:00</b></span>`;
     const cmpExpand = html`<button class="icon-btn" data-act="expand" title="${tText('expandView')}" aria-label="${tText('expandView')}" aria-keyshortcuts="C">${IC.expand}</button>`;
     const cmpGears = html`<div class="compact-gears cmp-gears" role="group" hidden><button class="icon-btn" data-shift="-1" title="${tText('shiftDownKey')}" aria-label="${tText('shiftDownKey')}">−</button><span class="cmp-gear-n"></span><button class="icon-btn" data-shift="1" title="${tText('shiftUpKey')}" aria-label="${tText('shiftUpKey')}">+</button></div>`;
     // the ride title lives in the regular top bar (in place of the mode switch)
@@ -221,10 +221,10 @@ class Ride {
             <div class="cp-body">
               <div class="cp-cell"><div class="cp-dial"><div class="cp-mount" id="cmp-gauge"></div><div class="cp-center"><b id="cmp-pow" data-fit="16">–</b><small>W</small></div></div></div>
               <div class="cp-ex">
-                <div class="cp-tgt" id="cmp-target" data-fit="12,19">${IC.bolt}<span id="cmp-target-v">–</span></div>
+                <div class="cp-tgt" id="cmp-target" data-fit="12">${IC.bolt}<span id="cmp-target-v">–</span></div>
                 <div class="cp-tiles">
-                  <div class="cp-tile" role="group" title="${tText('devHr')}" aria-label="${tText('devHr')}">${IC.heart}<b id="cmp-hr" data-fit="14,24">–</b></div>
-                  <div class="cp-tile" role="group" title="${tText('cadence')}" aria-label="${tText('cadence')}">${IC.cad}<b id="cmp-cad" data-fit="14,24">–</b></div>
+                  <div class="cp-tile" role="group" title="${tText('devHr')}" aria-label="${tText('devHr')}">${IC.heart}<b id="cmp-hr" data-fit="14">–</b></div>
+                  <div class="cp-tile" role="group" title="${tText('cadence')}" aria-label="${tText('cadence')}">${IC.cad}<b id="cmp-cad" data-fit="14">–</b></div>
                 </div>
               </div>
             </div>
@@ -259,6 +259,7 @@ class Ride {
       cmpEl.dataset.graph = m.graph ? '1' : '0';
       cmpEl.dataset.tiles = m.tiles ? '1' : '0';
       this.cGraph.setOrientation(m.layout);
+      fitTexts(cmpEl);
     };
     this.cObs = new ResizeObserver(fitCompact);
     this.cObs.observe(cmpEl);
@@ -875,6 +876,9 @@ class Ride {
     this.q('cmp-state').title = `${statusDetail} · ${connection}`;
     this.q('cmp-state').setAttribute('aria-label', `${statusDetail} · ${connection}`);
     this.q('cmp-dot').classList.toggle('on', trainer.connected);
+    // long values shrink to fit (see fitTexts); only when one of them changed its length, never every tick
+    const fitKey = [targetText, String(p ?? '–').length, String(hr ?? '–').length, String(c != null ? Math.round(c) : '–').length, this.q('d-rem').textContent.length].join('|');
+    if (fitKey !== this.cmpFitKey) { this.cmpFitKey = fitKey; fitTexts(this.qs('.compact-ride')); }
   }
 
   /** Play buttons (full and compact view: Start before the ride, then Pause / Resume), gauge toggle state, workout chart. */

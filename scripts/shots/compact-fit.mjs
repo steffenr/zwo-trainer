@@ -35,6 +35,28 @@ const SCENARIOS = {
       await s.tick(2000);
     },
   },
+  // the longest values the layout has to take: a ramp 100–1000 W, four-digit power, ten hours, three-digit heart rate / cadence
+  stress: {
+    rider: mode('workouts'),
+    setup: (s) => rideTo(s, SSS, 18 * 60 + 44),
+    async prepare(page) {
+      await page.evaluate(async () => {
+        const set = (el, text) => { if (el) el.textContent = text; };
+        set(document.querySelector('#cmp-target-v'), '100–1000 W');
+        set(document.querySelector('#cmp-pow'), '1234');
+        set(document.querySelector('#cmp-hr'), '188');
+        set(document.querySelector('#cmp-cad'), '120');
+        document.querySelectorAll('.cmp-wleft').forEach((e) => set(e, '10:15:00'));
+        (await import('/js/compact.js')).fitTexts(document.querySelector('.compact-ride'));
+      });
+    },
+    /** every shrinkable value stays at or above its floor (data-fit) */
+    async floors(page) {
+      return page.evaluate(() => [...document.querySelectorAll('.compact-ride [data-fit]')]
+        .filter((e) => e.getClientRects().length && parseFloat(getComputedStyle(e).fontSize) < Number(e.dataset.fit) - 0.01)
+        .map((e) => `below its floor: ${e.id || e.className} ${getComputedStyle(e).fontSize} < ${e.dataset.fit}px`));
+    },
+  },
   last: {
     rider: mode('workouts'),
     async setup(s) {
@@ -132,8 +154,10 @@ for (const theme of themes) {
         for (const [w, h] of SIZES) {
           await s.resize(w, h);
           await settle(s);
+          if (def.prepare) await def.prepare(page);
           const label = `${w}x${h} ${lang} ${theme} ${scenario}`;
           const found = await page.evaluate(inspect);
+          if (def.floors) found.push(...await def.floors(page));
           const layout = await page.evaluate(() => document.querySelector('.compact-ride')?.dataset.layout);
           const want = compactMode(w, h).layout;
           if (layout !== want) found.unshift(`data-layout is ${layout}, expected ${want}`);
