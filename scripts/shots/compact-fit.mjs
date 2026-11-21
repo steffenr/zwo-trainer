@@ -48,13 +48,10 @@ const SCENARIOS = {
         set(document.querySelector('#cmp-cad'), '120');
         document.querySelectorAll('.cmp-wleft').forEach((e) => set(e, '10:15:00'));
         (await import('/js/compact.js')).fitTexts(document.querySelector('.compact-ride'));
-        // the longest graph labels (French / German words, ten hours, a wide ramp); the ride repaints them on its next tick
-        const { ride } = await import('/js/core.js');
-        ride.cGraph.update(ride.t, {
-          nowKicker: 'Maintenant', now: ['Maintenant Maximalbelastung', 'Maximalbelastung'], nowSub: '10:15:00 restant',
-          nextKicker: 'Nächstes', nextWatts: '100–1000 W', nextSub: 'dans 10:15:00',
-          next: ['Nächstes 100–1000 W · dans 10:15:00', 'Nächstes 100–1000 W'],
-        });
+        // the longest card texts (a wide ramp, ten hours, French words); the ride repaints them on its next tick
+        set(document.querySelector('#cmp-cur'), '10:15:00'); set(document.querySelector('#cmp-cur-s'), 'à 100–1000 W');
+        set(document.querySelector('#cmp-next'), '100–1000 W'); set(document.querySelector('#cmp-next-s'), 'pendant 10:15:00');
+        (await import('/js/compact.js')).fitTexts(document.querySelector('.compact-ride'));
       });
     },
     /** every shrinkable value stays at or above its floor (data-fit) */
@@ -100,7 +97,8 @@ function inspect() {
     }
     const outside = r.right > b.right + 0.5 || r.left < b.left - 0.5 || r.bottom > b.bottom + 0.5 || r.top < b.top - 0.5;
     const offscreen = r.right > win.w + 0.5 || r.bottom > win.h + 0.5;
-    const clipped = !(el instanceof SVGElement) && el.children.length === 0 && cs.display !== 'inline' && el.scrollWidth > el.clientWidth + 1;
+    // an ellipsis is the deliberate last resort (the Current / Next cards in a narrow column), not a clip
+    const clipped = !(el instanceof SVGElement) && el.children.length === 0 && cs.display !== 'inline' && cs.textOverflow !== 'ellipsis' && el.scrollWidth > el.clientWidth + 1;
     if (outside || offscreen || clipped) out.push(`${outside ? 'outside panel' : offscreen ? 'outside window' : 'clipped'}: ${name(el)}`);
   }
   for (const svg of root.querySelectorAll('svg')) {
@@ -116,7 +114,7 @@ function inspect() {
   return out;
 }
 
-/** Runs in the page when the graph is shown: one polygon per segment, the position line inside the drawing, labels only where they belong. */
+/** Runs in the page when the graph is shown: one polygon per segment, the position line inside the drawing, no text in the drawing, and the Current / Next cards where they belong. */
 async function graphProblems(page, scenario, layout) {
   return page.evaluate(async ([scenario, layout]) => {
     const out = [];
@@ -127,22 +125,33 @@ async function graphProblems(page, scenario, layout) {
     if (n !== ride.w.segments.length) out.push(`graph has ${n} bars for ${ride.w.segments.length} segments`);
     const sr = svg.getBoundingClientRect(), pr = svg.querySelector('.cg-pos').getBoundingClientRect();
     if (pr.left < sr.left - 1 || pr.right > sr.right + 1 || pr.top < sr.top - 1 || pr.bottom > sr.bottom + 1) out.push('position line outside the graph');
-    if (layout === 'v') { // labels live in the 80 px gutter left of the bars
-      for (const tx of svg.querySelectorAll('text:not(.cg-measure)')) {
-        if (getComputedStyle(tx).visibility === 'hidden' || !tx.textContent.trim()) continue;
-        const right = tx.getBoundingClientRect().right - sr.left;
-        if (right > 80.5) out.push(`gutter overflow: "${tx.textContent.trim().slice(0, 24)}" reaches ${right.toFixed(0)} px of 80`);
+    if (svg.querySelector('text')) out.push('the graph still draws text (Current and Next are cards)');
+    const cards = document.querySelector('.compact-ride').dataset.cards === '1';
+    const cur = document.querySelector('.cp-card.cur'), next = document.querySelector('.cp-card.next');
+    const shown = (e) => e.getClientRects().length > 0;
+    if (cards !== shown(cur) || cards !== shown(next)) out.push(`cards ${shown(cur) ? 'shown' : 'hidden'}, expected ${cards ? 'shown' : 'hidden'}`);
+    if (cards) {
+      const panel = document.querySelector('.cp-graph').getBoundingClientRect(), a = cur.getBoundingClientRect(), b = next.getBoundingClientRect();
+      for (const [name, r] of [['Current', a], ['Next', b]]) if (r.left < panel.left - 0.5 || r.right > panel.right + 0.5 || r.top < panel.top - 0.5 || r.bottom > panel.bottom + 0.5) out.push(`${name} card sticks out of the graph panel`);
+      if (layout === 'v') {
+        if (a.top < sr.bottom - 1 || b.top < sr.bottom - 1) out.push('vertical: the cards are not under the graph');
+        if (sr.height < 60) out.push(`vertical: the graph is only ${sr.height.toFixed(0)} px high beside the cards, expected at least 60`);
+      } else {
+        if (a.left < sr.right - 1 || b.left < sr.right - 1) out.push('horizontal: the cards are not right of the graph');
+        if (Math.abs(a.left - b.left) > 1 || b.top < a.bottom - 1) out.push('horizontal: the cards are not one above the other');
+        if (sr.height < 120) out.push(`horizontal: the graph is only ${sr.height.toFixed(0)} px high, expected at least 120`);
       }
+      const val = (c) => c.querySelector('b').textContent.trim();
+      if (!/^\d+:\d\d/.test(val(cur))) out.push(`Current card says "${val(cur)}", expected the time left`);
+      if (!cur.querySelector('small').textContent.trim()) out.push('Current card shows no target');
+      if (scenario === 'last') { if (val(next) !== '–') out.push(`last segment: Next card says "${val(next)}", expected –`); }
+      else if (val(next) === '–' || !next.querySelector('small').textContent.trim()) out.push('Next card is empty');
     }
-    const shown = [...svg.querySelectorAll(layout === 'v' ? 'text.cg-k' : 'text.cg-lab:not(.cg-measure)')].filter((t) => getComputedStyle(t).visibility !== 'hidden' && t.textContent.trim());
-    if (scenario === 'last' && shown.length !== 1) out.push(`last segment: ${shown.length} labels shown, expected only the "now" label`);
-    // the stress strings are far longer than any real label: in a narrow bar (a 190 px graph) none of them has to fit
-    if (scenario !== 'last' && shown.length < 1 && !(scenario === 'stress' && layout === 'h' && window.innerWidth < 900)) out.push('no label shown');
     return out;
   }, [scenario, layout]);
 }
 
-/** Vertical layout: the target, the gauge number and a single watts value on the graph are large (a range shrinks to the gutter). */
+/** Vertical layout: the target and the gauge number are large. */
 async function verticalFontProblems(page) {
   return page.evaluate(() => {
     const out = [], px = (sel) => { const e = document.querySelector(sel); return e ? parseFloat(getComputedStyle(e).fontSize) : 0; };
@@ -150,8 +159,6 @@ async function verticalFontProblems(page) {
     const tgt = px('#cmp-target'), pow = px('#cmp-pow');
     if (tgt < (col ? 26 : 22)) out.push(`vertical ${col ? 'column' : 'row'}: target is ${tgt} px, expected at least ${col ? 26 : 22}`);
     if (pow < (col ? 34 : 24)) out.push(`vertical ${col ? 'column' : 'row'}: gauge number is ${pow.toFixed(1)} px, expected at least ${col ? 34 : 24}`);
-    const w = [...document.querySelectorAll('.cg-w')].find((t) => getComputedStyle(t).visibility !== 'hidden' && /^\d+ W$/.test(t.textContent.trim()));
-    if (w && parseFloat(getComputedStyle(w).fontSize) < 20) out.push(`vertical graph: "${w.textContent}" is ${getComputedStyle(w).fontSize}, expected at least 20px for a single value`);
     return out;
   });
 }
@@ -162,9 +169,8 @@ async function fontProblems(page, w) {
   return page.evaluate(() => {
     const out = [], px = (sel) => { const e = document.querySelector(sel); return e ? parseFloat(getComputedStyle(e).fontSize) : 0; };
     const tall = document.querySelector('.compact-main').getBoundingClientRect().height >= 170;
-    const lab = [...document.querySelectorAll('.cg-lab:not(.cg-measure)')].find((t) => t.textContent.trim());
-    const want = tall ? { tgt: 34, tile: 40, wl: 34, lab: 17 } : { tgt: 24, tile: 30, wl: 26, lab: 14 };
-    const got = { tgt: px('#cmp-target'), tile: px('#cmp-hr'), wl: px('.cp-graph .cmp-wleft'), lab: lab ? parseFloat(getComputedStyle(lab).fontSize) : 0 };
+    const want = tall ? { tgt: 34, tile: 40, wl: 34, card: 22 } : { tgt: 24, tile: 30, wl: 26, card: 22 };
+    const got = { tgt: px('#cmp-target'), tile: px('#cmp-hr'), wl: px('.cp-graph .cmp-wleft'), card: px('#cmp-cur') };
     const wlText = document.querySelector('.cp-graph .cmp-wleft')?.textContent ?? '';
     for (const k of Object.keys(want)) if (!(k === 'wl' && wlText.length > 5) && got[k] < want[k] - 0.01) out.push(`${tall ? 'tall' : 'flat'} bar: ${k} is ${got[k]} px, expected at least ${want[k]}`);
     return out;
@@ -294,6 +300,7 @@ for (const theme of themes) {
           if (want === 'h' && scenario !== 'stress') found.push(...await fontProblems(page, w));
           if (want === 'v' && scenario === 'steady' && h >= 360) found.push(...await verticalFontProblems(page));
           if (compactMode(w, h).graph) found.push(...await graphProblems(page, scenario, want));
+          if (opt('--png')) await page.screenshot({ path: `${opt('--png')}/${label.replaceAll(' ', '_')}.png` }); // for a look at the real UI
           report(found.length === 0, label, found);
         }
         if (scenario === 'steady' && theme === themes[0] && lang === langs[0]) {

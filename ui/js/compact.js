@@ -65,8 +65,8 @@ export class CompactView {
  * foot: where play / workout left sit ('foot' bottom row, 'head' heading row when short, 'rail' horizontal).
  */
 export function compactMode(width, height) {
-  if (width >= 640 && width >= 1.5 * height) return { layout: 'h', live: 'row', graph: true, foot: 'rail', tiles: true };
-  return { layout: 'v', live: height >= 520 ? 'col' : 'row', graph: height >= 360, foot: height < 244 ? 'head' : 'foot', tiles: height >= 190 };
+  if (width >= 640 && width >= 1.5 * height) return { layout: 'h', live: 'row', graph: true, cards: true, foot: 'rail', tiles: true };
+  return { layout: 'v', live: height >= 520 ? 'col' : 'row', graph: height >= 360, cards: height >= 420, foot: height < 244 ? 'head' : 'foot', tiles: height >= 190 };
 }
 
 /** Largest font size in [min, max] at which `measure(size)` (width in px) still fits `avail`. */
@@ -128,58 +128,21 @@ export function fitTexts(root) {
   }
 }
 
+
 /** Scale of the compact graph: the same rule as the full view's Diagram. */
 export const maxPOf = (segments) => Math.max(1.2, ...segments.flatMap((s) => [s.p0 ?? 0, s.p1 ?? 0])) * 1.08;
 
 /**
- * Corner points of one segment's bar as an SVG polygon string. Horizontal: time runs left to right over
- * `length`, power grows upwards in `breadth` below `top`. Vertical: time runs down over `length`, power grows
- * to the right of `gutter` within `breadth`. Free segments (no p) are drawn at 0.5.
+ * Corner points of one segment's bar as an SVG polygon string. The bars use the whole drawing (Current and Next
+ * are cards beside the graph, not labels in it). Horizontal: time runs left to right over `length`, power grows
+ * upwards in `breadth`. Vertical: time runs down over `length`, power grows to the right. Free segments (no p) are
+ * drawn at 0.5.
  */
-export function segmentPoints(seg, { orientation, total, maxP, length, breadth, top = 0, gutter = 0 }) {
+export function segmentPoints(seg, { orientation, total, maxP, length, breadth }) {
   const a = seg.p0 ?? 0.5, b = seg.p1 ?? 0.5;
   const t0 = (seg.start / total) * length, t1 = ((seg.start + seg.duration) / total) * length;
   const pts = orientation === 'h'
-    ? (() => { const y = (p) => breadth - (p / maxP) * (breadth - top); return [[t0, breadth], [t0, y(a)], [t1, y(b)], [t1, breadth]]; })()
-    : (() => { const x = (p) => gutter + (p / maxP) * (breadth - gutter); return [[gutter, t0], [x(a), t0], [x(b), t1], [gutter, t1]]; })();
+    ? (() => { const y = (p) => breadth - (p / maxP) * breadth; return [[t0, breadth], [t0, y(a)], [t1, y(b)], [t1, breadth]]; })()
+    : (() => { const x = (p) => (p / maxP) * breadth; return [[0, t0], [x(a), t0], [x(b), t1], [0, t1]]; })();
   return pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
-}
-
-// Block sizes of the vertical labels with the large (up to 24 px) watts line; the heights include the descent below the last baseline
-const NOW_MIN = 54, NEXT_3 = 52, NEXT_2 = 40, GAP = 2;
-/**
- * Vertical graph labels. NOW sits above the position line (its bottom, `nowBase`, is at least NOW_MIN from the
- * top), NEXT below the next segment's start (`yNext`, null without a next segment). NEXT is pulled up so it
- * fits the bottom; if it would then touch NOW, its third line goes, then the whole label.
- */
-export function placeGraphLabels({ height, yNow, yNext }) {
-  const nowBase = Math.max(yNow, NOW_MIN);
-  if (yNext === null) return { nowBase, next: null };
-  for (const [lines, h] of [[3, NEXT_3], [2, NEXT_2]]) {
-    const top = Math.min(yNext, height - h);
-    if (top >= nowBase + GAP) return { nowBase, next: { top, lines } };
-  }
-  return { nowBase, next: null };
-}
-
-/**
- * Horizontal graph labels. now / next are [full, short] strings; `measure(string)` gives the width in px.
- * Now ends left of the position line (xNow); when even its short form does not fit there, it moves to the
- * right of the line (nowSide 'right', and Next then has to clear it). Next starts right of the next segment's
- * start (xNext). A label that does not fit becomes ''.
- */
-export function fitHorizontalLabels({ width, xNow, xNext, now, next, measure }) {
-  const left = xNow - 6;
-  let nowText, nowSide = 'left', nextFrom = 0;
-  if (measure(now[0]) <= left) nowText = now[0];
-  else if (measure(now[1]) <= left) nowText = now[1];
-  else {
-    nowSide = 'right';
-    const end = xNow + 6 + measure(now[1]);
-    nowText = end <= width ? now[1] : '';
-    if (nowText) nextFrom = end + 8;
-  }
-  if (!next) return { now: nowText, next: '', nowSide };
-  const fits = (s) => xNext + 6 >= nextFrom && xNext + 6 + measure(s) <= width;
-  return { now: nowText, next: fits(next[0]) ? next[0] : fits(next[1]) ? next[1] : '', nowSide };
 }

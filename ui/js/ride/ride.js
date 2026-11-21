@@ -238,7 +238,13 @@ class Ride {
           <div class="cp-gap" data-tauri-drag-region></div>
           <section class="cp cp-graph" data-tauri-drag-region>
             <div class="cp-ph" data-tauri-drag-region><i></i>${tHtml('workout')}${cmpWl}</div>
-            <div class="cp-body" data-tauri-drag-region><div class="cp-gslot" id="cmp-graph" role="img" aria-label="${tText('compactGraphAria')}"></div></div>
+            <div class="cp-body" data-tauri-drag-region>
+              <div class="cp-gslot" id="cmp-graph" role="img" aria-label="${tText('compactGraphAria')}"></div>
+              <div class="cp-cards" data-tauri-drag-region>
+                <div class="cp-card cur"><span class="k">${tHtml('compactCurrent')}</span><span class="v"><b id="cmp-cur" data-fit="14">–</b><i>${tHtml('compactLeft')}</i></span><small id="cmp-cur-s" data-fit="11"></small></div>
+                <div class="cp-card next"><span class="k">${tHtml('compactNext')}</span><span class="v"><b id="cmp-next" data-fit="14">–</b></span><small id="cmp-next-s" data-fit="11"></small></div>
+              </div>
+            </div>
           </section>
         </div>
         <div class="compact-foot" data-tauri-drag-region>${cmpCtl}${cmpWl}</div>
@@ -261,6 +267,7 @@ class Ride {
       cmpEl.dataset.live = m.live;
       cmpEl.dataset.foot = m.foot;
       cmpEl.dataset.graph = m.graph ? '1' : '0';
+      cmpEl.dataset.cards = m.cards ? '1' : '0';
       cmpEl.dataset.tiles = m.tiles ? '1' : '0';
       this.cGraph.setOrientation(m.layout);
       fitTexts(cmpEl);
@@ -865,13 +872,13 @@ class Ride {
     const targetText = lv.kind !== 'range' && gt != null ? `${gt} W` : word(lv);
     setText(this.q('cmp-target-v'), targetText);
     if (this.compact.active) {
-      // the workout graph: now (this segment) and next, from the same values as the target line
-      const time = fmtTime(Math.max(0, Math.ceil(rem))), nxt = n && word(levelView(n, m, F));
-      this.cGraph.update(this.t, {
-        nowKicker: t('compactNow'), now: [`${t('compactNow')} ${targetText}`, targetText], nowSub: t('compactLeft', { time }),
-        nextKicker: t('compactNext'), nextWatts: nxt, nextSub: n ? `${t('compactIn')} ${time}` : null,
-        next: n ? [`${t('compactNext')} ${nxt} · ${t('compactIn')} ${time}`, `${t('compactNext')} ${nxt}`] : null,
-      });
+      // the workout graph's position line, and the Current / Next cards from the same values as the target line
+      this.cGraph.update(this.t);
+      setText(this.q('cmp-cur'), fmtTime(Math.max(0, Math.ceil(rem))));
+      // "at 130 W" for watts and ramps; the free / all-out / max effort words stand alone ("at All out" reads wrong)
+      setText(this.q('cmp-cur-s'), /\d/.test(targetText) ? t('compactAt', { watts: targetText }) : targetText);
+      setText(this.q('cmp-next'), n ? word(levelView(n, m, F)) : '–');
+      setText(this.q('cmp-next-s'), n ? t('compactFor', { time: fmtTime(Math.round(n.duration)) }) : '');
     }
     const ink = zoneInk(gt != null ? gt / F : null, bounds());
     if (this.cmpInk !== ink) { this.cmpInk = ink; this.q('cmp-target').style.color = ink; }
@@ -890,7 +897,7 @@ class Ride {
     this.q('cmp-state').setAttribute('aria-label', `${statusDetail} · ${connection}`);
     this.q('cmp-dot').classList.toggle('on', trainer.connected);
     // long values shrink to fit (see fitTexts); only when one of them changed its length, never every tick
-    const fitKey = [targetText, String(p ?? '–').length, String(hr ?? '–').length, String(c != null ? Math.round(c) : '–').length, this.q('d-rem').textContent.length].join('|');
+    const fitKey = [targetText, ...['cmp-cur', 'cmp-cur-s', 'cmp-next', 'cmp-next-s'].map((id) => this.q(id).textContent.length), String(p ?? '–').length, String(hr ?? '–').length, String(c != null ? Math.round(c) : '–').length, this.q('d-rem').textContent.length].join('|');
     if (fitKey !== this.cmpFitKey) { this.cmpFitKey = fitKey; fitTexts(this.qs('.compact-ride')); }
   }
 

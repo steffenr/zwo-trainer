@@ -166,6 +166,8 @@ These decisions were taken during testing and supersede the sections above where
 - **Labels.** Gutter texts (kicker, watts, sub-line) shrink and are cut with an ellipsis, so French and German never reach the bars; the horizontal labels are measured only when a text or place changes.
 - **Gear buttons / status dot** are hidden below 244 px high in the tall layout (`data-foot="head"`).
 
+- **Current and Next cards (supersedes the graph labels above: the 80 px gutter, the label strip, label placement and the Labels bullet).** The graph draws no text. Two cards carry what the labels did: **Current** (time left with the word "left", and "at {watts}") and **Next** (watts or range, "for {duration}"; "–" without a next segment). The bars use the whole slot. Vertical: the cards sit in one row under the graph (from 420 px of height, `data-cards`; narrower than 270 px of panel the word "left" drops). Horizontal: they sit at the graph's right end, one above the other (140–190 px wide, 23 px values), the graph keeps the rest. Keys: `compactCurrent`, `compactAt`, `compactFor`, `compactLeft` is now just the word; `compactNow` and `compactIn` are gone. Long values shrink to a floor (`data-fit`) like the other texts. Mockup: the "Compact Current and Next" artifact.
+
 ## Left to the builder
 
 Exact CSS values and spacing (the mockup numbers are the reference), the name and file of the graph class, how the compact graph gets the workout (same `this.w` the `Diagram` gets), the exact German and French strings, the place of the status dot and gears in the horizontal rail, and the fine tuning of the label clamp rules near the top and bottom of the vertical graph.

@@ -135,7 +135,7 @@ test('busy while the native resize runs, also after a failure and when leaving',
   assert.equal(g.view.busy, false);
 });
 
-import { compactMode, fitFontSize, levelView, maxPOf, segmentPoints, placeGraphLabels, fitHorizontalLabels } from '../ui/js/compact.js';
+import { compactMode, fitFontSize, levelView, maxPOf, segmentPoints } from '../ui/js/compact.js';
 
 test('compactMode: layout choice', () => {
   assert.equal(compactMode(639, 150).layout, 'v');
@@ -148,7 +148,10 @@ test('compactMode: layout choice', () => {
 });
 
 test('compactMode: horizontal is fixed, vertical thresholds', () => {
-  assert.deepEqual(compactMode(960, 150), { layout: 'h', live: 'row', graph: true, foot: 'rail', tiles: true });
+  assert.deepEqual(compactMode(960, 150), { layout: 'h', live: 'row', graph: true, cards: true, foot: 'rail', tiles: true });
+  // the Current / Next cards need room under the graph: from 420 px of height, never without the graph
+  assert.equal(compactMode(240, 419).cards, false); assert.equal(compactMode(240, 420).cards, true);
+  assert.equal(compactMode(240, 359).cards, false);
   assert.equal(compactMode(240, 519).live, 'row'); assert.equal(compactMode(240, 520).live, 'col');
   assert.equal(compactMode(240, 359).graph, false); assert.equal(compactMode(240, 360).graph, true);
   assert.equal(compactMode(240, 243).foot, 'head'); assert.equal(compactMode(240, 244).foot, 'foot');
@@ -175,33 +178,10 @@ test('levelView: watts, ramp, free, max effort, all-out, intensity', () => {
 test('maxPOf and segmentPoints', () => {
   assert.ok(Math.abs(maxPOf([{ p0: 0.5, p1: 0.5 }, { p0: 1, p1: 1.3 }]) - 1.404) < 1e-9);
   assert.ok(Math.abs(maxPOf([{ p0: 0.5, p1: 0.5 }]) - 1.296) < 1e-9);
-  const h = { orientation: 'h', total: 60, maxP: 1.1, length: 200, breadth: 110, top: 10 };
-  assert.equal(segmentPoints({ start: 10, duration: 10, p0: 0.5, p1: 1.1 }, h), '33.33,110.00 33.33,64.55 66.67,10.00 66.67,110.00');
-  const v = { orientation: 'v', total: 60, maxP: 1.1, length: 120, breadth: 100, gutter: 20 };
-  assert.equal(segmentPoints({ start: 30, duration: 30, p0: 1.1, p1: 0.55 }, v), '20.00,60.00 100.00,60.00 60.00,120.00 20.00,120.00');
-  assert.equal(segmentPoints({ start: 0, duration: 60, p0: null, p1: null }, v), '20.00,0.00 56.36,0.00 56.36,120.00 20.00,120.00'); // free block drawn at 0.5
-});
-
-test('placeGraphLabels: clamps, overlap, no next', () => {
-  assert.deepEqual(placeGraphLabels({ height: 200, yNow: 60, yNext: 80 }), { nowBase: 60, next: { top: 80, lines: 3 } });
-  assert.deepEqual(placeGraphLabels({ height: 200, yNow: 10, yNext: 14 }), { nowBase: 54, next: null });
-  // the large watts line makes the Next block 52 px high with three lines, 40 with two
-  assert.deepEqual(placeGraphLabels({ height: 100, yNow: 40, yNext: 70 }), { nowBase: 54, next: { top: 60, lines: 2 } });
-  assert.deepEqual(placeGraphLabels({ height: 130, yNow: 40, yNext: 70 }), { nowBase: 54, next: { top: 70, lines: 3 } });
-  assert.deepEqual(placeGraphLabels({ height: 100, yNow: 60, yNext: 70 }), { nowBase: 60, next: null });
-  assert.deepEqual(placeGraphLabels({ height: 80, yNow: 60, yNext: 70 }), { nowBase: 60, next: null });
-  assert.deepEqual(placeGraphLabels({ height: 200, yNow: 5, yNext: null }), { nowBase: 54, next: null });
-});
-
-test('fitHorizontalLabels: shortening ladder', () => {
-  const measure = (s) => s.length * 7;
-  const now = ['Now 140 W', '140 W'], next = ['Next 220 W · in 8:00', 'Next 220 W'];
-  assert.deepEqual(fitHorizontalLabels({ width: 200, xNow: 67, xNext: 93, now, next, measure }), { now: '140 W', next: 'Next 220 W', nowSide: 'left' });
-  assert.deepEqual(fitHorizontalLabels({ width: 600, xNow: 200, xNext: 260, now, next, measure }), { now: 'Now 140 W', next: 'Next 220 W · in 8:00', nowSide: 'left' });
-  assert.deepEqual(fitHorizontalLabels({ width: 200, xNow: 67, xNext: 190, now, next, measure }), { now: '140 W', next: '', nowSide: 'left' });
-  assert.deepEqual(fitHorizontalLabels({ width: 200, xNow: 67, xNext: 93, now, next: null, measure }), { now: '140 W', next: '', nowSide: 'left' });
-  // the position line is too close to the left edge: Now moves to its right, and Next must clear it
-  assert.deepEqual(fitHorizontalLabels({ width: 200, xNow: 20, xNext: 93, now, next, measure }), { now: '140 W', next: 'Next 220 W', nowSide: 'right' });
-  assert.deepEqual(fitHorizontalLabels({ width: 200, xNow: 20, xNext: 40, now, next, measure }), { now: '140 W', next: '', nowSide: 'right' });
-  assert.deepEqual(fitHorizontalLabels({ width: 60, xNow: 20, xNext: 50, now, next, measure }), { now: '', next: '', nowSide: 'right' }); // nothing fits
+  // the bars use the whole drawing: no gutter, no strip for labels (Current / Next are cards beside the graph)
+  const h = { orientation: 'h', total: 60, maxP: 1.1, length: 200, breadth: 100 };
+  assert.equal(segmentPoints({ start: 10, duration: 10, p0: 0.55, p1: 1.1 }, h), '33.33,100.00 33.33,50.00 66.67,0.00 66.67,100.00');
+  const v = { orientation: 'v', total: 60, maxP: 1.1, length: 120, breadth: 100 };
+  assert.equal(segmentPoints({ start: 30, duration: 30, p0: 1.1, p1: 0.55 }, v), '0.00,60.00 100.00,60.00 50.00,120.00 0.00,120.00');
+  assert.equal(segmentPoints({ start: 0, duration: 60, p0: null, p1: null }, v), '0.00,0.00 45.45,0.00 45.45,120.00 0.00,120.00'); // free block drawn at 0.5
 });

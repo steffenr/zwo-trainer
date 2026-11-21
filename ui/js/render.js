@@ -1,6 +1,6 @@
 // SVG rendering: zone colours, workout diagram, mini profiles and the power gauge.
 import { t } from './i18n/index.js';
-import { maxPOf, segmentPoints, placeGraphLabels, fitHorizontalLabels, fitFontSize } from './compact.js';
+import { maxPOf, segmentPoints } from './compact.js';
 
 // Zone colours follow the classic Zwift / WhatsOnZwift palette.
 // `name` is looked up in the UI language each time it's read (keys zone1…zone5).
@@ -212,14 +212,13 @@ export class Diagram {
 }
 
 const put = (n, k, v) => { if (n.__v?.[k] !== v) { n.setAttribute(k, v); (n.__v ??= {})[k] = v; } };
-const putText = (n, s) => { if (n.textContent !== s) n.textContent = s; };
 
 /**
  * Workout graph of the compact view (see docs/superpowers/specs/2026-11-20-compact-graph-layout-design.md).
- * Vertical: time runs down, labels in a left gutter. Horizontal: time runs across, labels above the bars.
- * Draws into `slot` at its measured pixel size (so text stays crisp) when the workout, the orientation or the
- * slot size changes; update() only moves the position line and the labels. Geometry and label rules are the
- * pure functions in compact.js.
+ * Vertical: time runs down. Horizontal: time runs across. The bars fill the whole slot; there are no labels in
+ * the drawing (Current and Next are cards beside it, see ride.js). Draws into `slot` at its measured pixel size
+ * (so lines stay crisp) when the workout, the orientation or the slot size changes; update() only moves the
+ * position line. The geometry is the pure segmentPoints() in compact.js.
  */
 export class CompactGraph {
   constructor(slot, workout, { bounds }) {
@@ -228,7 +227,6 @@ export class CompactGraph {
     this.bounds = bounds;
     this.orientation = 'v';
     this.at = 0;
-    this.labels = null;
     this.svg = null;
     // the drawing is out of the flow (position: absolute), so redrawing never changes the slot's size
     this.ro = new ResizeObserver(() => this.redraw());
@@ -245,46 +243,30 @@ export class CompactGraph {
     this.slot.replaceChildren();
     this.svg = null;
     if (width < 20 || height < 20) return;
-    const v = this.orientation === 'v', gutter = 80;
+    const v = this.orientation === 'v';
     const svg = el('svg', { width, height, viewBox: `0 0 ${width} ${height}`, class: 'cg-svg', 'aria-hidden': 'true' }, this.slot);
-    // the horizontal labels' size comes from CSS (larger in a tall bar): the strip above the bars follows it
-    this.measureEl = el('text', { class: 'cg-lab cg-measure', x: 0, y: -50 }, svg);
-    const fs = parseFloat(getComputedStyle(this.measureEl).fontSize) || 12;
-    const top = v ? 20 : Math.round(fs * 1.7), labelY = Math.round(fs + 2);
     const total = this.w.duration || 1, maxP = maxPOf(this.w.segments);
-    const geo = { orientation: this.orientation, total, maxP, length: v ? height : width, breadth: v ? width : height, top, gutter };
+    const geo = { orientation: this.orientation, total, maxP, length: v ? height : width, breadth: v ? width : height };
     this.segEls = this.w.segments.map((s) => el('polygon', {
       points: segmentPoints(s, geo), class: 'cg-seg',
       fill: s.p0 === null ? FREE_COLOR : zoneColor((s.p0 + s.p1) / 2, this.bounds),
     }, svg));
     const ftp = 1 / maxP;
-    if (v) el('line', { class: 'cg-ftp', x1: gutter + ftp * (width - gutter), x2: gutter + ftp * (width - gutter), y1: 0, y2: height }, svg);
-    else el('line', { class: 'cg-ftp', x1: 0, x2: width, y1: height - ftp * (height - top), y2: height - ftp * (height - top) }, svg);
-    this.nextLine = el('line', { class: 'cg-next', ...(v ? { x1: gutter, x2: width } : { y1: top, y2: height }) }, svg);
+    if (v) el('line', { class: 'cg-ftp', x1: ftp * width, x2: ftp * width, y1: 0, y2: height }, svg);
+    else el('line', { class: 'cg-ftp', x1: 0, x2: width, y1: height - ftp * height, y2: height - ftp * height }, svg);
+    this.nextLine = el('line', { class: 'cg-next', ...(v ? { x1: 0, x2: width } : { y1: 0, y2: height }) }, svg);
     this.pos = el('line', { class: 'cg-pos', ...(v ? { x1: 0, x2: width } : { y1: 0, y2: height }) }, svg);
-    const text = (cls, anchor) => el('text', { class: cls, ...(anchor ? { 'text-anchor': anchor } : {}), x: 0, y: -50 }, svg);
-    this.tx = v
-      ? { nowK: text('cg-k'), nowW: text('cg-w'), nowS: text('cg-s'), nextK: text('cg-k'), nextW: text('cg-w'), nextS: text('cg-s') }
-      : { now: text('cg-lab', 'end'), next: text('cg-lab') };
     this.svg = svg;
-    this.g = { v, width, height, gutter, top, total, labelY };
+    this.g = { v, width, height, total };
     this.idx = -1;
-    this.lastW = {};
-    this.hKey = '';
-    this.widths = new Map();
-    if (this.labels) this.update(this.at, this.labels);
+    this.update(this.at);
   }
 
-  /**
-   * Position line, finished segments and labels. `at`: seconds into the workout. `labels`:
-   * { nowKicker, now: [full, short], nowSub, nextKicker, next: [full, short] | null, nextWatts, nextSub }
-   * (now[1] is the watts alone; next[0] / next[1] already carry the "Next" word).
-   */
-  update(at, labels) {
+  /** Position line, finished segments and the line where the next segment starts. `at`: seconds into the workout. */
+  update(at) {
     this.at = at;
-    this.labels = labels;
     if (!this.svg) return;
-    const { v, width, height, gutter, total, labelY } = this.g, segs = this.w.segments;
+    const { v, width, height, total } = this.g, segs = this.w.segments;
     let idx = segs.findIndex((s) => at < s.start + s.duration);
     if (idx < 0) idx = segs.length - 1;
     if (idx !== this.idx) {
@@ -297,58 +279,6 @@ export class CompactGraph {
     put(this.pos, v ? 'y1' : 'x1', pos.toFixed(1)); put(this.pos, v ? 'y2' : 'x2', pos.toFixed(1));
     put(this.nextLine, 'visibility', ns === null ? 'hidden' : 'visible');
     if (ns !== null) { put(this.nextLine, v ? 'y1' : 'x1', ns.toFixed(1)); put(this.nextLine, v ? 'y2' : 'x2', ns.toFixed(1)); }
-    const x = this.tx;
-    if (v) {
-      const place = placeGraphLabels({ height, yNow: pos, yNext: ns });
-      put(x.nowK, 'y', place.nowBase - 40); put(x.nowW, 'y', place.nowBase - 20); put(x.nowS, 'y', place.nowBase - 5);
-      const avail = gutter - 6;
-      this.fitGutter('nowK', x.nowK, labels.nowKicker, 11, 11, avail);
-      this.fitGutter('nowS', x.nowS, labels.nowSub, 12, 11, avail);
-      this.fitGutter('nowW', x.nowW, labels.now[1], 24, 12, avail); // a single value is large, a range shrinks to the gutter
-      const nx = place.next;
-      for (const k of ['nextK', 'nextW', 'nextS']) put(x[k], 'visibility', nx ? 'visible' : 'hidden');
-      if (nx) {
-        put(x.nextK, 'y', nx.top + 13); put(x.nextW, 'y', nx.top + 33); put(x.nextS, 'y', nx.top + 49);
-        put(x.nextS, 'visibility', nx.lines === 3 ? 'visible' : 'hidden');
-        this.fitGutter('nextK', x.nextK, labels.nextKicker, 11, 11, avail);
-        this.fitGutter('nextS', x.nextS, labels.nextSub ?? '', 12, 11, avail);
-        this.fitGutter('nextW', x.nextW, labels.nextWatts ?? '', 24, 12, avail);
-      }
-    } else {
-      // only when a text or a place (whole px) changed: measuring forces a layout, and the line itself moves above every tick
-      const key = [width, Math.round(pos), ns === null ? '-' : Math.round(ns), labels.now.join('|'), labels.next ? labels.next.join('|') : ''].join(',');
-      if (key === this.hKey) return;
-      this.hKey = key;
-      const measure = (s) => {
-        let w = this.widths.get(s);
-        if (w === undefined) { putText(this.measureEl, s); w = this.measureEl.getComputedTextLength(); this.widths.set(s, w); }
-        return w;
-      };
-      const fit = fitHorizontalLabels({ width, xNow: pos, xNext: ns ?? width, now: labels.now, next: ns === null ? null : labels.next, measure });
-      const left = fit.nowSide === 'left';
-      put(x.now, 'x', (left ? pos - 6 : pos + 6).toFixed(1)); put(x.now, 'y', labelY); put(x.now, 'text-anchor', left ? 'end' : 'start'); putText(x.now, fit.now);
-      put(x.next, 'x', ((ns ?? 0) + 6).toFixed(1)); put(x.next, 'y', labelY); putText(x.next, fit.next);
-    }
-  }
-
-  /**
-   * Text in the vertical gutter: shrink 1 px at a time from `max` down to `floor` while it is wider than `avail`,
-   * then cut it with an ellipsis, so it never reaches the bars. Measured only when the text changes.
-   */
-  fitGutter(which, node, text, max, floor, avail) {
-    if (this.lastW[which] === text) return;
-    putText(node, text);
-    node.style.fontSize = '';
-    node.style.transition = 'none'; // a font size set a moment ago must read as set (Reduce motion's 0.01 ms transition still delays it)
-    // not rendered (the graph is hidden in a short window): nothing to measure, so try again when it shows
-    if (!node.getComputedTextLength()) { this.lastW[which] = undefined; return; }
-    this.lastW[which] = text;
-    const size = fitFontSize((s) => { node.style.fontSize = `${s}px`; return node.getComputedTextLength(); }, avail, floor, max);
-    node.style.fontSize = `${size}px`;
-    for (let cut = text; cut.length > 1 && node.getComputedTextLength() > avail;) {
-      cut = cut.slice(0, -1);
-      node.textContent = `${cut.trimEnd()}…`;
-    }
   }
 }
 

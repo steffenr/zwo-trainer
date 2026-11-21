@@ -99,11 +99,22 @@ body.compact-switching .ride > * { visibility: hidden; }
 .cg-ftp { stroke: var(--text-2); stroke-dasharray: 3 4; opacity: .7; }
 .cg-next { stroke: var(--text); stroke-width: 1; stroke-dasharray: 2 3; }
 .cg-pos { stroke: var(--text); stroke-width: 2; }
-.cg-k { fill: var(--text-2); font: 700 11px var(--font); letter-spacing: .08em; text-transform: uppercase; }
-.cg-w { fill: var(--text); font: 700 15px var(--num); font-variant-numeric: tabular-nums; }
-.cg-s { fill: var(--text-2); font: 12px var(--font); font-variant-numeric: tabular-nums; }
-.cg-lab { fill: var(--text); font: 600 12px var(--font); font-variant-numeric: tabular-nums; }
-.cg-measure { visibility: hidden; }
+
+/* Current and Next: two cards with the graph's labels (under the graph in the column, at its right end in the bar) */
+.cp-cards { display: flex; gap: 8px; flex: none; min-width: 0; }
+.cp-card {
+  flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; padding: 6px 10px 7px; border-radius: var(--r-sm); background: var(--surface-2); line-height: 1.2; white-space: nowrap;
+  & .k { font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--text-2); }
+  & .v { display: flex; align-items: baseline; gap: 5px; min-width: 0; font-variant-numeric: tabular-nums; }
+  /* last resort after the shrink in fitTexts: an ellipsis, never a text over the next card */
+  & b, & small { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  & b { font: 700 18px/1.15 var(--num); }
+  & i { font-style: normal; font-size: var(--fs-xs); color: var(--text-2); }
+  & small { font-size: var(--fs-xs); color: var(--text-2); font-variant-numeric: tabular-nums; }
+  &.cur b { color: var(--accent); }
+  &.next b { color: var(--ok); }
+}
+.compact-ride[data-cards="0"] .cp-cards { display: none; }
 
 /* graph slot (CompactGraph draws into it) */
 .cp-gslot { flex: 1; min-height: 0; min-width: 0; position: relative; pointer-events: none; }
@@ -112,6 +123,8 @@ body.compact-switching .ride > * { visibility: hidden; }
   & .cp-ph .cmp-wl { margin-left: auto; flex-direction: row; align-items: baseline; gap: 6px; text-transform: none; }
   & .cp-ph .cmp-wl b { font-size: 20px; }
   @container (max-width: 290px) { & .cp-ph .cmp-wl small { display: none; } }
+  /* a narrow column has no room for the word next to the time (the kicker says what it is) */
+  @container (max-width: 270px) { & .cp-card.cur i { display: none; } }
 }
 .compact-rail { display: none; }
 
@@ -152,13 +165,20 @@ body.compact-switching .ride > * { visibility: hidden; }
   & .cp-tile { & b { font-size: 30px; } & svg { width: 22px; height: 22px; } }
   & .cp-center b { font-size: min(30cqw, 30cqh); }
   & .cp-graph .cp-ph .cmp-wl b { font-size: 26px; }
-  & .cg-lab { font-size: 14px; }
+  /* the graph panel's body: the graph, and the cards at its right end (one above the other) */
+  & .cp-graph .cp-body { flex-direction: row; }
+  & .cp-cards { flex-direction: column; width: clamp(140px, 22%, 190px); gap: 6px; }
+  & .cp-card {
+    flex: 1 1 0; justify-content: center; padding-block: 4px 5px;
+    & .k { font-size: var(--fs-xs); }
+    & b { font-size: 23px; line-height: 1.1; }
+    & small { font-size: var(--fs-xs); line-height: 1.15; }
+  }
   @container (min-height: 170px) {
     & .cp-ph, & .cmp-wl small { font-size: var(--fs-sm); }
     & .cp-tgt { font-size: 34px; & svg { width: 28px; height: 28px; } }
     & .cp-tile { & b { font-size: 40px; } & svg { width: 28px; height: 28px; } }
     & .cp-graph .cp-ph .cmp-wl b { font-size: 34px; }
-    & .cg-lab { font-size: 17px; }
   }
 }
 /* the macOS window buttons (about 80 px wide from the window edge) sit over the top of the rail and the panels' headings: the panels start right of them */
