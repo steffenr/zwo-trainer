@@ -196,6 +196,19 @@ async function dragProblems(page, layout) {
       const gap = document.querySelector('.cp-gap').getBoundingClientRect().width;
       if (gap < 15.5) out.push(`gap between live block and graph is ${gap.toFixed(0)} px, expected at least 16`);
     }
+    if (layout === 'h') { // the graph is at least 60 % of the window width once the window is wide enough (the live block keeps its 460 px first: 100vw - 540 px bound)
+      const g = document.querySelector('.cp-graph').getBoundingClientRect().width;
+      if (innerWidth >= 1400 && g < innerWidth * 0.6 - 1) out.push(`graph is ${g.toFixed(0)} px of ${innerWidth} px (${(g / innerWidth * 100).toFixed(0)} %), expected at least 60 %`);
+      const rail = [...document.querySelectorAll('.compact-rail .ctl, .compact-rail .icon-btn')].filter((b) => b.getClientRects().length && !b.closest('.compact-gears'));
+      if (new Set(rail.map((b) => Math.round(b.getBoundingClientRect().left))).size > 1) out.push('rail buttons are not in one column');
+    }
+    if (layout === 'h') { // on macOS the window buttons (80 px wide from the window edge, 32 px high) must not cover the live block or its heading
+      const root = document.documentElement, was = root.dataset.os;
+      root.dataset.os = 'mac';
+      const left = document.querySelector('.cp-live').getBoundingClientRect().left;
+      if (left < 80) out.push(`macOS: the live block starts at ${left.toFixed(0)} px, the window buttons reach 80 px`);
+      if (was === undefined) delete root.dataset.os; else root.dataset.os = was;
+    }
     const bar = !!window.__shots.bar, wantBar = layout === 'h';
     if (bar !== wantBar) out.push(`window held to the bar height: ${bar}, expected ${wantBar}`);
     const sizes = [...document.querySelectorAll('.compact-ride .ctl, .compact-ride .icon-btn')].filter((b) => b.getClientRects().length).map((b) => `${Math.round(b.getBoundingClientRect().width)}x${Math.round(b.getBoundingClientRect().height)}`);

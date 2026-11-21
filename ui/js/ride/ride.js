@@ -243,9 +243,7 @@ class Ride {
         </div>
         <div class="compact-foot" data-tauri-drag-region>${cmpCtl}${cmpWl}</div>
         <div class="compact-rail" data-tauri-drag-region>
-          <div class="rail-row" data-tauri-drag-region>${cmpCtl}</div>
-          <div class="rail-row" data-tauri-drag-region>${cmpExpand}${cmpLayout}</div>
-          <div class="rail-row" data-tauri-drag-region>${cmpGears}</div>
+          ${cmpCtl}${cmpLayout}${cmpExpand}${cmpGears}
         </div>
       </section>
       <div class="ready" id="ready"><div><b>${tHtml('ready')}</b><span>${tHtml('readyText')}${trainer.connected && html` ${tHtml('readyPedal')}`}.</span></div>

@@ -136,9 +136,12 @@ body.compact-switching .ride > * { visibility: hidden; }
 .compact-ride[data-layout="h"] {
   flex-direction: row; gap: 8px;
   & .compact-head, & .compact-foot { display: none; }
-  & .compact-rail { display: flex; flex-direction: column; gap: 6px; flex: none; width: 96px; order: -1; }
+  /* the rail is one column of buttons: play, stop, layout, expand (the gear buttons take the layout button's place) */
+  & .compact-rail { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; flex: none; order: -1; }
+  & .compact-rail .compact-ctl { flex-direction: column; }
+  & .compact-rail:has(.cmp-gears:not([hidden])) .cmp-layout { display: none; }
   /* a bar: the window is held to 195-200 px (ride_window_bar, BAR_HEIGHT in ride_window.rs), so the panels stop at 200 minus the 16 px padding */
-  & .compact-main { container-type: size; display: grid; grid-template-columns: minmax(300px, 460px) minmax(16px, 1fr) minmax(190px, 1400px); column-gap: 0; align-self: flex-start; height: min(100%, 184px); width: 100%; }
+  & .compact-main { container-type: size; display: grid; grid-template-columns: minmax(300px, 460px) 16px minmax(max(190px, min(60vw, 100vw - 540px)), 1fr); column-gap: 0; align-self: flex-start; height: min(100%, 184px); width: 100%; }
   & .cp-gap { display: block; min-width: 0; }
   & .cp-live .cp-body { flex-direction: row; align-items: center; gap: 10px; }
   & .cp-live .cp-cell { width: auto; height: 100%; max-height: 150px; aspect-ratio: 1; margin-inline: 0; }
@@ -158,12 +161,10 @@ body.compact-switching .ride > * { visibility: hidden; }
     & .cg-lab { font-size: 17px; }
   }
 }
-:root[data-os="mac"] .compact-ride[data-layout="h"] .compact-rail { padding-top: 32px; }
-/* rail buttons are 28 px so play / stop, expand and the gear row fit 150 px of window height beside the macOS window buttons */
-.compact-rail {
-  & .rail-row { display: flex; align-items: center; gap: 6px; }
-  & .compact-gears { gap: 2px; }
-}
+/* the macOS window buttons (about 80 px wide from the window edge) sit over the top of the rail and the panels' headings: the panels start right of them */
+:root[data-os="mac"] .compact-ride[data-layout="h"] .compact-rail { padding-top: 32px; min-width: 66px; align-items: center; }
+/* play, stop, layout and expand (4 × 30 px + gaps) fit the 195 px bar below the macOS window buttons */
+.compact-rail .compact-gears { gap: 2px; }
 .cmp-gear-n { min-width: 20px; text-align: center; }
 /* below 244 px of height the heading row has no room for the status dot, the gears or the layout switch (keyboard and controller still shift, V still switches) */
 .compact-ride[data-foot="head"] .compact-head {
