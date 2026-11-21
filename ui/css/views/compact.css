@@ -93,7 +93,7 @@ body.compact-switching .ride > * { visibility: hidden; }
 /* the drawing of CompactGraph (render.js) */
 .cg-svg { display: block; position: absolute; left: 0; top: 0; }   /* out of the flow, so the drawing never sizes its own slot */
 .cg-seg {
-  &.done { opacity: .38; }
+  &.done { opacity: var(--seg-done); }
   &.cur { stroke: var(--text); stroke-width: 1.5; }
 }
 .cg-ftp { stroke: var(--text-2); stroke-dasharray: 3 4; opacity: .7; }
