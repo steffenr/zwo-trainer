@@ -13,21 +13,21 @@
 // Saved devices auto-connect to the mock's virtual trainer / strap / controller (mock.js), which holds
 // every ERG target. Ride shots fast-forward with ?speed=N: tick(ms) of fake time = N × ms of ride time.
 
-const SSS = 'sweet-spot-sessions/Sweet_Spot_3x12.zwo';
+export const SSS = 'sweet-spot-sessions/Sweet_Spot_3x12.zwo';
 const VO2 = 'base-builder-6wk/Week05_Day05_VO2_Ladder.zwo';
 const TEMPO = 'base-builder-6wk/Week02_Day03_Tempo_Surges.zwo';
 /** Fake ms from opening a workout until auto-start has started the ride clock. */
 const START = 1250;
 
 /** Start a workout from the Workouts list (rider mode 'workouts') and ride until `rideSeconds`. */
-async function rideTo(s, file, rideSeconds, speed = 10) {
+export async function rideTo(s, file, rideSeconds, speed = 10) {
   await s.open('', { speed: String(speed) });
   await s.click(`.wrow[data-file="${file}"] [data-act="ride-free"], .wrow[data-file="${file}"] [data-act="start"]`);
   await s.tick((rideSeconds * 1000) / speed + START); // pedalling starts the ride after about START ms
 }
 
 /** Start a built-in FTP test from the FTP Tests page (rider mode 'tests') and ride until `rideSeconds`. */
-async function testTo(s, id, rideSeconds, speed = 20) {
+export async function testTo(s, id, rideSeconds, speed = 20) {
   await s.open('', { speed: String(speed) });
   await s.click(`[data-act="start-test"][data-test="${id}"]`);
   await s.tick((rideSeconds * 1000) / speed + START);
@@ -58,7 +58,7 @@ export default [
   },
   // ---------------------------------------------------------------- compact view (960 × 200 window at 2×)
   {
-    name: 'compact', about: 'Compact ride view next to a video (960 × 200 window)',
+    name: 'compact', about: 'Compact ride view next to a video (960 × 200 window: live block and workout graph)',
     scale: 2, rider: mode('workouts'),
     async run(s) {
       await rideTo(s, SSS, 18 * 60 + 44);

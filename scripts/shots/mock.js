@@ -80,14 +80,17 @@ export function tauriMock(data) {
     ble_current: () => ({}),
     ctrl_list: () => [],
     keep_awake: () => null,
-    ride_window: () => null,
+    // shots.windowDelay (ms): the native resize takes this long, so a test can resize the page meanwhile
+    ride_window: async () => { if (shots.windowDelay) await new Promise((r) => setTimeout(r, shots.windowDelay)); return null; },
+    ride_window_bar: (a) => { shots.bar = !!a.bar; return null; },
+    ride_window_size: (a) => { shots.size = [a.width, a.height]; return null; },
   };
   window.__TAURI__ = {
     core: {
       invoke: async (cmd, args = {}) => {
         shots.calls.push(cmd);
         if (!(cmd in R)) { shots.unknown.push(cmd); return null; }
-        return structuredClone(R[cmd](args));
+        return structuredClone(await R[cmd](args));
       },
     },
     event: {

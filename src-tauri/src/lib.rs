@@ -636,6 +636,23 @@ fn ride_window(window: tauri::WebviewWindow, app: State<'_, App>, pending: State
     Ok(())
 }
 
+/// The compact view's two layouts have their own window size limits: the wide bar (`bar`) is one fixed
+/// height, the tall column 240–320 px wide. Entering or leaving the compact view resets this (`ride_window`).
+#[tauri::command]
+fn ride_window_bar(window: tauri::WebviewWindow, bar: bool) -> Res<()> {
+    let (min, max) = ride_window::bar_sizes(bar);
+    window.set_min_size(Some(min)).and_then(|()| window.set_max_size(Some(max))).map_err(|_| "Cannot limit the window size.".to_string())
+}
+
+/// Resize the compact window (logical px), e.g. when the rider switches between the bar and the column.
+#[tauri::command]
+fn ride_window_size(window: tauri::WebviewWindow, width: f64, height: f64) -> Res<()> {
+    if !(width.is_finite() && height.is_finite() && width >= 1.0 && height >= 1.0) {
+        return Err("Cannot resize the window.".into());
+    }
+    window.set_size(tauri::LogicalSize::new(width, height)).map_err(|_| "Cannot resize the window. Please try again.".to_string())
+}
+
 /// Remember the compact window geometry the rider used (machine-local, never synced).
 fn remember_compact(store: &state::Store, bounds: ride_window::Bounds) {
     let _ = store.update(|doc| {
@@ -757,6 +774,8 @@ pub fn run() {
             garmin_upload,
             keep_awake,
             ride_window,
+        ride_window_bar,
+        ride_window_size,
             ble_scan,
             ble_connect,
             ble_disconnect,

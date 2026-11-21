@@ -6,6 +6,28 @@ use serde_json::{json, Value};
 use std::sync::Mutex;
 use tauri::{LogicalSize, PhysicalPosition, PhysicalSize, WebviewWindow};
 
+/// Smallest compact window in logical px (width, height): narrow enough for a tall column beside a video
+/// and flat enough for a bar below it. The full view's minimum is 900 × 640.
+pub(crate) const COMPACT_MIN: (u32, u32) = (240, 150);
+
+/// The wide bar (horizontal layout) has one fixed height in logical px, readable from a distance, and is at
+/// least `BAR_MIN_WIDTH` wide so the UI keeps choosing the horizontal layout. The tall column is
+/// `COMPACT_MIN.0` to `COLUMN_MAX_WIDTH` wide at any height.
+pub(crate) const BAR_HEIGHT: u32 = 195;
+pub(crate) const BAR_MIN_WIDTH: u32 = 640;
+pub(crate) const COLUMN_MAX_WIDTH: u32 = 320;
+
+/// Minimum and maximum window size of the compact view's two layouts. Which layout is shown is the rider's
+/// choice (the switch button / V key); the window sizes of the two never overlap.
+pub(crate) fn bar_sizes(bar: bool) -> (LogicalSize<f64>, LogicalSize<f64>) {
+    let size = |w: u32, h: f64| LogicalSize::new(f64::from(w), h);
+    if bar {
+        (size(BAR_MIN_WIDTH, f64::from(BAR_HEIGHT)), size(10_000, f64::from(BAR_HEIGHT)))
+    } else {
+        (size(COMPACT_MIN.0, f64::from(COMPACT_MIN.1)), size(COLUMN_MAX_WIDTH, 10_000.0))
+    }
+}
+
 const RESIZE_ERROR: &str = "Cannot resize the window. Please try again.";
 const LEAVE_ERROR: &str = "Cannot restore the window size. Please resize the window by hand.";
 
@@ -80,10 +102,11 @@ impl WindowOps for WebviewWindow {
         let resize = || -> tauri::Result<()> {
             self.unmaximize()?;
             let (width, height) = if compact {
-                (320.0, 200.0)
+                (f64::from(COMPACT_MIN.0), f64::from(COMPACT_MIN.1))
             } else {
                 (900.0, 640.0)
             };
+            self.set_max_size(None::<LogicalSize<f64>>)?; // the wide bar's height limit is set again by the UI
             self.set_min_size(Some(LogicalSize::new(width, height)))?;
             match geometry {
                 Some(saved) => {
@@ -96,15 +119,34 @@ impl WindowOps for WebviewWindow {
                         self.maximize()?;
                     }
                 }
-                None if compact => self.set_size(LogicalSize::new(960.0, 200.0))?,
+                None if compact => self.set_size(LogicalSize::new(960.0, f64::from(BAR_HEIGHT)))?,
                 None => self.set_size(LogicalSize::new(900.0, 640.0))?,
             }
             Ok(())
         };
-        resize().map_err(|_| RESIZE_ERROR.to_string())
+        // Leaving compact the window grows from the bar to the full view's size: the minimum size is applied at once
+        // (the window jumps to it, its top edge fixed) and the size and position follow a moment later, so a visible
+        // window "rolls down" through the in-between sizes. Hidden for the length of that, it appears at its final
+        // size. It is shown again whatever the resize did.
+        let hide = !compact && self.is_visible().unwrap_or(false);
+        if hide {
+            let _ = self.hide();
+        }
+        let result = resize().map_err(|_| RESIZE_ERROR.to_string());
+        if hide {
+            let window = self.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(150));
+                let _ = window.show();
+                let _ = window.set_focus();
+            });
+        }
+        result
     }
 
     fn reset_minimum(&self) -> Result<(), String> {
+        // the compact layouts' maximum size goes too, or the full view would stay capped at 320 px wide
+        self.set_max_size(None::<LogicalSize<f64>>).map_err(|_| RESIZE_ERROR.to_string())?;
         self.set_min_size(Some(LogicalSize::new(900.0, 640.0)))
             .map_err(|_| RESIZE_ERROR.to_string())
     }
@@ -147,7 +189,7 @@ impl WindowState {
     }
 
     /// Leaving the ride: restore the full view like `set(false)`, retrying once. If both tries fail,
-    /// the ride screen closes anyway, so give up the geometry but never keep the lowered 320 × 200
+    /// the ride screen closes anyway, so give up the geometry but never keep the lowered compact
     /// minimum or a stale snapshot: the window stays resizable and the next compact entry starts fresh.
     fn leave(&mut self, window: &impl WindowOps) -> Result<Option<Bounds>, String> {
         if self.saved.is_none() {
@@ -254,7 +296,7 @@ mod tests {
         }
         fn apply(&self, compact: bool, geometry: Option<&Bounds>) -> Result<(), String> {
             self.calls.borrow_mut().push(compact);
-            *self.minimum.borrow_mut() = if compact { (320, 200) } else { (900, 640) };
+            *self.minimum.borrow_mut() = if compact { COMPACT_MIN } else { (900, 640) };
             if self.fail.borrow_mut().take() == Some(compact) {
                 return Err("resize failed".into());
             }
@@ -300,6 +342,21 @@ mod tests {
     }
 
     #[test]
+    fn compact_minimum_is_240_by_150() {
+        assert_eq!(COMPACT_MIN, (240, 150));
+    }
+
+    #[test]
+    fn the_bar_is_195_px_high_and_the_column_240_to_320_px_wide() {
+        let (min, max) = bar_sizes(true);
+        assert_eq!((min.width, min.height), (640.0, 195.0));
+        assert_eq!((max.width, max.height), (10_000.0, 195.0));
+        let (min, max) = bar_sizes(false);
+        assert_eq!((min.width, min.height), (240.0, 150.0));
+        assert_eq!((max.width, max.height), (320.0, 10_000.0));
+    }
+
+    #[test]
     fn leaving_after_two_failed_restores_resets_the_minimum_and_forgets_the_snapshot() {
         let window = FakeWindow::new(original());
         let mut state = WindowState::default();
@@ -312,7 +369,7 @@ mod tests {
         assert!(state.saved.is_none());
         // the next ride's compact toggle snapshots the current window and works normally
         state.set(&window, true, None).unwrap();
-        assert_eq!(*window.minimum.borrow(), (320, 200));
+        assert_eq!(*window.minimum.borrow(), COMPACT_MIN);
         state.set(&window, false, None).unwrap();
         assert_eq!(*window.bounds.borrow(), compact_bounds());
         assert_eq!(*window.minimum.borrow(), (900, 640));
@@ -331,7 +388,7 @@ mod tests {
         let window = FakeWindow::new(original());
         let mut state = WindowState::default();
         state.set(&window, true, None).unwrap();
-        assert_eq!(*window.minimum.borrow(), (320, 200));
+        assert_eq!(*window.minimum.borrow(), COMPACT_MIN);
         window.bounds.borrow_mut().size = PhysicalSize::new(640, 1040);
         window.bounds.borrow_mut().position = Some(PhysicalPosition::new(300, 200));
         state.set(&window, false, None).unwrap();
@@ -391,7 +448,7 @@ mod tests {
         *window.fail.borrow_mut() = Some(false);
         assert!(state.set(&window, false, None).is_err());
         assert_eq!(*window.bounds.borrow(), compact);
-        assert_eq!(*window.minimum.borrow(), (320, 200));
+        assert_eq!(*window.minimum.borrow(), COMPACT_MIN);
         assert_eq!(state.saved, Some(original()));
         state.set(&window, false, None).unwrap();
         assert_eq!(*window.bounds.borrow(), original());
@@ -406,7 +463,7 @@ mod tests {
         let window = FakeWindow::new(saved);
         let mut state = WindowState::default();
         state.set(&window, true, None).unwrap();
-        assert_eq!(*window.minimum.borrow(), (320, 200));
+        assert_eq!(*window.minimum.borrow(), COMPACT_MIN);
         state.set(&window, false, None).unwrap();
         assert_eq!(window.bounds.borrow().size, saved.size);
         assert_eq!(*window.minimum.borrow(), (900, 640));

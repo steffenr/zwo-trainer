@@ -16,20 +16,12 @@
 // on one contact sheet, so a review needs a single look instead of one per file.
 // Shots are defined in shots.mjs. Playwright comes from npx (no package.json on purpose);
 // run `npx -y playwright install chromium` once.
-import { createRequire } from 'node:module';
-import { execSync } from 'node:child_process';
-import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { tauriMock } from './mock.js';
-import { rider, backend, NOW, TIMEZONE } from './rider.mjs';
 import SHOTS from './shots.mjs';
+import { repo, loadPlaywright, startServer, loadFixture, newShotPage, helpers as shotHelpers } from './lib.mjs';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const repo = path.resolve(here, '../..');
-const ui = path.join(repo, 'ui');
 const siteDir = path.join(repo, 'site');
 const QUALITY = 0.82;            // WebP quality (images stay ~20–70 KB)
 const NOISE = { delta: 16, share: 0.002 }; // ≤ 0.2 % of pixels off by > 16 = encoder noise, not a change
@@ -56,33 +48,12 @@ const selected = argv.length ? SHOTS.filter((s) => argv.includes(s.name)) : SHOT
 fs.mkdirSync(out, { recursive: true });
 
 // ------------------------------------------------------------------ Playwright
-function loadPlaywright() {
-  const roots = process.env.PATH.split(path.delimiter).filter((d) => d.endsWith(`node_modules${path.sep}.bin`)).map((d) => path.dirname(d));
-  roots.push(path.join(repo, 'node_modules'));
-  try { roots.push(execSync('npm root -g', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()); } catch { /* no npm */ }
-  for (const root of roots) {
-    try { return createRequire(path.join(root, 'noop.js'))('playwright'); } catch { /* next */ }
-  }
-  console.error('Playwright not found. Run: npx -y -p playwright node scripts/shots/run.mjs (once before: npx -y playwright install chromium)');
-  process.exit(1);
-}
 const { chromium } = loadPlaywright();
 
 // ------------------------------------------------------------------ static server for ui/
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.mp3': 'audio/mpeg', '.png': 'image/png', '.woff2': 'font/woff2' };
-const server = http.createServer((req, res) => {
-  const p = path.join(ui, decodeURIComponent(req.url.split('?')[0]).replace(/^\/$/, '/index.html'));
-  if (!p.startsWith(ui) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.writeHead(404); return res.end(); }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(p)] || 'application/octet-stream' });
-  fs.createReadStream(p).pipe(res);
-}).listen(0, '127.0.0.1');
-await new Promise((r) => server.once('listening', r));
-const base = `http://127.0.0.1:${server.address().port}/`;
-
-const fixture = {
-  library: JSON.parse(fs.readFileSync(path.join(here, 'fixture', 'library.json'), 'utf8')),
-  workouts: JSON.parse(fs.readFileSync(path.join(here, 'fixture', 'workouts.json'), 'utf8')),
-};
+const server = await startServer();
+const base = server.base;
+const fixture = loadFixture();
 
 // ------------------------------------------------------------------ image helpers (run in a blank page)
 const browser = await chromium.launch();
@@ -165,54 +136,13 @@ function syncHtml(name, [w, h]) {
   return changed;
 }
 
-// ------------------------------------------------------------------ shot context (the API shots.mjs uses)
-function helpers(page, shot, theme) {
-  const s = {
-    page, theme,
-    /** Open the app at a hash route (e.g. '#/history'), after `boot` has finished. */
-    async open(hash = '', params = {}) {
-      const q = new URLSearchParams({ profile: 'p_lena', ...params });
-      await page.goto(`${base}index.html?${q}${hash}`);
-      await page.waitForFunction(() => document.querySelector('#view')?.childElementCount > 0 || !document.querySelector('#ride')?.hidden);
-      await s.tick(600);
-    },
-    /** Advance the fake clock: timers, the ride loop and the simulator run exactly this long. */
-    tick: (ms) => page.clock.runFor(ms),
-    /** Click the n-th match (default the first) and let the UI settle. */
-    async click(selector, n = 0) {
-      await page.locator(selector).nth(n).click();
-      await s.tick(400);
-    },
-    async key(k) { await page.keyboard.press(k); await s.tick(300); },
-    /** Fake an event from Rust (device-status, battery, sensor, button …). */
-    emit: (event, payload) => page.evaluate(([e, p]) => window.__shots.emit(e, p), [event, payload]),
-    /** Resize the viewport mid-shot (compact view). */
-    resize: (w, h) => page.setViewportSize({ width: w, height: h }),
-    /** Wait for an element. */
-    wait: (selector) => page.locator(selector).first().waitFor(),
-  };
-  return s;
-}
-
+// ------------------------------------------------------------------ shot context (the API shots.mjs uses: see helpers() in lib.mjs)
 async function capture(shot, theme) {
-  const [w, h] = shot.viewport || [1600, 1000];
-  const context = await browser.newContext({
-    viewport: { width: w, height: h }, deviceScaleFactor: shot.scale || 1, colorScheme: theme,
-    timezoneId: TIMEZONE, locale: 'en-US', reducedMotion: 'reduce',
-  });
-  const page = await context.newPage();
-  const errors = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  const profile = rider();
-  shot.rider?.(profile);
   // fake clock, paused: time moves only through s.tick() (runFor), never with the real time the
   // machine needs, so every run renders the same pixels
-  await page.clock.install({ time: new Date(Date.parse(NOW) - 1000) });
-  await page.clock.pauseAt(new Date(NOW));
-  await page.addInitScript(tauriMock, { ...fixture, ...backend, profile, freePower: shot.free, version: 'dev' });
+  const { page, context, errors } = await newShotPage(browser, { base, fixture, theme, viewport: shot.viewport, scale: shot.scale || 1, free: shot.free, tweakRider: shot.rider });
   try {
-    const target = await shot.run(helpers(page, shot, theme));
+    const target = await shot.run(shotHelpers(page, base, theme));
     await page.mouse.move(0, 0);
     const loc = typeof target === 'string' ? page.locator(target).first() : target;
     const png = loc ? await loc.screenshot({ animations: 'disabled' }) : await page.screenshot({ animations: 'disabled' });

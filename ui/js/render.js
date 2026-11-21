@@ -1,5 +1,6 @@
 // SVG rendering: zone colours, workout diagram, mini profiles and the power gauge.
 import { t } from './i18n/index.js';
+import { maxPOf, segmentPoints } from './compact.js';
 
 // Zone colours follow the classic Zwift / WhatsOnZwift palette.
 // `name` is looked up in the UI language each time it's read (keys zone1…zone5).
@@ -210,6 +211,77 @@ export class Diagram {
   }
 }
 
+const put = (n, k, v) => { if (n.__v?.[k] !== v) { n.setAttribute(k, v); (n.__v ??= {})[k] = v; } };
+
+/**
+ * Workout graph of the compact view (see docs/superpowers/specs/2026-11-20-compact-graph-layout-design.md).
+ * Vertical: time runs down. Horizontal: time runs across. The bars fill the whole slot; there are no labels in
+ * the drawing (Current and Next are cards beside it, see ride.js). Draws into `slot` at its measured pixel size
+ * (so lines stay crisp) when the workout, the orientation or the slot size changes; update() only moves the
+ * position line. The geometry is the pure segmentPoints() in compact.js.
+ */
+export class CompactGraph {
+  constructor(slot, workout, { bounds }) {
+    this.slot = slot;
+    this.w = workout;
+    this.bounds = bounds;
+    this.orientation = 'v';
+    this.at = 0;
+    this.svg = null;
+    // the drawing is out of the flow (position: absolute), so redrawing never changes the slot's size
+    this.ro = new ResizeObserver(() => this.redraw());
+    this.ro.observe(slot);
+  }
+
+  setWorkout(w) { this.w = w; this.redraw(); }
+  setOrientation(o) { if (o !== this.orientation) { this.orientation = o; this.redraw(); } }
+  destroy() { this.ro.disconnect(); }
+
+  /** Rebuild the SVG for the current size, workout and orientation (nothing is drawn while the slot is hidden or tiny). */
+  redraw() {
+    const width = Math.floor(this.slot.clientWidth), height = Math.floor(this.slot.clientHeight);
+    this.slot.replaceChildren();
+    this.svg = null;
+    if (width < 20 || height < 20) return;
+    const v = this.orientation === 'v';
+    const svg = el('svg', { width, height, viewBox: `0 0 ${width} ${height}`, class: 'cg-svg', 'aria-hidden': 'true' }, this.slot);
+    const total = this.w.duration || 1, maxP = maxPOf(this.w.segments);
+    const geo = { orientation: this.orientation, total, maxP, length: v ? height : width, breadth: v ? width : height };
+    this.segEls = this.w.segments.map((s) => el('polygon', {
+      points: segmentPoints(s, geo), class: 'cg-seg',
+      fill: s.p0 === null ? FREE_COLOR : zoneColor((s.p0 + s.p1) / 2, this.bounds),
+    }, svg));
+    const ftp = 1 / maxP;
+    if (v) el('line', { class: 'cg-ftp', x1: ftp * width, x2: ftp * width, y1: 0, y2: height }, svg);
+    else el('line', { class: 'cg-ftp', x1: 0, x2: width, y1: height - ftp * height, y2: height - ftp * height }, svg);
+    this.nextLine = el('line', { class: 'cg-next', ...(v ? { x1: 0, x2: width } : { y1: 0, y2: height }) }, svg);
+    this.pos = el('line', { class: 'cg-pos', ...(v ? { x1: 0, x2: width } : { y1: 0, y2: height }) }, svg);
+    this.svg = svg;
+    this.g = { v, width, height, total };
+    this.idx = -1;
+    this.update(this.at);
+  }
+
+  /** Position line, finished segments and the line where the next segment starts. `at`: seconds into the workout. */
+  update(at) {
+    this.at = at;
+    if (!this.svg) return;
+    const { v, width, height, total } = this.g, segs = this.w.segments;
+    let idx = segs.findIndex((s) => at < s.start + s.duration);
+    if (idx < 0) idx = segs.length - 1;
+    if (idx !== this.idx) {
+      this.idx = idx;
+      this.segEls.forEach((p, i) => { p.classList.toggle('done', i < idx); p.classList.toggle('cur', i === idx); });
+    }
+    const length = v ? height : width;
+    const pos = Math.max(0, Math.min(1, at / total)) * length;
+    const ns = segs[idx + 1] ? (segs[idx + 1].start / total) * length : null;
+    put(this.pos, v ? 'y1' : 'x1', pos.toFixed(1)); put(this.pos, v ? 'y2' : 'x2', pos.toFixed(1));
+    put(this.nextLine, 'visibility', ns === null ? 'hidden' : 'visible');
+    if (ns !== null) { put(this.nextLine, v ? 'y1' : 'x1', ns.toFixed(1)); put(this.nextLine, v ? 'y2' : 'x2', ns.toFixed(1)); }
+  }
+}
+
 const SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹';
 /** Digits as Unicode superscript, for compact labels. */
 const toSup = (n) => String(n).split('').map((d) => SUP[+d]).join('');
@@ -220,13 +292,20 @@ export const motionOK = () => !window.matchMedia?.('(prefers-reduced-motion: red
 /** Ring gauge: outer = target, inner = actual, blue tick = FTP. The arcs glide to new values
  *  (a light spring, ~0.45 s) unless reduced motion is on; then they jump. */
 export class Gauge {
-  constructor(container) {
+  /** `compact`: one arc for the actual power and a short tick for the target (no target arc, inner track or FTP tick). */
+  constructor(container, { compact = false } = {}) {
     this.c = container;
     const S = 200, cx = 100, cy = 100;
     this.cx = cx; this.cy = cy;
     this.start = 135; this.sweep = 270;
     const svg = el('svg', { viewBox: `0 0 ${S} ${S}`, class: 'gauge-svg' }, container);
     this.svg = svg;
+    if (compact) {
+      el('path', { d: this.arc(80, 0, 1), class: 'g-track' }, svg);
+      this.actual = el('path', { d: '', class: 'g-actual' }, svg);
+      this.tick = el('line', { class: 'g-tick' }, svg);
+      return;
+    }
     el('path', { d: this.arc(86, 0, 1), class: 'g-track' }, svg);
     this.innerTrack = el('path', { d: this.arc(68, 0, 1), class: 'g-track inner' }, svg);
     this.target = el('path', { d: '', class: 'g-target' }, svg);
@@ -279,6 +358,15 @@ export class Gauge {
   paint() {
     const { ftp, bounds } = this.cfg, { target, actual } = this.cur, goal = this.goal;
     const max = Math.max(ftp * 1.5, goal.target * 1.1, goal.actual * 1.05) || 1;
+    if (this.tick) {
+      if (actual >= 0.5) {
+        this.actual.setAttribute('d', this.arc(80, 0, actual / max));
+        this.actual.style.stroke = zoneColor((goal.actual || actual) / ftp, bounds);
+      } else this.actual.setAttribute('d', '');
+      const [x0, y0] = this.pt(70, target / max), [x1, y1] = this.pt(92, target / max);
+      Object.entries({ x1: x0, y1: y0, x2: x1, y2: y1 }).forEach(([k, v]) => this.tick.setAttribute(k, target >= 0.5 ? v : 0));
+      return;
+    }
     if (target >= 0.5) {
       this.target.setAttribute('d', this.arc(86, 0, target / max));
       this.target.style.stroke = zoneColor((goal.target || target) / ftp, bounds);
