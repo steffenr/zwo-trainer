@@ -22,7 +22,8 @@
   --warn-soft: rgba(138, 90, 18, .12);
   --danger: #c62f26;       /* on --surface 5.53, on --surface-2 5.06; white on it 5.47 */
   --pos: #1f2328;          /* position line in the diagram */
-  --done: #00a3c4;         /* completed bar (brand cyan; graphic only, never text) */
+  --seg-done: .38;         /* opacity of finished workout segments (full chart and compact graph) */
+  --done: #00a3c4;       /* completed bar (brand cyan; graphic only, never text) */
   --trace: #1f2328;        /* actual power trace */
   --ftp: #1f2328;          /* FTP marker */
   --track: #eceef2;

@@ -23,6 +23,7 @@
   }
   & .seg { cursor: pointer; }
   & .seg path { transition: opacity .15s; }
+  & .seg.done path { opacity: var(--seg-done); }
   & .seg:hover path { opacity: .8; }
   & .seg.current path { opacity: 1; }
   & .seg-sep { stroke: var(--bg); stroke-opacity: .55; stroke-width: 1; vector-effect: non-scaling-stroke; }

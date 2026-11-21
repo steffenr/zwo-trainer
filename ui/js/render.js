@@ -152,6 +152,7 @@ export class Diagram {
       power: el('polyline', { class: 'trace trace-pow', points: '' }, svg),
     };
     this.setOverlay(this.overlay);
+    this.doneIdx = null;
     this.done = el('rect', { x: 0, y: H - 4, width: 0, height: 4, class: 'done-bar' }, svg);
     this.pos = el('line', { x1: 0, x2: 0, y1: 0, y2: H, class: 'pos-line' }, svg);
     this.ro?.disconnect();
@@ -172,6 +173,16 @@ export class Diagram {
     this.segEls.forEach((g, j) => g.classList.toggle('current', j === i));
   }
 
+  /** Dim the segments that are over at `at` seconds (the current one stays bright). Touches the DOM only when the current segment changes. */
+  dim(at) {
+    const segs = this.w.segments;
+    let idx = segs.findIndex((s) => at < s.start + s.duration);
+    if (idx < 0) idx = segs.length;
+    if (idx === this.doneIdx) return;
+    this.doneIdx = idx;
+    this.segEls.forEach((g, i) => g.classList.toggle('done', i < idx));
+  }
+
   /** Choose which live traces to draw ({ power, cadence, hr }). */
   setOverlay(o) {
     this.overlay = { ...o };
@@ -183,6 +194,7 @@ export class Diagram {
     const X = this.x(at);
     this.pos.setAttribute('x1', X); this.pos.setAttribute('x2', X);
     this.done.setAttribute('width', X);
+    this.dim(at);
     if (!samples || !samples.length) return;
     const step = Math.max(1, Math.floor(samples.length / 700));
     const h = this.H - this.top;
