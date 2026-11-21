@@ -124,7 +124,24 @@ impl WindowOps for WebviewWindow {
             }
             Ok(())
         };
-        resize().map_err(|_| RESIZE_ERROR.to_string())
+        // Leaving compact the window grows from the bar to the full view's size: the minimum size is applied at once
+        // (the window jumps to it, its top edge fixed) and the size and position follow a moment later, so a visible
+        // window "rolls down" through the in-between sizes. Hidden for the length of that, it appears at its final
+        // size. It is shown again whatever the resize did.
+        let hide = !compact && self.is_visible().unwrap_or(false);
+        if hide {
+            let _ = self.hide();
+        }
+        let result = resize().map_err(|_| RESIZE_ERROR.to_string());
+        if hide {
+            let window = self.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(150));
+                let _ = window.show();
+                let _ = window.set_focus();
+            });
+        }
+        result
     }
 
     fn reset_minimum(&self) -> Result<(), String> {
