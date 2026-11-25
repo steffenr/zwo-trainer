@@ -70,7 +70,7 @@ a { color: inherit; }
 .brand b { color: var(--accent); font-weight: 600; }
 .nav-links { display: flex; gap: 4px; margin-left: auto; align-items: center; }
 .nav-links a { display: inline-flex; align-items: center; text-decoration: none; color: var(--muted); font-weight: 500; font-size: 15px; padding: 8px 12px; border-radius: 10px; }
-.nav-links a:hover, .nav-links a[aria-current="page"] { color: var(--text); background: var(--bg-2); }
+.nav-links a:not(.btn):hover, .nav-links a[aria-current="page"] { color: var(--text); background: var(--bg-2); }
 .nav-links .btn { margin-left: 8px; }
 .nav-links a.ico { width: 38px; height: 38px; padding: 0; justify-content: center; }
 .nav-links a.ico svg { width: 18px; height: 18px; flex: none; }
