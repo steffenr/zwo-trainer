@@ -250,13 +250,15 @@ footer a:hover { color: var(--text); }
 
 .deep { padding: clamp(64px, 8vw, 110px) 0; border-bottom: 1px solid var(--line); scroll-margin-top: 64px; }
 .deep .grid { display: grid; grid-template-columns: 4fr 8fr; gap: clamp(28px, 5vw, 64px); }
+/* the short text column stays in view while the cards and screenshots beside it scroll */
+.deep .side { position: sticky; top: 96px; align-self: start; }
 .deep .side h2 { font-size: clamp(30px, 3.4vw, 44px); margin: 14px 0 14px; }
 .deep .side p { color: var(--muted); margin: 0; }
 .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 28px; }
 .card { border: 1px solid var(--line); border-radius: 14px; padding: 20px; background: var(--card); }
 .card h3 { margin: 0 0 6px; font-size: 16px; font-weight: 650; font-stretch: 100%; letter-spacing: normal; }
 .card p { margin: 0; color: var(--muted); font-size: 15px; }
-@media (max-width: 900px) { .deep .grid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .deep .grid { grid-template-columns: 1fr; } .deep .side { position: static; } }
 @media (max-width: 600px) { .cards { grid-template-columns: 1fr; } }
 
 table.keys { width: 100%; border-collapse: collapse; margin-top: 24px; font-size: 15px; }
