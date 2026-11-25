@@ -23,6 +23,7 @@ Installers end up in `src-tauri/target/release/bundle/`. On the first Bluetooth 
 ```bash
 cd src-tauri && cargo test                                                    # unit tests
 cd src-tauri && cargo clippy --all-targets                                    # lints (keep warning-free)
+cd src-tauri && cargo audit                                                   # dependency advisories (cargo install cargo-audit)
 ZWO_TEST_DIR=~/Downloads/zwo cargo test scan_real_library -- --nocapture       # parse a whole library
 node --test scripts/*.test.mjs                                                # UI unit tests
 node scripts/check-i18n.mjs                                                   # translations complete (en / de / fr)

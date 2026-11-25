@@ -64,6 +64,19 @@ fn description_file(folder_name: &str, md_files: &[String]) -> Option<String> {
 /// Bytes read from a description file; the rest of a bigger file is never read.
 const MAX_DESCRIPTION: usize = 64 * 1024;
 
+/// Upper bound for a workout file that is read into memory. Real `.zwo` files are a few KB; a
+/// multi-GB file in the folder (by accident or not) must not be loaded whole by the scan.
+pub const MAX_ZWO_BYTES: u64 = 2 * 1024 * 1024;
+
+/// The whole file as text, refusing anything above `MAX_ZWO_BYTES` before it is read.
+fn read_workout(path: &Path) -> Result<String, String> {
+    let len = std::fs::metadata(path).map_err(|e| e.to_string())?.len();
+    if len > MAX_ZWO_BYTES {
+        return Err(format!("larger than {} MB", MAX_ZWO_BYTES / (1024 * 1024)));
+    }
+    std::fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
 /// The first `max` bytes of a text file, cut back to the last whole UTF-8 character.
 fn read_capped(path: &Path, max: usize) -> Option<String> {
     use std::io::Read;
@@ -201,7 +214,7 @@ impl Cache {
                 return Ok(info.clone());
             }
         }
-        let xml = std::fs::read_to_string(abs).map_err(|e| e.to_string())?;
+        let xml = read_workout(abs)?;
         let w = zwo::parse(&xml)?;
         let (week, day, title) = parse_file_name(rel);
         let r3 = |v: Option<f64>| v.map(|x| (x * 1000.0).round() / 1000.0);
@@ -304,7 +317,7 @@ pub fn load(root: &Path, rel: &str) -> Result<LoadedWorkout, String> {
         return Err("not a .zwo file".into());
     }
     let abs = inside_root(root, rel)?;
-    let xml = std::fs::read_to_string(&abs).map_err(|e| format!("{rel}: {e}"))?;
+    let xml = read_workout(&abs).map_err(|e| format!("{rel}: {e}"))?;
     let (week, day, title) = parse_file_name(rel);
     Ok(LoadedWorkout { file: rel.to_string(), week, day, title, workout: zwo::parse(&xml)? })
 }
@@ -330,6 +343,23 @@ mod tests {
         let out = Path::new(&out);
         std::fs::write(out.join("library.json"), serde_json::to_string(&lib).unwrap()).unwrap();
         std::fs::write(out.join("workouts.json"), serde_json::to_string(&loaded).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn huge_workout_files_are_not_read() {
+        let dir = std::env::temp_dir().join(format!("zt-huge-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let big = dir.join("big.zwo");
+        // a valid workout, padded past the cap: never read, so never parsed
+        let xml = r#"<workout_file><name>W</name><workout><SteadyState Duration="600" Power="0.6"/></workout></workout_file>"#;
+        std::fs::write(&big, format!("{xml}{}", " ".repeat(MAX_ZWO_BYTES as usize))).unwrap();
+        assert!(load(&dir, "big.zwo").is_err(), "load refuses it");
+        assert!(Cache::default().info(&big, "big.zwo").is_err(), "scan skips it");
+        // a normal file next to it still loads
+        std::fs::write(dir.join("ok.zwo"), xml).unwrap();
+        assert!(load(&dir, "ok.zwo").is_ok());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

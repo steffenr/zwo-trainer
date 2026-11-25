@@ -48,11 +48,14 @@ test('HTML is escaped, never emitted', () => {
   assert.doesNotMatch(renderMarkdown('**<b>x</b>** `<i>`'), /<b>|<i>/);
 });
 
-test('non-http links do not become links', () => {
+test('non-https links do not become links', () => {
   assert.equal(renderMarkdown('[click](javascript:alert(1))'), p('click)'));
   assert.equal(renderMarkdown('[mail](mailto:a@b.c)'), p('mail'));
   assert.equal(renderMarkdown('[file](file:///etc/passwd)'), p('file'));
   assert.doesNotMatch(renderMarkdown('ftp://x.com/a javascript:alert(1)'), /<a /);
+  // plaintext http would be refused by open_link anyway; never offer it as a link
+  assert.equal(renderMarkdown('[plan](http://x.com/a)'), p('plan'));
+  assert.doesNotMatch(renderMarkdown('see http://x.com/a for details'), /<a /);
 });
 
 test('code spans are left untouched', () => {

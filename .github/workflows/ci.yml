@@ -43,6 +43,12 @@ jobs:
       - name: Clippy
         working-directory: src-tauri
         run: cargo clippy --locked --all-targets -- -D warnings
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+        with:
+          tool: cargo-audit
+      - name: Security advisories (cargo audit)
+        working-directory: src-tauri
+        run: cargo audit
       - name: UI syntax check
         run: for f in $(find ui/js -name '*.js'); do node --check "$f"; done
       - name: UI unit tests
