@@ -396,6 +396,51 @@ fn clean_name(name: &str) -> Result<String, String> {
     Ok(n.chars().take(40).collect())
 }
 
+/// Windows has no `0600`. A private file gets an explicit ACL for its owner with inheritance
+/// removed, applied to the tmp file so the rename carries it over (like the unix mode above).
+/// Best effort: if `icacls` can't be run, the file still lives in the per-user app data folder,
+/// and losing the Garmin session over a failed permission change would be worse.
+#[cfg(windows)]
+fn owner_only(path: &Path) {
+    use std::process::{Command, Stdio};
+    let Some(mut args) = owner_only_args(path, std::env::var("SystemRoot").ok().as_deref(), std::env::var("USERDOMAIN").ok().as_deref(), std::env::var("USERNAME").ok().as_deref()) else {
+        return;
+    };
+    let exe = args.remove(0);
+    let _ = Command::new(exe)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+/// The `icacls` command line that grants `account` full access to `path` and drops inherited
+/// entries (`icacls <file> /inheritance:r /grant:r <account>:(F)`). `icacls.exe` is named with
+/// its absolute path: Windows also searches the current directory for an executable.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn owner_only_args(path: &Path, system_root: Option<&str>, domain: Option<&str>, user: Option<&str>) -> Option<Vec<std::ffi::OsString>> {
+    let account = acl_account(domain, user)?;
+    let root = system_root.filter(|r| !r.is_empty()).unwrap_or(r"C:\Windows");
+    Some(vec![
+        Path::new(root).join("System32").join("icacls.exe").into_os_string(),
+        path.into(),
+        "/inheritance:r".into(),
+        "/grant:r".into(),
+        format!("{account}:(F)").into(),
+    ])
+}
+
+/// The account to grant: `DOMAIN\user` when both are known, else `user`, else none.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn acl_account(domain: Option<&str>, user: Option<&str>) -> Option<String> {
+    let user = user.filter(|u| !u.trim().is_empty())?;
+    match domain.filter(|d| !d.trim().is_empty()) {
+        Some(d) => Some(format!("{d}\\{user}")),
+        None => Some(user.to_string()),
+    }
+}
+
 pub(crate) fn write_json(path: &Path, v: &Value, private: bool) -> Result<(), String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
@@ -421,11 +466,17 @@ pub(crate) fn write_json(path: &Path, v: &Value, private: bool) -> Result<(), St
             use std::os::unix::fs::PermissionsExt;
             f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
         }
+        #[cfg(not(unix))]
+        let _ = private;
         f.write_all(&bytes)?;
         // on disk before the rename, so a power cut leaves the old or the new file, never a truncated one
         f.sync_all()
     };
     write(&opts).map_err(|e| e.to_string())?;
+    #[cfg(windows)]
+    if private {
+        owner_only(&tmp);
+    }
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
@@ -582,5 +633,29 @@ mod tests {
         assert_eq!(iso_from_unix(0), "1970-01-01T00:00:00Z");
         assert_eq!(iso_from_unix(1_792_224_000), "2026-10-17T08:00:00Z");
         assert_eq!(iso_from_unix(951_782_400), "2000-02-29T00:00:00Z");
+    }
+
+    /// The Windows ACL call for `secrets.json`. Built and checked here (it only runs on Windows):
+    /// the executable must be absolute, and the grant names the current user only.
+    #[test]
+    fn windows_owner_only_acl() {
+        let file = Path::new(r"C:\Users\lena\AppData\Roaming\dev.steffenr.zwotrainer\secrets.json.tmp");
+        let args = owner_only_args(file, Some(r"C:\Windows"), Some("LAPTOP"), Some("lena")).unwrap();
+        let s: Vec<String> = args.iter().map(|a| a.to_string_lossy().to_string()).collect();
+        assert_eq!(args[0], Path::new(r"C:\Windows").join("System32").join("icacls.exe").into_os_string());
+        #[cfg(windows)]
+        assert!(Path::new(&args[0]).is_absolute(), "no current-directory lookup");
+        assert_eq!(args[1], file.as_os_str(), "the tmp file, so the rename keeps the ACL");
+        assert_eq!(&s[2..], ["/inheritance:r", "/grant:r", r"LAPTOP\lena:(F)"]);
+        // no SystemRoot / no domain: still safe, still the default system path
+        let args = owner_only_args(file, None, None, Some("lena")).unwrap();
+        let s: Vec<String> = args.iter().map(|a| a.to_string_lossy().to_string()).collect();
+        assert_eq!(args[0], Path::new(r"C:\Windows").join("System32").join("icacls.exe").into_os_string());
+        assert_eq!(s[4], "lena:(F)");
+        // unknown user: no ACL change at all rather than a wrong one
+        assert!(owner_only_args(file, None, Some("LAPTOP"), None).is_none());
+        assert!(owner_only_args(file, None, None, Some("  ")).is_none());
+        assert_eq!(acl_account(Some("D"), Some("u")), Some(r"D\u".into()));
+        assert_eq!(acl_account(Some(""), Some("u")), Some("u".into()));
     }
 }

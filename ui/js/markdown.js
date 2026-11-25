@@ -3,6 +3,8 @@
 // Supports: headings, paragraphs, line breaks, **bold**, *italic* / _italic_, ~~strike~~,
 // `code`, fenced code blocks, [links](https://…), bare https:// URLs, bullet / numbered
 // lists (one nesting level), > blockquotes, horizontal rules and simple tables.
+// Only `https:` becomes a link (Rust's open_link refuses anything else): descriptions come from
+// downloaded workout folders, so a plan can't send the rider to a plaintext http page.
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -34,7 +36,7 @@ function inline(text) {
   let t = text.replace(/`([^`]+)`/g, (_, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
   const link = (label, url) => {
     const u = url.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
-    if (!/^https?:\/\//i.test(u)) return label;
+    if (!/^https:\/\//i.test(u)) return label;
     links.push(`<a href="#" class="md-link" data-act="md-link" data-link="${esc(u)}" title="${esc(u)}">${label}</a>`);
     return `\u0001${links.length - 1}\u0001`;
   };
@@ -42,7 +44,7 @@ function inline(text) {
   // (it may sit inside *…* / **…**, so it never ends with a star). A URL may end in `_`, except
   // when an _italic_ opened before it on this line is still open: then that `_` closes it.
   t = t.replace(/\[([^\]]+)\]\(\s*([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\s*\)/g, (_, l, u) => link(emphasis(l), u));
-  t = t.replace(/(^|[\s(*])(_?)(https?:\/\/[^\s<)]+[^\s<).,;:!?*])/g, (_, pre, us, u, at, all) => {
+  t = t.replace(/(^|[\s(*])(_?)(https:\/\/[^\s<)]+[^\s<).,;:!?*])/g, (_, pre, us, u, at, all) => {
     // u[0]: an `_` directly before the URL opens only when a non-space follows it
     const close = u.endsWith('_') && italicOpen(all.slice(0, at) + pre + us + u[0]) ? '_' : '';
     if (close) u = u.slice(0, -1);

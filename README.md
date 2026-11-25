@@ -105,7 +105,7 @@ During a workout the bar stays the same, except that the mode switch shows the w
 - **Plan or collection:** a sub-folder whose files span **at least two weeks** (`Week01_…`, `Week02_…`) is a **plan**. Everything else (one week only, e.g. WhatsOnZwift collections exported as `Week01_Day01…Day39`, or no week numbering) is a **collection**, shown only under **Workouts** without week/day labels. A folder you have started as a plan stays one.
 - **Override:** in the folder's **⋯** menu, *Use as plan* or *Show as collection*. Stored per rider and synced.
 - **Order:** natural sort by file name, so `Week01_Day01_…`, `Week01_Day02_…`, `Week02_Day01_…` group by week and day.
-- **Description:** a Markdown file in the folder (`<folder>.md`, else `README.md`, else the only `.md`) is shown on the plan page and in the Workouts folder header. It supports headings, emphasis, links, lists, quotes and tables, and long texts start as a short preview with *Show more*.
+- **Description:** a Markdown file in the folder (`<folder>.md`, else `README.md`, else the only `.md`) is shown on the plan page and in the Workouts folder header. It supports headings, emphasis, links, lists, quotes and tables, and long texts start as a short preview with *Show more*. Links must be `https://`; they open in your browser.
 - **Start plan** makes it the active plan. The home screen then shows **Up next** with profile, duration and TSS.
 - **In order:** only the next workout can be started.
 - **Skip** marks it skipped and moves on; **Undo skip** brings it back.
@@ -267,7 +267,7 @@ Every finished ride is saved as a **FIT file** with one lap per workout segment,
 
 Settings → Connections.
 
-- **Sign in** with **Sign in to Garmin**. Garmin's own login page opens in a small window, MFA supported. zwoTrainer stores only the resulting session token for that rider, never your password.
+- **Sign in** with **Sign in to Garmin**. Garmin's own login page opens in a small window, MFA supported. zwoTrainer stores only the resulting session token for that rider, never your password. The window only ever shows Garmin's own pages; if you sign in to Garmin through a third-party provider (Google, Apple…), use your Garmin e-mail and password instead.
 - **Upload mode:** *Off*, *Manual* (a button after each ride and in the history) or *Automatic*.
 - **Activity name:** every upload is named after the workout (e.g. *“5x6 Sweet Spot 1B”*), with plan and week/day in the description; Garmin would otherwise call it *“Indoor Cycling”*. Intervals.icu uploads are named the same way.
 - **Edge identity:** the file identifies as a Garmin Edge, so Garmin computes Training Effect and VO2max and counts the ride for challenges.
@@ -327,7 +327,7 @@ Keep riders in sync across computers through a folder your cloud app already syn
 - **Stays on each computer:** paired devices, the workouts folder, the Garmin FIT folder and the Garmin sign-in.
 - **Conflicts:** the newest change to a rider wins. Ride history and FTP tests are merged from both sides, as are plan progress (per workout), personal bests (the higher one) and the FTP of a test applied elsewhere. Deleting a rider removes it everywhere.
 - **When it runs:** at launch, a few seconds after every change, when the window gets focus and every 5 minutes, never during a ride. **Sync now** forces a run.
-- **Layout in the cloud folder:** `zwoTrainer/profiles/<id>.json` and `zwoTrainer/activities/<id>/*.fit`.
+- **Layout in the cloud folder:** `zwoTrainer/profiles/<id>.json` and `zwoTrainer/activities/<id>/*.fit`. Only rider files and real FIT files are picked up from that folder; anything else left there is ignored.
 
 ---
 
@@ -365,7 +365,7 @@ Limits can be changed per rider (Settings → Rider) and drive the colours, targ
 | What | Where |
 |---|---|
 | Riders, settings, progress, history, update setting | `state.json` in the app data folder: `~/Library/Application Support/dev.steffenr.zwotrainer/` (macOS), `%APPDATA%\dev.steffenr.zwotrainer\` (Windows), `~/.local/share/dev.steffenr.zwotrainer/` (Linux). A damaged file is kept as `state.json.corrupt-<number>` and zwoTrainer starts fresh, so nothing is overwritten. |
-| Garmin session tokens (with the OAuth consumer pair, downloaded once per Garmin sign-in) and the Intervals.icu API key | `secrets.json` in the same folder (owner-only, never synced) |
+| Garmin session tokens (with the OAuth consumer pair, downloaded once per Garmin sign-in) and the Intervals.icu API key | `secrets.json` in the same folder (owner-only: mode `0600` on macOS/Linux, an owner-only ACL on Windows; never synced) |
 | Ride files | `activities/<rider>/*.fit` in the same folder (plus `*.garmin.fit`). Rides started in the same minute get separate files (`…-2.fit`); nothing ever replaces an existing ride file. |
 | Workouts | your workouts folder; zwoTrainer only reads it, except *Move to Trash* |
 
@@ -381,7 +381,7 @@ Nothing is sent anywhere except what you enable: uploads to the platforms you co
 | ERG doesn't react | Connect the trainer as **trainer** (FTMS), not as a power meter; "Power only" in the ride header means no ERG. If zwoTrainer warns that another app controls the trainer, close Zwift, the Zwift Companion app and other training apps (also on phone or tablet), then reconnect. |
 | Zwift Ride buttons do nothing | Connect only the **left** controller; check the *button test* in the Shifter dialog; update the Ride firmware in the Zwift Companion app. |
 | Zwift Click stops after ~1 min | Unlock it once in the Zwift phone app (see [Virtual shifting & controllers](#virtual-shifting--controllers)). |
-| A workout is missing | It must be a `.zwo` file inside the workouts folder; use **Settings → App → Rescan**. Unreadable files and workouts longer than 48 hours are skipped. |
+| A workout is missing | It must be a `.zwo` file inside the workouts folder; use **Settings → App → Rescan**. Unreadable files, files larger than 2 MB and workouts longer than 48 hours are skipped. |
 | Garmin upload fails | Sign out and in again under Settings → Connections; use *Manual FIT import* meanwhile. |
 | Intervals.icu says the key is wrong | Create a new key under intervals.icu → Settings → Developer Settings and paste it again (no spaces). |
 | COROS import fails | Pick the **.zip** zwoTrainer highlighted, not the .fit; processing in Training Hub can take a few minutes. |

@@ -187,10 +187,32 @@ fn relocate_paths(p: &mut Value, act_dir: &Path) {
     }
 }
 
+/// A FIT file is at most this big; anything larger in a sync folder is not a ride of ours.
+const MAX_FIT_BYTES: u64 = 100 * 1024 * 1024;
+
+/// Does this look like a FIT file? The FIT SDK puts the ".FIT" tag at bytes 8–11 of the header.
+/// A sync folder is shared with other apps (and with whoever else can write to it), so only real
+/// ride files are copied out of it — never whatever else was dropped there.
+fn is_fit_file(path: &Path) -> bool {
+    use std::io::Read;
+    let Ok(meta) = std::fs::metadata(path) else { return false };
+    if !meta.is_file() || !(12..=MAX_FIT_BYTES).contains(&meta.len()) {
+        return false;
+    }
+    let mut header = [0u8; 12];
+    std::fs::File::open(path).ok().and_then(|mut f| f.read_exact(&mut header).ok()).is_some_and(|()| &header[8..12] == b".FIT")
+}
+
 /// Copy .fit files that exist on one side only.
 fn sync_files(a: &Path, b: &Path) -> (u32, u32) {
     let list = |d: &Path| -> Vec<String> {
-        std::fs::read_dir(d).into_iter().flatten().flatten().filter_map(|e| e.file_name().to_str().map(str::to_string)).filter(|n| n.ends_with(".fit")).collect()
+        std::fs::read_dir(d)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|e| e.file_name().to_str().map(str::to_string))
+            .filter(|n| n.ends_with(".fit") && is_fit_file(&d.join(n)))
+            .collect()
     };
     let (la, lb) = (list(a), list(b));
     let mut n = (0, 0);
@@ -695,5 +717,34 @@ mod tests {
         for bad in ["p_1.json.icloud", ".p_1.fit.icloud", ".notes.json.icloud", ".p_1 2.json.icloud"] {
             assert_eq!(placeholder_id(bad), None, "{bad}");
         }
+    }
+
+    /// A FIT header as the SDK writes it: 12 bytes with ".FIT" at 8–11.
+    fn fit_bytes() -> Vec<u8> {
+        let mut v = vec![14u8, 0x20, 0, 0, 0, 0, 0, 0];
+        v.extend_from_slice(b".FIT");
+        v
+    }
+
+    #[test]
+    fn only_real_fit_files_cross_the_folder() {
+        let base = std::env::temp_dir().join(format!("zt-sync-fit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (local, cloud) = (base.join("local"), base.join("cloud"));
+        std::fs::create_dir_all(&cloud).unwrap();
+        std::fs::write(cloud.join("ride.fit"), fit_bytes()).unwrap();
+        // what else can end up in a shared cloud folder: a fake extension, a truncated file,
+        // and something not a FIT file at all
+        std::fs::write(cloud.join("payload.fit"), b"#!/bin/sh\nrm -rf ~\n").unwrap();
+        std::fs::write(cloud.join("short.fit"), b".FIT").unwrap();
+        assert!(is_fit_file(&cloud.join("ride.fit")));
+        assert!(!is_fit_file(&cloud.join("payload.fit")));
+        assert!(!is_fit_file(&cloud.join("short.fit")));
+        assert!(!is_fit_file(&cloud.join("missing.fit")));
+        let (up, down) = sync_files(&local, &cloud);
+        assert_eq!((up, down), (0, 1), "only the real ride is copied");
+        assert_eq!(std::fs::read(local.join("ride.fit")).unwrap(), fit_bytes());
+        assert!(!local.join("payload.fit").exists() && !local.join("short.fit").exists());
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

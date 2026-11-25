@@ -364,11 +364,13 @@ fn open_url(handle: tauri::AppHandle, url: String) -> Res<()> {
     handle.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
 
-/// Open an http(s) link from a plan description in the default browser.
+/// Open an https link from a plan description in the default browser. Plain `http` is refused:
+/// descriptions come from downloaded workout folders, and a ride app has no reason to start a
+/// plaintext web session.
 #[tauri::command]
 fn open_link(handle: tauri::AppHandle, url: String) -> Res<()> {
-    if !(url.starts_with("https://") || url.starts_with("http://")) {
-        return Err("Only web links can be opened".into());
+    if !url.starts_with("https://") {
+        return Err("Only https links can be opened".into());
     }
     handle.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
@@ -474,6 +476,18 @@ fn garmin_status(app: State<'_, App>) -> Value {
     json!({ "connected": s["oauth1"]["token"].is_string(), "name": s["displayName"] })
 }
 
+/// May the sign-in window go to `u`? Only Garmin's own pages: the window is titled "Sign in to
+/// Garmin Connect" and carries our ticket script, so it must never show an unrelated site
+/// (Garmin's SSO flow, its embed page and the Connect redirects all stay on `garmin.com`).
+/// The ticket sentinel is handled before this in `on_navigation`.
+fn garmin_page(u: &tauri::Url) -> bool {
+    u.scheme() == "https"
+        && u.host_str().is_some_and(|h| {
+            let h = h.to_ascii_lowercase();
+            h == "garmin.com" || h.ends_with(".garmin.com")
+        })
+}
+
 /// "Sign in to Garmin": Garmin's own login page in an app window; the service ticket it
 /// returns is exchanged for a long-lived token stored for this rider only.
 #[tauri::command]
@@ -498,7 +512,7 @@ async fn garmin_connect(handle: tauri::AppHandle, app: State<'_, App>) -> Res<Va
                 }
                 return false;
             }
-            true
+            garmin_page(u)
         })
         .build()
         .map_err(|e| e.to_string())?;
@@ -871,5 +885,31 @@ mod tests {
     #[test]
     fn safe_names() {
         assert_eq!(safe_name("HIT 80% FTP #1"), "HIT_80__FTP__1");
+    }
+
+    #[test]
+    fn garmin_signin_stays_on_garmin() {
+        for ok in [
+            "https://sso.garmin.com/sso/signin?id=gauth-widget",
+            "https://sso.garmin.com/sso/embed",
+            "https://connect.garmin.com/modern/import-data",
+            "https://garmin.com/",
+            "https://sso.garmin.com:443/x",
+        ] {
+            assert!(garmin_page(&ok.parse().unwrap()), "{ok}");
+        }
+        for bad in [
+            "https://evil.example/garmin",
+            "https://sso.garmin.com.evil.example/",
+            "https://garmin.com.evil.example/",
+            "https://sso.garmin.com@evil.example/",
+            "https://evil.example/?next=https://sso.garmin.com",
+            "http://sso.garmin.com/sso/signin",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "data:text/html,<b>x</b>",
+        ] {
+            assert!(!garmin_page(&bad.parse().unwrap()), "{bad}");
+        }
     }
 }
