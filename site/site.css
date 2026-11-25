@@ -207,9 +207,11 @@ section.block.alt { background: var(--bg-2); border-block: 1px solid var(--line)
 /* compatibility grid */
 .compat { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .compat > div { background: var(--card); padding: 26px; }
-.compat h3 { font-size: 18px; margin-bottom: 10px; }
-.compat p { margin: 0; color: var(--muted); font-size: 15px; }
-.compat .ic { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); margin-bottom: 18px; }
+/* icon inline before the heading, the text below both */
+.compat > div { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; align-items: center; align-content: start; }
+.compat h3 { font-size: 18px; }
+.compat p { grid-column: 1 / -1; margin: 10px 0 0; color: var(--muted); font-size: 15px; }
+.compat .ic { display: grid; color: var(--accent); }
 .compat .ic svg { width: 22px; height: 22px; }
 @media (max-width: 900px) { .compat { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .compat { grid-template-columns: 1fr; } }
