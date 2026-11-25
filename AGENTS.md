@@ -85,6 +85,7 @@ scripts/shots/              every website screenshot (site/img) from the real ui
   mock.js                   window.__TAURI__ stub: state, events, virtual trainer/strap/controller, seeded random
   rider.mjs                 sample rider "Lena" (history, plan progress, tests) and the fixed clock time NOW
   fixture/                  sample library: make.mjs (definitions → .zwo → Rust scan) → library.json, workouts.json
+docs/releasing.md           release workflow, in-app update signing, releasing by hand (linked from the README)
 site/                       static website (home, features, download) with dark/light screenshots in site/img; no build step
 .github/workflows/
   ci.yml                    push/PR: tests + clippy + UI syntax + i18n + CSS + markup checks (Linux), tests (macOS, Windows)

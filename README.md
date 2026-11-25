@@ -4,40 +4,38 @@
 
 # zwoTrainer
 
-A lightweight, fast indoor-training app for macOS (with Windows and Linux builds) that rides Zwift `.zwo` workouts and turns folders of workouts into training plans. It controls your smart trainer in ERG mode, records every ride as a FIT file and uploads it to Garmin Connect (and from there to Strava) and Intervals.icu.
+zwoTrainer rides Zwift `.zwo` workouts on a Bluetooth smart trainer in ERG mode and turns folders of workouts into training plans. Every ride is recorded as a FIT file and uploaded to Garmin Connect (and from there to Strava) and Intervals.icu. It runs on macOS, Windows and Linux.
 
-No video courses, no workout builder, no music, no subscription. You get a clean workout display and your own library.
+No video courses, workout builder, music or subscription. You get a workout display and your own library.
 
 **Website:** [steffenr.github.io/zwo-trainer](https://steffenr.github.io/zwo-trainer/) · **Download:** [latest release](https://github.com/steffenr/zwo-trainer/releases/latest) · **License:** [MIT](LICENSE)
 
-- **Plans:** every folder with a weekly schedule is a plan. Start it and ride the workouts in order; skipped and done workouts are tracked and the next one is always suggested.
-- **Workouts:** browse and ride any workout freely, with search, length and intensity filters, TSS and favorites.
-- **FTP Tests:** Ramp, Ramp Lite, 20-minute, 8-minute and Power Profile tests, plus test workouts from your library. One click applies the new FTP. W/kg and VO2max estimates are included.
-- **Riders:** several profiles with their own FTP, zones, plan progress, history, avatar and devices, optionally synced through iCloud Drive, Dropbox or Nextcloud.
-- **Devices:** Bluetooth smart trainers (FTMS), power meters, heart-rate straps, Zwift Ride / Click / Play and OpenBikeControl controllers, with virtual shifting for free-ride segments.
-- **Languages:** English, German (Deutsch) and French (Français). zwoTrainer follows your system language until you pick one under Settings → App.
+- **Plans:** every folder with a weekly schedule is a plan. Ride the workouts in order; done and skipped ones are tracked and the next is always suggested.
+- **Workouts:** ride anything freely, with search, length and intensity filters, TSS and favorites.
+- **FTP tests:** Ramp, Ramp Lite, 20-minute, 8-minute and Power Profile, plus test workouts from your library. One click applies the new FTP.
+- **Riders:** profiles with their own FTP, zones, plan progress, history and devices, optionally synced through iCloud Drive, Dropbox or Nextcloud.
+- **Devices:** smart trainers (FTMS), power meters, heart-rate straps, Zwift Ride / Click / Play and OpenBikeControl controllers, with virtual shifting.
+- **Languages:** English, German and French. zwoTrainer follows your system language until you pick one under Settings → App.
 
-Built with **Tauri 2**: a Rust core and a plain HTML/CSS/JS interface, with no Node and no bundler. Light mode uses pure white and dark mode pure black; zone colours follow the classic Zwift / WhatsOnZwift palette.
+Built with **Tauri 2**: a Rust core and a plain HTML/CSS/JS interface, with no Node and no bundler. Zone colours follow the classic Zwift / WhatsOnZwift palette.
 
 ---
 
 ## Contents
 
-1. [Install & build](#install--build)
-    - [Updates](#updates)
+1. [Install](#install)
 2. [Getting started](#getting-started)
 3. [The top bar](#the-top-bar)
 4. [Plans](#plans)
 5. [Workouts](#workouts)
-6. [FTP Tests](#ftp-tests)
+6. [FTP tests](#ftp-tests)
 7. [Riding a workout](#riding-a-workout)
 8. [Devices](#devices)
 9. [Virtual shifting & controllers](#virtual-shifting--controllers)
 10. [Ride history, FIT files, Garmin & Strava](#ride-history-fit-files-garmin--strava)
-    - [Intervals.icu & COROS](#intervalsicu--coros)
-11. [Riders (profiles)](#riders-profiles)
+11. [Riders](#riders)
 12. [Profile sync](#profile-sync)
-13. [Settings reference](#settings-reference)
+13. [Settings](#settings)
 14. [Zones & intensity](#zones--intensity)
 15. [Where your data lives](#where-your-data-lives)
 16. [Troubleshooting](#troubleshooting)
@@ -46,7 +44,7 @@ Built with **Tauri 2**: a Rust core and a plain HTML/CSS/JS interface, with no N
 
 ---
 
-## Install & build
+## Install
 
 ### Download
 
@@ -54,88 +52,67 @@ Every release on the GitHub **Releases** page has installers for all platforms. 
 
 | Platform | File | First launch |
 |---|---|---|
-| macOS 13+ (Apple silicon) | `zwoTrainer_<version>_aarch64.dmg` | Right-click the app → **Open** (or System Settings → Privacy & Security → **Open Anyway**), then allow Bluetooth access. |
+| macOS 13+ (Apple silicon) | `zwoTrainer_<version>_aarch64.dmg` | Right-click the app → **Open** (or System Settings → Privacy & Security → **Open Anyway**), then allow Bluetooth. |
 | macOS 13+ (Intel) | `zwoTrainer_<version>_x64.dmg` | as above |
-| Windows 10/11 (x64) | `zwoTrainer_<version>_x64-setup.exe` (or `.msi`) | SmartScreen: **More info → Run anyway**. Turn Bluetooth on in Settings; no pairing needed. |
-| Linux (x64) | `.deb`, `.rpm` or `.AppImage` | Needs BlueZ (`bluetoothd`) running; the `.deb`/`.rpm` pull it in. |
+| Windows 10/11 (x64) | `zwoTrainer_<version>_x64-setup.exe` or `.msi` | SmartScreen: **More info → Run anyway**. Turn Bluetooth on in Settings; no pairing needed. |
+| Linux (x64) | `.deb`, `.rpm` or `.AppImage` | Needs BlueZ (`bluetoothd`) running; the `.deb` and `.rpm` pull it in. |
 
-The window is drawn by the system's web engine, and the interface uses modern CSS (cascade layers and nesting). Keep it current: on macOS install the Safari updates (Safari 17 or newer), on Windows WebView2 updates itself, and on Linux use a current WebKitGTK (2.42 or newer, as in current Ubuntu, Debian and Fedora releases). With an older engine the screens appear unstyled.
+The window is drawn by the system's web engine and the interface uses modern CSS (cascade layers and nesting), so keep it current: Safari 17+ on macOS, WebView2 on Windows (updates itself), WebKitGTK 2.42+ on Linux. With an older engine the screens appear unstyled.
 
-zwoTrainer is developed and used on macOS; the Windows and Linux builds use the same code and are compile-checked and tested in CI on every push, but get less real-world riding.
+zwoTrainer is developed and used on macOS. The Windows and Linux builds use the same code and are tested in CI on every push, but get less real-world riding.
 
 ### Updates
 
-Once installed, zwoTrainer updates itself. A few seconds after launch (and every 6 hours while it runs) it asks the newest GitHub release whether there is a newer version. If there is, a small card in the bottom-right corner offers **Install & restart**, **Later** and **What's new**.
+zwoTrainer updates itself. A few seconds after launch, and every 6 hours while it runs, it asks the newest GitHub release for a newer version. If there is one, a small card in the bottom-right corner offers **Install & restart**, **Later** and **What's new**.
 
-- **Never during a ride:** no check, card or install happens while you ride; an update found earlier appears when the ride ends.
-- **Signed:** every update file is signed with the project's update key, and the app refuses anything whose signature doesn't match. Updates fetched by the app itself normally don't bring back the unsigned-app warning.
-- **Each install type updates in kind:** the macOS app is replaced in place, Windows runs the same installer you used (`-setup.exe` or `.msi`) and closes the app while it installs, and Linux updates the `.AppImage`, `.deb` or `.rpm` (the packages ask for your password).
+- **Never during a ride:** an update found earlier appears when the ride ends.
+- **Signed:** every update file is signed with the project's update key, and the app refuses anything that doesn't match.
+- **Per install type:** the macOS app is replaced in place, Windows runs the installer you used, Linux updates the `.AppImage`, `.deb` or `.rpm` (the packages ask for your password).
 - **Settings → App → Updates:** switch *Check for updates automatically* off, or press **Check now**. The setting belongs to this computer and isn't synced.
 
-### Build from source
-
-**Requirements:** Rust 1.90+ (`rustup`) plus the platform's Tauri prerequisites:
-- **macOS 13+:** the Xcode command-line tools (`xcode-select --install`).
-- **Windows 10/11:** Microsoft C++ Build Tools and WebView2 (preinstalled on Windows 11).
-- **Linux (Debian/Ubuntu):** `sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libdbus-1-dev pkg-config`.
-
-```bash
-cargo install tauri-cli --version "^2" --locked   # once
-cd ~/Projects/zwoTrainer
-cargo tauri dev          # run in development
-cargo tauri build        # release build for this platform
-```
-
-The installers end up in `src-tauri/target/release/bundle/` (`dmg/` and `macos/zwoTrainer.app` on macOS, `nsis/` and `msi/` on Windows, `deb/`, `rpm/` and `appimage/` on Linux).
-
-On the first Bluetooth search macOS asks for Bluetooth access. If you declined, allow it later under **System Settings → Privacy & Security → Bluetooth**.
+To build it yourself, see [docs/development.md](docs/development.md).
 
 ---
 
 ## Getting started
 
-1. **Workouts folder.** zwoTrainer reads `~/Downloads/zwo` by default. Change it under **Settings → App → Workouts folder**. Sub-folders with a weekly schedule are plans, other sub-folders are collections, and loose `.zwo` files in the root are single workouts.
-2. **Your numbers.** Open **Settings → Rider** and enter FTP, max heart rate and weight. Weight is needed for W/kg, VO2max and virtual shifting.
+1. **Workouts folder.** zwoTrainer reads `~/Downloads/zwo` by default; change it under **Settings → App → Workouts folder**. Sub-folders with a weekly schedule are plans, other sub-folders are collections, and loose `.zwo` files in the root are single workouts.
+2. **Your numbers.** Under **Settings → Rider** enter FTP, max heart rate and weight. Weight is needed for W/kg, VO2max and virtual shifting.
+3. **Devices.** Click the **Bluetooth** button in the top bar and connect your trainer, heart-rate strap and, optionally, a Zwift controller. They reconnect automatically next time.
+4. **Ride.** Pick a plan and press **Start plan**, or switch to **Workouts** and ride anything. The workout starts when you pedal, or press **Space**.
 
-   Settings has four tabs: **Rider** (FTP, heart rate, weight, bests, zones), **Riding** (sounds, behaviour during a ride, virtual shifting), **Connections** (profile sync, Garmin, other platforms) and **App** (appearance, language, workouts folder, devices, updates). Every change is saved as soon as you make it; a number is saved when you leave the field, and a value outside its range shows an error under the field instead. **Done**, ✕, Esc or a click outside just close the dialog.
-3. **Devices.** Click the **Bluetooth** button in the top bar and connect your trainer, heart-rate strap and (optionally) a Zwift controller. They reconnect automatically next time.
-4. **Ride.** Pick a plan and press **Start plan**, or switch to **Workouts** and ride anything. The workout starts as soon as you pedal, or press **Space**.
+No hardware at hand? Each device dialog has **Use simulator**.
 
-> No hardware at hand? Each device dialog has **Use simulator**, so you can try every screen.
+Settings has four tabs: **Rider** (FTP, heart rate, weight, bests, zones), **Riding** (sounds, ride behaviour, virtual shifting), **Connections** (profile sync, Garmin, other platforms) and **App** (appearance, language, workouts folder, devices, updates). Changes save as you make them; a number saves when you leave the field, and an out-of-range value shows an error instead. **Done**, ✕, Esc or a click outside just close the dialog.
 
 ---
 
 ## The top bar
 
-| Left | | Right |
-|---|---|---|
-| Logo · **Plans / Workouts / FTP Tests** | | **Devices** · **Ride history** · **Settings** · **Rider avatar** |
+Left: logo and the **Plans / Workouts / FTP Tests** switch. Right: **Devices**, **Ride history**, **Settings** and the **rider avatar**.
 
-- **Devices** (Bluetooth icon): three small dots show trainer, heart rate and shifter. Green means connected, amber means connecting, grey means off. Click it for a menu with each device and *Connect / Change*. Click it to see each device; devices that report their **battery** (most heart-rate straps and controllers, a few trainers) show a small battery icon with the percentage there: green from 40 %, amber from 16 %, red at 15 % or less, so you know when to charge or change the battery. Devices that do not report it show nothing.
+- **Devices** (Bluetooth icon): three dots show trainer, heart rate and shifter (green connected, amber connecting, grey off). The menu lists each device with *Connect / Change*. Devices that report a battery (most heart-rate straps and controllers, a few trainers) show it there: green from 40 %, amber from 16 %, red at 15 % or less.
 - **Ride history** (calendar with a check mark): every ride, with uploads and FIT export.
-- **Settings** (gear): rider data, app preferences (including light/dark appearance) and connections.
-- **Avatar**: switch, add or edit riders.
+- **Settings** (gear): rider data, app preferences (including light/dark) and connections.
+- **Avatar:** switch, add or edit riders.
 
-During a workout the bar stays the same. The mode switch is replaced by the workout title, its plan and the ERG status, and ride history is unavailable until the ride ends. During a ride the bar also shows a compact-view icon. The optional Compact view hides this bar until you return to the full view.
+During a workout the bar stays the same, except that the mode switch shows the workout title, its plan and the ERG status, ride history is unavailable until the ride ends, and a compact-view icon appears.
 
 ---
 
 ## Plans
 
-- **Plans and collections:**
-  - A sub-folder whose files span **at least two weeks** (`Week01_…`, `Week02_…`) is a **plan**.
-  - Everything else (all files in one week, e.g. WhatsOnZwift collections exported as `Week01_Day01…Day39`, or no week numbering) is a **collection**. Collections appear only under **Workouts**, without fake week/day labels.
-  - A folder you have already started as a plan stays a plan.
-  - **Override** in the folder's **⋯** menu: *Use as plan* (Workouts → collection) or *Show as collection* (plan page). The choice is stored per rider and synced.
-- **Order:** workouts are sorted by file name with natural sort, so `Week01_Day01_…`, `Week01_Day02_…`, `Week02_Day01_…` are grouped by week and day.
-- **Description:** a Markdown file in the folder (`<folder>.md`, else `README.md`, else the only `.md`) is shown on the plan page and in the Workouts folder header. It supports headings, bold/italic, links (open in your browser), lists, quotes and tables; long texts start as a short preview (about 300 characters, cut at a sentence end) with *Show more* to expand the full text. Plan cards show its first sentence.
-- **Start plan** makes it the active plan. The home screen then always shows **Up next** with its profile, duration and TSS.
-- **In order.** Only the next workout can be started; later ones are locked.
-- **Skip** marks the next workout as skipped and moves on. **Undo skip** brings it back.
-- **Done.** Finishing a workout marks it done and offers **Start next now**.
-- **Ending early** gives you the choice of **Save as done**, **Count as skipped** or **Discard**.
-- **Switching plans** keeps the progress of the old plan, so you can return to it.
-- **⋯ menu** on the plan page: *Reset progress…*, *Show in Finder*, *Show as collection (Workouts only)*, *Move plan folder to Trash…*.
+- **Plan or collection:** a sub-folder whose files span **at least two weeks** (`Week01_…`, `Week02_…`) is a **plan**. Everything else (one week only, e.g. WhatsOnZwift collections exported as `Week01_Day01…Day39`, or no week numbering) is a **collection**, shown only under **Workouts** without week/day labels. A folder you have started as a plan stays one.
+- **Override:** in the folder's **⋯** menu, *Use as plan* or *Show as collection*. Stored per rider and synced.
+- **Order:** natural sort by file name, so `Week01_Day01_…`, `Week01_Day02_…`, `Week02_Day01_…` group by week and day.
+- **Description:** a Markdown file in the folder (`<folder>.md`, else `README.md`, else the only `.md`) is shown on the plan page and in the Workouts folder header. It supports headings, emphasis, links, lists, quotes and tables, and long texts start as a short preview with *Show more*.
+- **Start plan** makes it the active plan. The home screen then shows **Up next** with profile, duration and TSS.
+- **In order:** only the next workout can be started.
+- **Skip** marks it skipped and moves on; **Undo skip** brings it back.
+- **Done:** finishing a workout marks it done and offers **Start next now**.
+- **Ending early** offers **Save as done**, **Count as skipped** or **Discard**.
+- **Switching plans** keeps the old plan's progress.
+- **⋯ menu** on the plan page: *Reset progress…*, *Show in Finder*, *Show as collection*, *Move plan folder to Trash…*.
 
 ---
 
@@ -143,85 +120,99 @@ During a workout the bar stays the same. The mode switch is replaced by the work
 
 Browse every workout across all folders and ride anything. Free rides are saved to your history but never change plan progress.
 
-- **Sidebar** (left): *All workouts*, *★ Favorites*, *Recently ridden*, *Single workouts*, then **Plans** and **Collections**. A selected folder shows its description and a *Plan* / *Collection* badge.
+- **Sidebar:** *All workouts*, *★ Favorites*, *Recently ridden*, *Single workouts*, then **Plans** and **Collections**. A selected folder shows its description and a *Plan* / *Collection* badge.
 - **Search** by title, name or file name.
 - **Length filter:** ≤ 30, 30–60, 60–90 or > 90 minutes.
-- **Intensity filter:** Z1 Recovery, Z2 Base endurance, Z3 Tempo, Z4 Threshold, Z5 VO2max. Several can be active at once (see [Zones & intensity](#zones--intensity)).
+- **Intensity filter:** Z1 to Z5, several at once (see [Zones & intensity](#zones--intensity)).
 - **Sort** by name, shortest, longest, hardest (TSS), intensity or recently ridden.
-- **Each row** shows the workout profile, duration, intensity tag and estimated TSS. Click it for details, or use **Ride**. For a workout that belongs to a plan, the details also offer **Open plan** next to *Ride*.
-- **Favorites:** star ☆ a workout. Favorites can be reordered with ↑ / ↓ inside the *Favorites* collection.
-- **Row ⋯ menu:** favorite, *Show in Finder*, *Open its folder*, *Move workout to Trash…*.
-- **Folder ⋯ menu** (next to the folder title): *Show in Finder*, *Use as plan…* / *Show as collection*, *Move folder to Trash…*.
+- **Each row** shows profile, duration, intensity tag and estimated TSS. Click for details or use **Ride**; for a workout in a plan, the details also offer **Open plan**.
+- **Favorites:** star ☆ a workout; reorder with ↑ / ↓ inside *Favorites*.
+- **⋯ menus:** on a row, favorite, *Show in Finder*, *Open its folder*, *Move workout to Trash…*; on a folder, *Show in Finder*, *Use as plan…* / *Show as collection*, *Move folder to Trash…*.
 
-Deleting always goes to the system Trash (the Recycle Bin on Windows), so it can be restored. Favorites and plan progress that point to deleted files are cleaned up; ride history stays.
+Deleting goes to the system Trash (Recycle Bin on Windows), so it can be restored. Favorites and plan progress that point to deleted files are cleaned up; ride history stays.
 
 ---
 
-## FTP Tests
+## FTP tests
 
 | Test | Protocol | Result |
 |---|---|---|
-| **Ramp Test** | 5 min at 100 W, then +20 W per minute in ERG until you can't hold it; then an automatic 5-minute cool-down | 75 % of the best 1-minute power |
+| **Ramp Test** | 5 min at 100 W, then +20 W per minute in ERG until you can't hold it, then an automatic 5-minute cool-down | 75 % of the best 1-minute power |
 | **Ramp Test Lite** | the same with +10 W per minute, for beginners and lighter riders | 75 % of the best 1-minute power |
 | **20-Minute Test** | Allen & Coggan: warm-up with spin-ups, 5 min all-out, recovery, 20 min all-out | 95 % of the 20-minute average |
 | **8-Minute Test** | 2 × 8 min all-out with 10 min recovery (CTS) | 90 % of the better effort |
 | **Power Profile Test** | 8 s sprint, then 1, 5 and 20 min maximal efforts | FTP, 5 s / 1 / 5 / 20 min bests, Critical Power and W′ |
 
-- **ALL OUT efforts** are ridden off ERG: the trainer simulates a flat road and you set the power with your gears, or with virtual shifting. A pacing target is still shown.
-- **Live pacing:** in efforts of 5 minutes or longer, the Current segment panel shows your running effort average and, for the 8- and 20-minute efforts, the estimated FTP so far. After the first minute it warns "too fast · ease off" when you're more than 10 % above the pacing target.
-- **End of the ramp:** when you can't hold the target any more (cadence below 30 rpm or power below half the target for 10 s), the ramp ends there and the trainer switches to an easy 5-minute cool-down. Press ⏹ any time to see your result.
-- **During measured parts** (the ramp and the all-out efforts) auto-pause is off, so stopping counts as 0 W instead of being left out, and skipping is blocked. Skipping before an effort (e.g. to shorten the warm-up) is fine; a jump never lands in the middle of an effort.
-- **How the result is measured:** the ramp uses the best 60 seconds of the ramp itself (never the warm-up). The 20- and 8-minute tests use only the all-out effort, and it counts as completed when at least 95 % of it was ridden.
-- **Effort not completed:** if you stop or skip an all-out effort early (or a ramp test before its first full minute), there is no FTP — an incomplete effort would give a value that's too low. The summary says how much you rode, your FTP stays unchanged, and your power bests from the ride are still saved. The test history marks it *Not completed*.
-- **Plausibility check:** if the new FTP differs from your current one by more than 15 %, the result shows a note (trainer calibration, which device measured the power, fatigue) before you apply it.
-- **The result** appears as "Your FTP is ~X W". **Use X W as my FTP** applies it and recalculates the zones in watts. Personal bests (5 s, 1, 5, 20 min) are updated automatically.
-- **Test history** lists every result with its change against the previous FTP and a small FTP trend chart. An older result can still be applied later.
-- **Tests in your library:** test-themed ZWO files (FTP Test, Ramp Test, Critical Power, Best effort, Benchmarking, …) are recognised automatically, including inside plans. Following Zwift's convention, their free-ride blocks are the all-out efforts. Ramp-test files that lack the actual ramp (a known WhatsOnZwift export issue) start the built-in Ramp Test instead. A ramp in a library file is evaluated like the built-in one: only its own steps count (75 % of the best ramp minute, never a harder warm-up), and when you can't hold it, the 5-minute cool-down follows.
-- **W/kg and VO2max** need your weight. VO2max is estimated from your 8-minute power with the ACSM equation (`10.8 · W/kg + 7` ml/kg/min), or after a ramp test from peak power (Hawley & Noakes, `0.01141 · W + 0.435` L/min).
+**During a test**
+- **All-out efforts** are ridden off ERG: the trainer simulates a flat road and you set the power with your gears. A pacing target is still shown, and in efforts of 5 minutes or longer the Current segment panel shows your running average and warns "too fast · ease off" when you're more than 10 % above it.
+- **End of the ramp:** when you can't hold the target (cadence below 30 rpm or power below half the target for 10 s), the trainer switches to an easy 5-minute cool-down. Press ⏹ any time to see your result.
+- **Measured parts:** auto-pause is off and skipping is blocked, so stopping counts as 0 W.
+
+**Results**
+- **Measured:** the ramp uses the best 60 seconds of the ramp itself, never the warm-up. The 20- and 8-minute tests use only the all-out effort, which counts when at least 95 % of it was ridden. Otherwise there is no FTP (it would come out too low), your FTP stays unchanged and the history marks the test *Not completed*.
+- **Plausibility:** if the new FTP differs by more than 15 %, a note appears before you apply it.
+- **Applying:** **Use X W as my FTP** recalculates the zones in watts and updates your personal bests. An older result can still be applied later.
+- **History:** every result with its change against the previous FTP and a small trend chart.
+- **W/kg and VO2max** need your weight. VO2max comes from 8-minute power (ACSM: `10.8 · W/kg + 7` ml/kg/min) or, after a ramp, from peak power (Hawley & Noakes: `0.01141 · W + 0.435` L/min).
+
+**Tests in your library:** test-themed ZWO files (FTP Test, Ramp Test, Critical Power, Best effort, Benchmarking, …) are recognised automatically, including inside plans. Their free-ride blocks are the all-out efforts (Zwift's convention). Ramp-test files that lack the actual ramp (a known WhatsOnZwift export issue) start the built-in Ramp Test instead.
 
 ---
 
 ## Riding a workout
 
-**Display:** three panels above the workout chart, a quarter, half and quarter of the width: **Live** (the watt gauge with target and actual power, below it power, cadence, speed and heart rate with small bars), **Current segment** (the target in watts in the ring, with % of FTP below it; next to it target power, target cadence, segment time with progress bar and remaining) and **Next segment** (just the values: watts, % of FTP, duration and, if set, target cadence). The intensity control sits in the control bar next to play/pause. The chart has a watt axis, dims the segments you have finished (the current one stays bright), and draws your live power, cadence and heart-rate lines (each can be switched on or off; the choice is remembered per rider). The workout clock (elapsed and remaining) and all readouts scale up in full screen.
+**Display:** three panels above the workout chart, a quarter, half and quarter of the width.
+- **Live:** the watt gauge with target and actual power, then power, cadence, speed and heart rate with small bars.
+- **Current segment:** the target in watts in the ring with % of FTP below it, plus target power, target cadence, segment time with progress bar and time remaining.
+- **Next segment:** watts, % of FTP, duration and, if set, target cadence.
 
-**Compact view for videos:** click the **compact view icon** in the top bar (just left of your rider icon, visible during a ride) or press **C** to keep zwoTrainer beside or above YouTube or another video player. The first time it is a **960 × 195** horizontal bar; afterwards it reopens at the size and position you last used (a remembered position that is no longer on a connected screen is dropped). It can be resized down to **240 × 150**. It shows what you need while riding: the **power gauge** with your target (a ramp shows its range, the target is coloured by its zone), your **heart rate and cadence** as large numbers, and the **whole workout as a graph** with a line where you are, **Now** (the current target and the time left in this segment) and **Next** (the next target and when it starts). Narrow windows stack these: gauge, target, heart rate and cadence on top, the graph below (time runs down), and play/pause, stop and the workout time left at the bottom. Wide windows (from 640 px, and at least 1.5 times as wide as high) put play/pause, stop and expand in a rail on the left, the live numbers next to it and the graph (time runs across) on the right; on a large screen the graph takes the extra width (up to about 1,400 px, beyond that the free space sits between the live numbers and the graph), and the wide bar has a fixed height of 195 px, which keeps its values readable from a distance. The tall column is 240–320 px wide. Switch between them with the layout button next to the expand button, or with **V**; each comes back at the size it had last. When the window gets too small things give way in this order: the graph (below 360 px high), then play/pause and the workout time left move into the title row (below 244 px high), and in a tiny window the heart rate and cadence (below 190 px high). Long values, such as a ramp of 100–1000 W or hours of workout time left, shrink to fit. Virtual gear buttons appear in free-ride/all-out segments (keyboard and controller still shift when the window is too short for them). Drag the window by any free spot (the title row, the empty parts of the rail and of the panels); the dot in the vertical layout shows the trainer connection (details on hover). The normal toolbar, dashboard and chart are hidden only in Compact view. Keyboard and controller shortcuts, trainer control, sounds and recording keep working. **Return to full view** (the expand button or **C** again) restores the previous window size and maximization, and position where the window manager supports it; stop/result dialogs expand automatically. Exit native full screen before switching views. There is no embedded video player or always-on-top behavior.
+The intensity control sits next to play/pause. The chart has a watt axis, dims finished segments and draws your live power, cadence and heart-rate lines (each can be switched off; remembered per rider). The clock and readouts scale up in full screen.
 
-**Starting:** the workout starts after about 2 seconds of pedalling, or press **Space** / ▶.
+**Start:** the workout starts after about 2 seconds of pedalling, or press **Space** / ▶.
 
-**Cadence check:** when a segment has a cadence target, the Live panel shows it next to your cadence (`86 / 90 rpm`) and the Current segment panel shows it as *Target cadence*. The bar marks the target and turns **green** when you're on it, **amber** 5–10 rpm off and **red** beyond 10 rpm (the number turns red too). The next segment's target cadence is shown in its panel, so you can prepare.
+### Compact view for videos
 
-**Trainer control:**
-- **ERG** follows every target second by second, including ramps. Targets are kept inside the power range the trainer reports (for example its minimum resistance), so it never rejects one.
-- **Intensity** (− / + in the control bar or ↑ / ↓ for ±1 %, with Shift ±10 %) scales all targets of the workout.
-- **Free-ride and all-out segments** release ERG: you ride with your gears, or with virtual gears.
+Click the **compact view icon** in the top bar (left of your avatar, during a ride) or press **C** to keep zwoTrainer beside or above a video player. It opens as a **960 × 195** bar, then at the size and position you last used, and can shrink to **240 × 150**.
 
-**Coach line:** a single line below the Current segment values shows one short message at a time and stays empty otherwise. The workout's own text events come first. Then, in this order: pacing warnings (starting a long test effort too fast, or power fading more than 15 % below the ERG target for 5 seconds), cadence more than 5 rpm off its target for 5 seconds (amber up to 10 rpm, red beyond; it says "Back on target" once you're back for 3 seconds), and cues in hard segments (Z4 and up, all-out and max efforts: at the start, at halfway and in the last 30 seconds). Each message stays at least 4 seconds. The automatic hints can be switched off under Settings → Riding (*Coach hints*); the workout's own messages are always shown.
+- **Shows:** power gauge with target (a ramp shows its range), heart rate and cadence as large numbers, and the whole workout as a graph with **Now** and **Next** targets.
+- **Layouts:** a wide bar (from 640 px wide) or a tall column (240–320 px wide). Switch with the layout button or **V**.
+- **Small windows** drop the graph first, then move play/pause into the title row, then hide heart rate and cadence. Long values shrink to fit.
+- **Unchanged:** shortcuts, controllers, trainer control, sounds and recording keep working. Virtual gear buttons appear in free-ride and all-out segments.
+- **Back to full view:** the expand button or **C** restores the previous size and position. Stop and result dialogs expand automatically. Exit native full screen first.
 
-**Auto-pause:** after 3 seconds without power or cadence the workout pauses, and it resumes as soon as you pedal again. You can switch this off under Settings → Riding.
+There is no embedded video player and no always-on-top behaviour.
 
-**Sounds:** a countdown in the last 3 seconds before each change of target. Three rising notes mean the power goes up, three falling notes that it goes down, and the plain beep that it stays about the same (within 3 % FTP) or that the next segment has no fixed target. All-out and max efforts count as going up. When a workout is ridden to the end, a short chime plays (not after FTP tests, and not when you stop early). Each can be switched off under Settings → Riding → Sounds (*Countdown beeps*, with the rising/falling notes below it, and *Chime*).
+### During the ride
 
-**Keyboard:**
+- **ERG** follows every target second by second, including ramps. Targets stay inside the power range the trainer reports, so it never rejects one.
+- **Intensity:** − / + in the control bar, or ↑ / ↓ for ±1 % (Shift ±10 %), scales all targets.
+- **Free-ride and all-out segments** release ERG: you ride with your gears or virtual gears.
+- **Cadence check:** when a segment has a cadence target, the Live panel shows it next to your cadence (`86 / 90 rpm`). The bar turns **green** on target, **amber** 5–10 rpm off and **red** beyond 10 rpm. The next segment's target shows in its panel so you can prepare.
+- **Auto-pause:** after 3 seconds without power or cadence the workout pauses and resumes when you pedal. Switch it off under Settings → Riding.
+- **Coach line:** one short message at a time under the Current segment values: the workout's own text events first, then pacing warnings, cadence off target for 5 s, and cues in hard segments (Z4 and up). Switch the automatic hints off under Settings → Riding (*Coach hints*).
+- **Sounds:** a countdown in the last 3 seconds before each target change: three rising notes mean power goes up, three falling notes down, a plain beep about the same (within 3 % FTP). A chime plays when a workout is ridden to the end (not after FTP tests). Switch each off under Settings → Riding.
+- **Feedback:** every button press shows a short confirmation. The display stays awake and App Nap is disabled so ERG keeps updating in the background.
+
+### Keyboard
 
 | Key | Action |
 |---|---|
 | Space | start / pause |
 | ← / → | previous / next segment |
-| ↑ / ↓ | intensity ±1 % (with Shift ±10 %) |
-| + / − | shift gear (virtual gears); during free-ride segments ↑ / ↓ shift too |
-| C | toggle Compact view (full ⇄ compact; Ctrl/Cmd + C still copies) |
-| V | in Compact view: switch between the wide bar and the tall column |
+| ↑ / ↓ | intensity ±1 % (Shift ±10 %) |
+| + / − | shift gear (virtual gears); in free-ride segments ↑ / ↓ shift too |
+| C | toggle Compact view (Ctrl/Cmd + C still copies) |
+| V | in Compact view: switch between wide bar and tall column |
 | Esc | end workout (closes an open menu instead) |
-| Tab, then Space / Enter | press the ride button you moved to with Tab (Space no longer pauses until you click elsewhere); a button you clicked with the mouse keeps Space = start / pause |
+| Tab, then Space / Enter | press the ride button you tabbed to (Space no longer pauses until you click elsewhere); a button clicked with the mouse keeps Space = start / pause |
 
-Menus work with the keyboard too: arrow keys move between items, Esc closes the menu. Screen readers announce notices (uploads, sync, errors) and the short ride hints (gear, intensity, auto-pause); every ride button has a spoken name, the play button says whether it starts, pauses or resumes, and the chart line toggles and the power gauge (watts ↔ % FTP) report whether they are on. Recording stays at one sample per second even when the window is hidden or minimised.
+Menus work with arrow keys and Esc. Screen readers announce notices (uploads, sync, errors) and short ride hints (gear, intensity, auto-pause); every ride button has a spoken name. Recording stays at one sample per second even when the window is hidden or minimised.
 
-If you switch to another app during a ride (a video, a browser) and zwoTrainer might still have the keyboard focus, turn off **Keyboard shortcuts while riding** under Settings → Riding. The on-screen buttons and controllers keep working.
+If you switch to another app during a ride and zwoTrainer might still have keyboard focus, turn off **Keyboard shortcuts while riding** under Settings → Riding. On-screen buttons and controllers keep working.
 
-**Controller buttons** (Zwift Ride / Play / Click):
+### Controller buttons
 
-| Button | Action |
+| Zwift Ride / Play / Click | Action |
 |---|---|
 | Shift + / − | free-ride segments: virtual gear; ERG segments: intensity ±1 % |
 | ▲ / ▼ | intensity ±1 % |
@@ -229,11 +220,11 @@ If you switch to another app during a ride (a video, a browser) and zwoTrainer m
 | A, Y, Power-up | start / pause |
 | Z | switch watts ↔ % FTP |
 
-**OpenBikeControl buttons:** Shift Up / Down work like Shift + / −, Increase / Decrease Difficulty like ▲ / ▼, Skip / Previous Interval and Right / Left like ▶ / ◀, Up / Down like ▲ / ▼, Select like A. When one press sends several of them (e.g. Shift Up + Increase Difficulty + Select), only one action runs: shift in free-ride segments, difficulty in ERG segments, otherwise the interval skip or navigation button.
+**OpenBikeControl:** Shift Up / Down work like Shift + / −, Increase / Decrease Difficulty like ▲ / ▼, Skip / Previous Interval and Right / Left like ▶ / ◀, Up / Down like ▲ / ▼, Select like A. When one press sends several (e.g. Shift Up + Increase Difficulty + Select), only one action runs: shift in free-ride segments, difficulty in ERG segments, otherwise interval skip or navigation.
 
-Every button press shows a short confirmation on screen. The display stays awake during a ride, and App Nap is disabled so ERG keeps updating in the background.
+### Finishing
 
-**Finishing:** the summary shows time, average power, NP, average HR, cadence and energy. Below that, the Garmin upload status (or a manual import) and **Save .fit**. In a plan, the next workout is offered.
+The summary shows time, average power, NP, average HR, cadence and energy, then the Garmin upload status (or a manual import) and **Save .fit**. In a plan, the next workout is offered.
 
 ---
 
@@ -243,11 +234,11 @@ Every button press shows a short confirmation on screen. The display stays awake
 |---|---|
 | Smart trainer | Bluetooth **FTMS** (Zwift Hub, Wahoo KICKR, Tacx, Elite, Saris, JetBlack, …), with ERG and flat-road simulation |
 | Power meter | Bluetooth **Cycling Power**, power only (no ERG) |
-| Heart rate | any Bluetooth heart-rate strap or watch broadcasting HR |
+| Heart rate | any Bluetooth strap or watch broadcasting HR |
 | Controllers | **Zwift Ride**, **Zwift Click (v1/v2)**, **Zwift Play**, **OpenBikeControl** controllers and bridge apps (e.g. BikeControl) over Bluetooth |
 
-- **Pairing:** pair from the **Devices** menu → *Connect*. Devices are remembered per rider and reconnect at launch and after dropouts (controllers too: for about a minute after one drops, e.g. when it falls asleep).
-- **Retry auto-connect:** if the app started before your trainer or heart-rate strap was awake, open the **Devices** menu and click **Retry auto-connect**. It connects every saved device that is still off (with two controllers, only the missing one) and leaves connected devices alone. The button shows only while a saved device is off and no connection attempt is running.
+- **Pairing:** **Devices** menu → *Connect*. Devices are remembered per rider and reconnect at launch and after dropouts (controllers for about a minute after one drops, e.g. when it falls asleep).
+- **Retry auto-connect:** if the app started before your trainer or strap was awake, open the **Devices** menu and click it. It connects every saved device that is still off and leaves connected ones alone. It shows only while a saved device is off and no attempt is running.
 - **One connection only:** close Zwift and other training apps first, because most trainers and controllers accept just one connection.
 
 ---
@@ -256,15 +247,15 @@ Every button press shows a short confirmation on screen. The display stays awake
 
 **Virtual shifting** gives you gears in free-ride segments and all-out efforts, even on a trainer without real shifting.
 
-- **How it works:** a virtual 24-speed drivetrain (ratio range and start gear configurable). Cadence × gear ratio gives a virtual speed, and road physics (rolling resistance and air drag, using your weight) turns that into the watts the trainer holds in ERG. Speed and distance in the FIT file follow the virtual speed.
-- **Choice per ride:** the Ready screen asks *Real gears* or *Virtual gears easy / medium / hard*. The default is set under Settings → Riding → Virtual shifting (gear range and start gear under *Advanced*).
+- **How it works:** a virtual 24-speed drivetrain (ratio range and start gear configurable). Cadence × gear ratio gives a virtual speed, and road physics (rolling resistance and air drag, using your weight) turns that into the watts the trainer holds in ERG. Speed and distance in the FIT file follow it.
+- **Per ride:** the Ready screen asks *Real gears* or *Virtual gears easy / medium / hard*. The default is under Settings → Riding → Virtual shifting (gear range and start gear under *Advanced*).
 - **Shifting:** with a Zwift or OpenBikeControl controller, the keyboard (`+` / `−`) or the on-screen − / + buttons.
 
-**Controllers:**
+**Controllers**
 - **Zwift Ride:** connect only the **left** controller; it relays the right one's buttons.
 - **Zwift Click v2:** unlock it once in the Zwift phone app (connect, wait about 90 s, close Zwift), or it stops after about a minute.
-- **OpenBikeControl:** controllers that advertise the open [OpenBikeControl](https://github.com/OpenBikeControl/openbikecontrol-protocol) Bluetooth service, and apps like BikeControl that bridge other controllers to it, show up in the Shifter dialog. zwoTrainer tells the device which buttons it uses after connecting.
-- **Button test:** the Shifter dialog has a live *button test* showing every press and the action it triggers.
+- **OpenBikeControl:** controllers advertising the open [OpenBikeControl](https://github.com/OpenBikeControl/openbikecontrol-protocol) Bluetooth service, and apps like BikeControl that bridge other controllers to it, show up in the Shifter dialog. zwoTrainer tells the device which buttons it uses after connecting.
+- **Button test:** the Shifter dialog shows every press and the action it triggers.
 
 ---
 
@@ -272,16 +263,21 @@ Every button press shows a short confirmation on screen. The display stays awake
 
 Every finished ride is saved as a **FIT file** with one lap per workout segment, including power, cadence, heart rate, speed/distance, NP, IF and TSS. **Ride history** lists all rides with *Garmin* upload and *FIT* export.
 
-**Garmin Connect** (Settings → Connections):
-- **Sign in:** click **Sign in to Garmin**. Garmin's own login page opens in a small window, MFA supported. zwoTrainer stores only the resulting session token for that rider, never your password.
+### Garmin Connect
+
+Settings → Connections.
+
+- **Sign in** with **Sign in to Garmin**. Garmin's own login page opens in a small window, MFA supported. zwoTrainer stores only the resulting session token for that rider, never your password.
 - **Upload mode:** *Off*, *Manual* (a button after each ride and in the history) or *Automatic*.
-- **Activity name:** every upload is named after the workout you rode (e.g. *“5x6 Sweet Spot 1B”*), with plan and week/day in the description. Garmin would otherwise call it *“Indoor Cycling”*. The FIT file also carries the workout name and its segments (like a structured workout ridden on a Garmin), which tools that read FIT files can use. Intervals.icu uploads are named the same way.
-- **Edge identity:** the uploaded file identifies as a Garmin Edge, so Garmin computes Training Effect and VO2max and counts the ride for challenges.
-- **Unofficial interface:** this is the same approach as the Garmin Connect mobile app, not Garmin's official partner API, so it may change. If it fails, the **manual FIT import** fallback saves the file, shows it in Finder and opens Garmin's import page.
+- **Activity name:** every upload is named after the workout (e.g. *“5x6 Sweet Spot 1B”*), with plan and week/day in the description; Garmin would otherwise call it *“Indoor Cycling”*. Intervals.icu uploads are named the same way.
+- **Edge identity:** the file identifies as a Garmin Edge, so Garmin computes Training Effect and VO2max and counts the ride for challenges.
+- **Unofficial interface:** this is the approach of the Garmin Connect mobile app, not Garmin's partner API, so it may change. If it fails, **manual FIT import** saves the file, shows it in Finder and opens Garmin's import page.
 
-**Strava:** zwoTrainer has no direct Strava connection, because since 2026 Strava requires a paid subscription from the owner of an API app. Link Strava to your Garmin account once (Garmin Connect → Settings → Connected Apps → Strava) and every ride uploaded to Garmin Connect goes on to Strava. As a fallback, use **FIT** in the history and drop the file on strava.com/upload.
+### Strava
 
-**Strava doesn't get the workout name.** Garmin passes each ride to Strava once, right after the upload, before zwoTrainer renames it. Garmin also ignores the workout name in the FIT file. So Strava gives the ride its own default name (e.g. *“Morning Ride”*) and your default bike, while the type is correctly *Indoor Cycling*. Rename it in Strava by hand, or let a renaming service such as Strautomator set it from the workout name in the FIT file (its Garmin integration is a paid feature).
+zwoTrainer has no direct Strava connection, because since 2026 Strava requires a paid subscription from the owner of an API app. Link Strava to your Garmin account once (Garmin Connect → Settings → Connected Apps → Strava) and every ride uploaded to Garmin goes on to Strava. As a fallback, use **FIT** in the history and drop the file on strava.com/upload.
+
+Strava doesn't get the workout name: Garmin passes each ride on right after the upload and ignores the name in the FIT file, so Strava uses its own default (e.g. *“Morning Ride”*) and your default bike. The type is correctly *Indoor Cycling*. Rename it by hand or with a service such as Strautomator (its Garmin integration is a paid feature).
 
 ### Intervals.icu & COROS
 
@@ -290,35 +286,35 @@ Settings → Connections → **More platforms**.
 | Platform | How | Set-up |
 |---|---|---|
 | **Intervals.icu** | **Automatic upload** (official API) | intervals.icu → Settings → *Developer Settings* → create an API key and paste it into zwoTrainer. Upload mode: Off / Manual / Automatic. |
-| **COROS** | **Manual import** into the Training Hub | Turn on *Show import button*. After a ride, zwoTrainer saves it as a **ZIP** (Training Hub only accepts ZIPs), shows it in Finder and opens the Training Hub; there choose *Activity List → Import Data*. |
+| **COROS** | **Manual import** into the Training Hub | Turn on *Show import button*. After a ride, zwoTrainer saves a **ZIP** (Training Hub only accepts ZIPs), shows it in Finder and opens the Training Hub; there choose *Activity List → Import Data*. |
 
 - **After a ride:** the summary lists Garmin, Intervals.icu and COROS with *Upload* or *Import…*; automatic uploads start by themselves.
-- **Short rides:** a ride shorter than 15 minutes (a test spin, a stopped workout) is not uploaded automatically. The summary asks first: *Upload* sends it everywhere it would have gone automatically, *Don’t upload* leaves it on your computer (you can still use the *Upload* buttons later, also from the ride history).
-- **In the ride history:** a ✓ marks where a ride went, and the row's **⋯** menu sends older rides to the others.
+- **Short rides:** a ride under 15 minutes (a test spin, a stopped workout) isn't uploaded automatically. The summary asks first: *Upload* sends it everywhere it would have gone, *Don't upload* keeps it on your computer (you can still upload later, also from the history).
+- **In the history:** a ✓ marks where a ride went, and the row's **⋯** menu sends older rides to the others.
 
-Other platforms (Wahoo, TrainingPeaks, Suunto) only accept uploads from approved partner apps, so zwoTrainer doesn't offer them. TrainingPeaks and many others can be linked in Garmin Connect, which then forwards your rides.
+Wahoo, TrainingPeaks and Suunto only accept uploads from approved partner apps, so zwoTrainer doesn't offer them. TrainingPeaks and many others can be linked in Garmin Connect, which then forwards your rides.
 
 ---
 
-## Riders (profiles)
+## Riders
 
-**Per rider:**
+Each rider has their own:
 - avatar (colour and initials or an emoji), FTP, max heart rate, weight, zone limits and power bests
 - active plan, done/skipped marks, favorites, ride history and FTP tests
-- theme, language, beeps and sounds, auto-pause, coach hints, virtual-shifting defaults, workouts folder and paired devices
+- theme, language, sounds, auto-pause, coach hints, virtual-shifting defaults, workouts folder and paired devices
 - Garmin sign-in and upload mode
 
-**Managing riders:**
+**Managing riders**
 - **Switch** with the avatar in the top bar. With more than one rider, zwoTrainer asks **Who's riding?** at launch.
-- **Edit** changes the name, colour (8 presets or any custom colour) and emoji.
-- **A new rider** takes over the workouts folder, theme, language and devices from the current rider; everything else starts from defaults.
+- **Edit** changes name, colour (8 presets or any custom colour) and emoji.
+- **A new rider** takes the workouts folder, theme, language and devices from the current rider; everything else starts from defaults.
 - **Deleting a rider** removes their settings, progress, history, stored rides and Garmin sign-in.
 
 ---
 
 ## Profile sync
 
-Keep riders in sync across Macs through a folder your cloud app already syncs. No accounts or API keys are involved. Set it up under **Settings → Connections → Profile sync**.
+Keep riders in sync across computers through a folder your cloud app already syncs, with no accounts or API keys. Set it up under **Settings → Connections → Profile sync**.
 
 | Option | Folder used |
 |---|---|
@@ -328,21 +324,21 @@ Keep riders in sync across Macs through a folder your cloud app already syncs. N
 | Other folder… | any folder another app keeps in sync |
 
 - **Synced:** all riders, including avatar, FTP and zones, weight, plan progress, favorites, ride history, FTP tests and the ride FIT files.
-- **Stays on each Mac:** paired devices, the workouts folder, the Garmin FIT folder and the Garmin sign-in.
-- **Conflicts:** the newest change to a rider wins. Ride history and FTP tests are merged from both sides, and so is what a ride produced: plan progress (per workout), personal bests (the higher one) and the FTP of a test applied on the other computer. Unmarking a workout as done can come back from a computer that still has it marked. Deleting a rider removes it on all Macs.
+- **Stays on each computer:** paired devices, the workouts folder, the Garmin FIT folder and the Garmin sign-in.
+- **Conflicts:** the newest change to a rider wins. Ride history and FTP tests are merged from both sides, as are plan progress (per workout), personal bests (the higher one) and the FTP of a test applied elsewhere. Deleting a rider removes it everywhere.
 - **When it runs:** at launch, a few seconds after every change, when the window gets focus and every 5 minutes, never during a ride. **Sync now** forces a run.
-- **First sync on a new Mac:** an untouched default rider is replaced by the riders already in the folder, so you don't get a second "Rider 1".
 - **Layout in the cloud folder:** `zwoTrainer/profiles/<id>.json` and `zwoTrainer/activities/<id>/*.fit`.
 
 ---
 
-## Settings reference
+## Settings
 
-| Tab | Setting |
+| Tab | Settings |
 |---|---|
 | **Rider** | FTP, max heart rate, weight, personal bests (5 s / 1 / 5 / 20 min), zone limits (upper limit of Z1–Z4 in % FTP) |
-| **App** | Appearance (Match system / Light / Dark), Language (English / Deutsch / Français; applies immediately, defaults to the system language), countdown beeps (with rising/falling notes), end-of-workout chime, auto-pause, coach hints, workouts folder (*Change… / Rescan*), virtual shifting (default, difficulty, gear-ratio range, start gear), paired devices overview, *About* (version, *Check for updates automatically*, *Check now*, licence, links to the website, source code, third-party licences and Buy Me a Coffee) |
+| **Riding** | Countdown beeps (with rising/falling notes), end-of-workout chime, auto-pause, coach hints, keyboard shortcuts while riding, virtual shifting (default, difficulty, gear-ratio range, start gear) |
 | **Connections** | Profile sync, Garmin Connect (sign in, upload mode, manual FIT import folder), Strava note, more platforms (Intervals.icu API key and upload mode, COROS import button) |
+| **App** | Appearance (Match system / Light / Dark), language (English / Deutsch / Français; applies immediately), workouts folder (*Change… / Rescan*), paired devices, *About* (version, *Check for updates automatically*, *Check now*, licence, links to website, source code, third-party licences and Buy Me a Coffee) |
 
 ---
 
@@ -356,12 +352,9 @@ Keep riders in sync across Macs through a folder your cloud app already syncs. N
 | Z4 Threshold | ≤ 105 % | yellow `#FFCC3F` |
 | Z5 VO2max | > 105 % | orange `#FF6639` |
 
-The limits can be changed per rider (Settings → Rider) and drive the colours, targets and zone strip.
+Limits can be changed per rider (Settings → Rider) and drive the colours, targets and zone strip.
 
-**Workout intensity** (the Z-tag and filter in the workout list) is calculated once when a ZWO file is read:
-- It uses the standard %FTP bands above.
-- Free-ride time counts as Z2.
-- A workout's intensity is the **highest zone it spends at least 60 s and 8 % of its time in**. A VO2max session with 5 × 3 min at 115 % is Z5 even though most of it is warm-up and recovery.
+**Workout intensity** (the Z-tag and filter in the workout list) is calculated once when a ZWO file is read, with the %FTP bands above. Free-ride time counts as Z2. A workout's intensity is the **highest zone it spends at least 60 s and 8 % of its time in**, so a VO2max session of 5 × 3 min at 115 % is Z5 even though most of it is warm-up and recovery.
 
 **TSS** in the list is an estimate from the planned targets (free ride counted at 60 % FTP). The FIT file contains the TSS of what you actually rode.
 
@@ -371,12 +364,12 @@ The limits can be changed per rider (Settings → Rider) and drive the colours, 
 
 | What | Where |
 |---|---|
-| Riders, settings, progress, history, update setting | `state.json` in the app data folder: `~/Library/Application Support/dev.steffenr.zwotrainer/` (macOS), `%APPDATA%\dev.steffenr.zwotrainer\` (Windows), `~/.local/share/dev.steffenr.zwotrainer/` (Linux). If the file is ever damaged, zwoTrainer keeps it as `state.json.corrupt-<number>` next to it and starts fresh, so nothing is overwritten. |
-| Garmin session tokens (with the OAuth consumer pair, downloaded once per Garmin sign-in) and the Intervals.icu API key (owner-only file) | `…/dev.steffenr.zwotrainer/secrets.json` (never synced) |
-| Ride files | `…/dev.steffenr.zwotrainer/activities/<rider>/*.fit` (plus `*.garmin.fit`); rides started in the same minute get separate files (`…-2.fit`), and nothing ever replaces an existing ride file |
+| Riders, settings, progress, history, update setting | `state.json` in the app data folder: `~/Library/Application Support/dev.steffenr.zwotrainer/` (macOS), `%APPDATA%\dev.steffenr.zwotrainer\` (Windows), `~/.local/share/dev.steffenr.zwotrainer/` (Linux). A damaged file is kept as `state.json.corrupt-<number>` and zwoTrainer starts fresh, so nothing is overwritten. |
+| Garmin session tokens (with the OAuth consumer pair, downloaded once per Garmin sign-in) and the Intervals.icu API key | `secrets.json` in the same folder (owner-only, never synced) |
+| Ride files | `activities/<rider>/*.fit` in the same folder (plus `*.garmin.fit`). Rides started in the same minute get separate files (`…-2.fit`); nothing ever replaces an existing ride file. |
 | Workouts | your workouts folder; zwoTrainer only reads it, except *Move to Trash* |
 
-Nothing is sent anywhere except what you enable: uploads to the platforms you connect, and the cloud folder you choose for profile sync. The update check only downloads the release manifest from GitHub (switch it off under Settings → App → Updates).
+Nothing is sent anywhere except what you enable: uploads to the platforms you connect and the cloud folder you choose for profile sync. The update check only downloads the release manifest from GitHub (switch it off under Settings → App → Updates).
 
 ---
 
@@ -384,53 +377,25 @@ Nothing is sent anywhere except what you enable: uploads to the platforms you co
 
 | Problem | Try |
 |---|---|
-| Trainer / HR not found | Close Zwift, TrainerRoad and other training apps; wake the device (pedal / wet the strap); check Bluetooth permission for zwoTrainer (macOS), that Bluetooth is on (Windows) or that `bluetoothd` is running (Linux). |
-| ERG doesn't react | Make sure the trainer is connected as **trainer** (FTMS), not as a power meter; "Power only" in the ride header means no ERG. If zwoTrainer warns that another app controls the trainer and ERG doesn't react, close Zwift, the Zwift Companion app and other training apps (also on your phone or tablet), then connect the trainer again. |
+| Trainer / HR not found | Close Zwift, TrainerRoad and other training apps; wake the device (pedal, wet the strap); check Bluetooth permission (macOS), that Bluetooth is on (Windows) or that `bluetoothd` is running (Linux). |
+| ERG doesn't react | Connect the trainer as **trainer** (FTMS), not as a power meter; "Power only" in the ride header means no ERG. If zwoTrainer warns that another app controls the trainer, close Zwift, the Zwift Companion app and other training apps (also on phone or tablet), then reconnect. |
 | Zwift Ride buttons do nothing | Connect only the **left** controller; check the *button test* in the Shifter dialog; update the Ride firmware in the Zwift Companion app. |
-| Zwift Click stops after ~1 min | Unlock it once in the Zwift phone app (see above). |
-| A workout is missing | It must be a `.zwo` file inside the workouts folder; use **Settings → App → Rescan**. Files that can't be read, or describe a workout longer than 48 hours, are skipped. |
+| Zwift Click stops after ~1 min | Unlock it once in the Zwift phone app (see [Virtual shifting & controllers](#virtual-shifting--controllers)). |
+| A workout is missing | It must be a `.zwo` file inside the workouts folder; use **Settings → App → Rescan**. Unreadable files and workouts longer than 48 hours are skipped. |
 | Garmin upload fails | Sign out and in again under Settings → Connections; use *Manual FIT import* meanwhile. |
 | Intervals.icu says the key is wrong | Create a new key under intervals.icu → Settings → Developer Settings and paste it again (no spaces). |
-| COROS import fails | Pick the **.zip** file zwoTrainer highlighted, not the .fit; processing in Training Hub can take a few minutes. |
-| Update fails or "Check now" says GitHub can't be reached | Check the internet connection and try again later; you can always download the newest version from the Releases page and install it over the old one. |
-| Sync says "waiting for iCloud downloads" | iCloud hasn't downloaded the files yet; zwoTrainer asks it to and picks them up on the next run. Until then it leaves those riders alone (nothing is overwritten), and on a new computer the default "Rider 1" is only uploaded once every rider file has arrived. |
+| COROS import fails | Pick the **.zip** zwoTrainer highlighted, not the .fit; processing in Training Hub can take a few minutes. |
+| Update fails or "Check now" can't reach GitHub | Check your connection and retry later, or install the newest version from the Releases page over the old one. |
+| Sync says "waiting for iCloud downloads" | iCloud hasn't downloaded the files yet. zwoTrainer asks it to and picks them up on the next run, leaving those riders alone until then. On a new computer the default "Rider 1" is only uploaded once every rider file has arrived. |
 
 ---
 
 ## For developers
 
-- **[AGENTS.md](AGENTS.md):** architecture, commands, conventions and how to test. Read it before changing code.
-- **[DESIGN.md](DESIGN.md):** the visual design system, covering tokens, typography, components, icons and layout rules.
-
-```bash
-cd src-tauri && cargo test                                                    # unit tests
-cd src-tauri && cargo clippy --all-targets                                    # lints (keep warning-free)
-ZWO_TEST_DIR=~/Downloads/zwo cargo test scan_real_library -- --nocapture       # parse a whole library
-node --test scripts/*.test.mjs                                                # UI unit tests (compact ride, battery, html``, Markdown)
-node scripts/check-i18n.mjs                                                   # translations complete (en / de / fr)
-node scripts/check-css.mjs                                                    # CSS layers, imports, nesting
-node scripts/check-html.mjs                                                   # markup reaches the DOM only through mount()
-npx -y -p playwright node scripts/shots/run.mjs                               # retake all website screenshots (site/img)
-```
-
-The website screenshots are generated from the real interface with a sample rider and library, never taken by hand; see *Website* in [AGENTS.md](AGENTS.md).
-
-### Releases
-
-GitHub Actions builds and publishes everything (workflows in `.github/workflows/`):
-
-- **CI** (`ci.yml`, every push to `develop` and every PR): tests and clippy on Linux plus the UI checks (syntax, unit tests, translations, CSS, markup), tests on macOS and Windows.
-- **Release** (`release.yml`): *Actions → Release → Run workflow* on `develop`, pick **patch / minor / major**. It first runs the full CI (tests, clippy, JS and i18n/CSS/markup checks on all three systems) and stops if any of it fails. Then it bumps the version in `src-tauri/Cargo.toml` (the only place it lives) and `Cargo.lock`, commits `chore(release): X`, tags `vX` and pushes the commit and the tag together (atomically: both or neither). Only one release runs at a time. Needs a repository secret **`RELEASE_PAT`** (a token with *Contents: read & write*), because pushes made with the default token don't start other workflows.
-- **Build** (`build-app.yml`, on every `v*` tag): builds macOS Apple silicon + Intel, Windows x64 and Linux x64 in parallel, then publishes one GitHub release with all installers, notes generated from the commits since the previous tag and `THIRD-PARTY-NOTICES.html` (the licences of all bundled Rust crates, generated with [cargo-about](https://github.com/EmbarkStudios/cargo-about) from `src-tauri/about.toml` and `about.hbs`). Run it by hand (*Run workflow*) for a test build: the installers are attached to the run instead.
-- **In-app updates:** with the secret **`TAURI_SIGNING_PRIVATE_KEY`** in the `release` environment (open to `v*` tags only) (plus `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` if the key has one), *Build* also signs update files (`src-tauri/tauri.updater.conf.json` turns on `createUpdaterArtifacts`), and the release gets the macOS `.app.tar.gz` bundles and a `latest.json` (`scripts/updater-manifest.mjs`) that the apps read from `releases/latest/download/latest.json`. One-time setup: `scripts/setup-updater-key.sh` creates the key in `~/.tauri/`, writes the public key into `tauri.conf.json`, creates the environment and sets both secrets with `gh` (run again with the existing key, it only moves the secrets). Back the key and password up: without them, installed apps can't be updated any more. Without the secret, builds still work, just without update files.
-- **Website** (`pages.yml`): publishes the static site in `site/` to GitHub Pages as of the latest release: as the last step of each release build (the download page then shows the new version) and by hand (*Run workflow*; the optional `ref`, e.g. `develop`, deploys another branch for an urgent site fix). Site changes on `develop` go live with the next release. One-time setup: *Settings → Pages → Build and deployment → Source: GitHub Actions*.
-- **Dependabot** (`.github/dependabot.yml`): opens monthly pull requests against `develop`. All GitHub Actions updates come in one PR, minor and patch updates of the Rust crates in another, and each major crate update (e.g. `tauri`, `btleplug`) in its own. CI runs on every PR.
-
-To release by hand instead: `node scripts/sync-version.mjs 1.2.0`, commit, then `git tag -a v1.2.0 -m v1.2.0 && git push --atomic origin develop v1.2.0`. (A plain `git tag` creates a lightweight tag, which `git push --follow-tags` doesn't push, so no build would start.)
-
-If the build for a release fails, re-run *Build* for the existing tag (*Re-run failed jobs* on that run); don't run *Release* again, which would bump to the next version.
-
-Supported ZWO elements: `SteadyState`, `SolidState`, `Warmup`, `Cooldown`, `Ramp`, `IntervalsT`, `FreeRide`, `MaxEffort`, `textevent` (inside elements and at workout level) and the cadence attributes. Ramps follow Zwift's rule: `PowerLow` is the start value and `PowerHigh` the end value.
+- **[docs/development.md](docs/development.md):** build from source, commands and tests, supported ZWO elements.
+- **[docs/releasing.md](docs/releasing.md):** CI, the release workflow, in-app update signing and releasing by hand.
+- **[AGENTS.md](AGENTS.md):** architecture, conventions and how to test. Read it before changing code.
+- **[DESIGN.md](DESIGN.md):** the visual design system: tokens, typography, components, icons and layout rules.
 
 ---
 
