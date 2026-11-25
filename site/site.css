@@ -8,9 +8,9 @@
   --text: #0b0c0d;
   --muted: #5b6168;
   --faint: #686e75;
-  --accent: #00a3c4;
+  --accent: #007690;   /* the app's light accent: white on it 5.3:1 */
   --accent-ink: #ffffff;
-  --accent-soft: rgba(0, 163, 196, .10);
+  --accent-soft: rgba(0, 118, 144, .10);
   --z1: #7f7f7f; --z2: #338cff; --z3: #59bf59; --z4: #ffcc3f; --z5: #ff6639;
   --shadow: 0 1px 2px rgba(0,0,0,.05), 0 20px 50px -20px rgba(10, 20, 30, .28);
   --radius: 18px;
@@ -216,7 +216,8 @@ section.block.alt { background: var(--bg-2); border-block: 1px solid var(--line)
 .nots span { padding: 10px 16px; border-radius: 999px; border: 1px dashed var(--line-2); color: var(--muted); font-size: 15px; text-decoration: line-through; text-decoration-color: var(--z5); text-decoration-thickness: 2px; }
 
 /* big CTA */
-.final { position: relative; overflow: hidden; border-radius: 28px; padding: clamp(40px, 7vw, 90px); background: #000; color: #f4f5f6; border: 1px solid #1d1f22; }
+/* always dark, so it always uses the dark accent */
+.final { --accent: #1cc4e6; --accent-ink: #001014; position: relative; overflow: hidden; border-radius: 28px; padding: clamp(40px, 7vw, 90px); background: #000; color: #f4f5f6; border: 1px solid #1d1f22; }
 .final .bars { position: absolute; right: 3%; bottom: 0; width: 44%; height: 86%; display: flex; align-items: flex-end; gap: 6px; opacity: .85; }
 .final .bars i { flex: 1; border-radius: 6px 6px 0 0; }
 .final .copy { position: relative; max-width: 560px; }
