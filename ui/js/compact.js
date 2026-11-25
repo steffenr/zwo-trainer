@@ -89,7 +89,7 @@ export function levelView(seg, m, F) {
 /** How far (px) the text of `el` sticks out of the space its layout gives it; <= 0 means it fits. */
 function overflowOf(el) {
   const tgt = el.closest('.cp-tgt'), tile = el.closest('.cp-tile'), head = el.closest('.compact-head');
-  const foot = el.closest('.compact-foot'), ph = el.closest('.cp-ph'), dial = el.closest('.cp-dial');
+  const foot = el.closest('.compact-foot'), ph = el.closest('.cp-ph'), dial = el.closest('.cp-dial'), ring = el.closest('.seg-ring');
   if (tgt) return () => tgt.scrollWidth - tgt.clientWidth;
   if (tile) return () => tile.scrollWidth - tile.clientWidth;
   if (head) { // right-aligned row beside the macOS window buttons: what does not fit sticks out to the left of its content box
@@ -102,11 +102,13 @@ function overflowOf(el) {
   if (foot) return () => foot.scrollWidth - foot.clientWidth;
   if (ph) return () => ph.scrollWidth - ph.clientWidth;
   if (dial) return () => el.getBoundingClientRect().width - dial.clientWidth * 0.62; // the number lives inside the gauge ring
+  // full view: the target inside the Current segment ring (offsetWidth: the segment-change animation scales it)
+  if (ring) return () => el.offsetWidth - ring.clientWidth * 0.7;
   return () => el.scrollWidth - el.clientWidth;
 }
 
 /**
- * Shrink the long values of the compact view to fit: every element with data-fit="<floor px>" goes back to its
+ * Shrink the long values of the compact view (and the full view's segment ring) to fit: every element with data-fit="<floor px>" goes back to its
  * CSS size, then down 1 px at a time (never below the floor) until it no longer sticks out. Call it when such a
  * text changed its length or the window size changed, not on every tick.
  */

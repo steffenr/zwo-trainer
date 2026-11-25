@@ -94,7 +94,7 @@
 .progress-svg .g-target { stroke-width: 12; transition: d .25s linear; }
 .ring-center {
   & b {
-    font-size: 40px; line-height: 1.05; font-family: var(--num); font-weight: 750;
+    font-size: 40px; line-height: 1.05; font-family: var(--num); font-weight: 750; white-space: nowrap;
     &.range { font-size: 30px; }
   }
   /* stays inside the ring, long texts wrap */

@@ -152,6 +152,9 @@ body.riding {
   &::before { content: attr(data-msg); position: absolute; left: 50%; top: -24px; transform: translateX(-50%); color: var(--text-2); font-size: var(--fs-sm); white-space: nowrap; }
 }
 
+/* fitTexts() measures the ring's target with transitions off (see compact.js) */
+.seg-ring.fit-measuring, .seg-ring.fit-measuring * { transition: none !important; }
+
 /* ride readouts scale with the window: base size at 1400 px wide, up to 1.6× in full screen */
 @media (min-width: 1401px) {
   .ride .gauge-center b { font-size: clamp(50px, 3.571vw, 80px); }
