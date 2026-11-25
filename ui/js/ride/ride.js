@@ -171,7 +171,7 @@ class Ride {
               <div class="seg-ring">
                 <div class="ring-mount"></div>
                 <div class="ring-center">
-                  <b id="s-target">–</b>
+                  <b id="s-target" data-fit="18">–</b>
                   <small id="s-watts"></small>
                 </div>
                 <svg class="ring-check" viewBox="0 0 100 100" aria-hidden="true"><path d="M27 52 L44 68 L74 34"/></svg>
@@ -795,6 +795,9 @@ class Ride {
     this.q('s-bar').style.background = color;
     setText(this.q('s-rem'), fmtTime(Math.ceil(rem)));
     this.qs('.panel.seg').classList.toggle('closing', rem <= 5 && !!n);
+    // a long target ("218–262 W") shrinks to stay inside the ring; only when its length or the window changed
+    const fitKey = `${this.q('s-target').textContent.length}|${innerWidth}x${innerHeight}`;
+    if (fitKey !== this.segFitKey) { this.segFitKey = fitKey; fitTexts(this.qs('.seg-ring')); }
   }
 
   /** Live pacing in long all-out test efforts: running average, projected FTP, "too fast" warning (sets f.paceFast). */
