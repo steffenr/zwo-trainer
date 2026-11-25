@@ -476,16 +476,23 @@ fn garmin_status(app: State<'_, App>) -> Value {
     json!({ "connected": s["oauth1"]["token"].is_string(), "name": s["displayName"] })
 }
 
-/// May the sign-in window go to `u`? Only Garmin's own pages: the window is titled "Sign in to
-/// Garmin Connect" and carries our ticket script, so it must never show an unrelated site
-/// (Garmin's SSO flow, its embed page and the Connect redirects all stay on `garmin.com`).
-/// The ticket sentinel is handled before this in `on_navigation`.
-fn garmin_page(u: &tauri::Url) -> bool {
-    u.scheme() == "https"
-        && u.host_str().is_some_and(|h| {
-            let h = h.to_ascii_lowercase();
-            h == "garmin.com" || h.ends_with(".garmin.com")
-        })
+/// May the sign-in window follow `u`? Only what a web page navigates to: `http(s)`, `about:` and
+/// `blob:`. A login window has no business opening `file:`, `data:`, `javascript:` or an app's
+/// custom scheme (that would read local files or hand the URL to another app).
+///
+/// Hosts are deliberately **not** pinned to `garmin.com`: wry passes every navigation of the
+/// webview to this handler on all three platforms (macOS `decidePolicyForNavigationAction`,
+/// WebView2 `NavigationStarting`, WebKitGTK `decide-policy`) without saying which frame it comes
+/// from, so a host allowlist would also cancel Garmin's embedded frames — the captcha and the
+/// third-party identity providers its SSO page frames — and silently break the sign-in (and with
+/// it every Garmin upload) for anyone who gets one. A cancelled navigation is unrecoverable inside
+/// the window (it just stays blank), so nothing that could be part of the flow is blocked here;
+/// `http` stays allowed for the same reason (WebKit reports the URL before HSTS upgrades it, and
+/// Garmin's own `includeSubDomains` HSTS is what keeps it https). The window carries no IPC
+/// permission (`capabilities/default.json` lists only `main`), which is what actually keeps it
+/// harmless; the ticket sentinel is handled before this in `on_navigation`.
+fn web_page(u: &tauri::Url) -> bool {
+    matches!(u.scheme(), "http" | "https" | "about" | "blob")
 }
 
 /// "Sign in to Garmin": Garmin's own login page in an app window; the service ticket it
@@ -512,7 +519,7 @@ async fn garmin_connect(handle: tauri::AppHandle, app: State<'_, App>) -> Res<Va
                 }
                 return false;
             }
-            garmin_page(u)
+            web_page(u)
         })
         .build()
         .map_err(|e| e.to_string())?;
@@ -888,28 +895,33 @@ mod tests {
     }
 
     #[test]
-    fn garmin_signin_stays_on_garmin() {
+    fn signin_window_follows_web_pages_only() {
         for ok in [
             "https://sso.garmin.com/sso/signin?id=gauth-widget",
             "https://sso.garmin.com/sso/embed",
             "https://connect.garmin.com/modern/import-data",
-            "https://garmin.com/",
-            "https://sso.garmin.com:443/x",
+            // frames Garmin's page makes for itself, and the ones it may embed a captcha or an
+            // identity provider in: never blocked (wry can't tell a frame from the top level)
+            "about:blank",
+            "about:srcdoc",
+            "http://sso.garmin.com/sso/signin",
+            "blob:https://sso.garmin.com/1234",
+            "https://www.google.com/recaptcha/api2/anchor",
+            "https://accounts.google.com/gsi/iframe/select",
+            "https://appleid.apple.com/auth/authorize",
+            "https://zwotrainer.invalid/garmin-ticket?ticket=ST-1",
         ] {
-            assert!(garmin_page(&ok.parse().unwrap()), "{ok}");
+            assert!(web_page(&ok.parse().unwrap()), "{ok}");
         }
         for bad in [
-            "https://evil.example/garmin",
-            "https://sso.garmin.com.evil.example/",
-            "https://garmin.com.evil.example/",
-            "https://sso.garmin.com@evil.example/",
-            "https://evil.example/?next=https://sso.garmin.com",
-            "http://sso.garmin.com/sso/signin",
             "file:///etc/passwd",
-            "javascript:alert(1)",
             "data:text/html,<b>x</b>",
+            "javascript:alert(1)",
+            "garmin-connect://activity/1",
+            "mailto:a@b.c",
+            "tel:+123",
         ] {
-            assert!(!garmin_page(&bad.parse().unwrap()), "{bad}");
+            assert!(!web_page(&bad.parse().unwrap()), "{bad}");
         }
     }
 }

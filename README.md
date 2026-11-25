@@ -267,7 +267,7 @@ Every finished ride is saved as a **FIT file** with one lap per workout segment,
 
 Settings → Connections.
 
-- **Sign in** with **Sign in to Garmin**. Garmin's own login page opens in a small window, MFA supported. zwoTrainer stores only the resulting session token for that rider, never your password. The window only ever shows Garmin's own pages; if you sign in to Garmin through a third-party provider (Google, Apple…), use your Garmin e-mail and password instead.
+- **Sign in** with **Sign in to Garmin**. Garmin's own login page opens in a small window, MFA supported. zwoTrainer stores only the resulting session token for that rider, never your password.
 - **Upload mode:** *Off*, *Manual* (a button after each ride and in the history) or *Automatic*.
 - **Activity name:** every upload is named after the workout (e.g. *“5x6 Sweet Spot 1B”*), with plan and week/day in the description; Garmin would otherwise call it *“Indoor Cycling”*. Intervals.icu uploads are named the same way.
 - **Edge identity:** the file identifies as a Garmin Edge, so Garmin computes Training Effect and VO2max and counts the ride for challenges.
