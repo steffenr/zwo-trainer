@@ -776,10 +776,13 @@ class Ride {
     this.ring.update(Math.min(1, inSeg / s.duration), color);
     if (s.p0 === null) { this.q('s-target').classList.remove('range'); setText(this.q('s-target'), s.type === 'maxeffort' ? t('bigMax') : t('bigFree')); setText(this.q('s-watts'), vsActive ? t('virtualShiftingLc') : t('rideByFeel')); }
     else {
-      const a = Math.round(s.p0 * 100 * this.mult()), b = Math.round(s.p1 * 100 * this.mult());
-      setText(this.q('s-target'), allOut ? t('bigAllOut') : a === b ? pct(a) : pct(`${a}–${b}`));
-      this.q('s-target').classList.toggle('range', a !== b || allOut);
-      setText(this.q('s-watts'), allOut ? t('aimW', { w: tw, how: vsActive ? t('howShift') : t('howGears') }) : `${tw} W`);
+      // watts are the big number (a ramp shows its range), % of FTP the line under it
+      const m = this.mult();
+      const a = Math.round(s.p0 * 100 * m), b = Math.round(s.p1 * 100 * m);
+      const wa = Math.round(s.p0 * F * m), wb = Math.round(s.p1 * F * m);
+      setText(this.q('s-target'), allOut ? t('bigAllOut') : wa === wb ? `${wa} W` : `${wa}–${wb} W`);
+      this.q('s-target').classList.toggle('range', wa !== wb || allOut);
+      setText(this.q('s-watts'), allOut ? t('aimW', { w: tw, how: vsActive ? t('howShift') : t('howGears') }) : a === b ? pct(a) : pct(`${a}–${b}`));
     }
     this.q('s-target').style.color = zoneInk(tf, bounds());
     setText(this.q('s-tw'), gt != null ? `${gt} W` : allOut ? t('allOut') : t('free'));
@@ -839,13 +842,15 @@ class Ride {
       const nf = n.p0 === null ? null : ((n.p0 + n.p1) / 2) * m;
       const pa = n.p0 === null ? null : Math.round(n.p0 * 100 * m), pb = n.p0 === null ? null : Math.round(n.p1 * 100 * m);
       const wa = n.p0 === null ? null : Math.round(n.p0 * F * m), wb = n.p0 === null ? null : Math.round(n.p1 * F * m);
-      const big = n.p0 === null ? tHtml(n.type === 'maxeffort' ? 'maxEffort' : 'freeRide') : n.erg === false ? tHtml('allOut') : pa === pb ? pct(pa) : `${pct(pa)} → ${pct(pb)}`;
-      const watts = n.p0 === null ? tHtml('rideByFeel') : wa === wb ? `${wa} W` : `${wa} → ${wb} W`;
+      // watts are the big number, % of FTP the line under it (an all-out effort keeps its word and shows the aim)
+      const watts = wa === wb ? `${wa} W` : `${wa} → ${wb} W`;
+      const big = n.p0 === null ? tHtml(n.type === 'maxeffort' ? 'maxEffort' : 'freeRide') : n.erg === false ? tHtml('allOut') : watts;
+      const sub = n.p0 === null ? tHtml('rideByFeel') : n.erg === false ? watts : pa === pb ? pct(pa) : `${pct(pa)} → ${pct(pb)}`;
       const nLo = n.cadenceLow ?? n.cadence, nHi = n.cadenceHigh ?? n.cadence;
       const rpm = nLo == null ? null : `${nLo === nHi ? nLo : `${nLo}–${nHi}`} rpm`;
       zc = zoneColor(nf, bounds());
       title = nf == null ? t('freeRide') : zoneOf(nf, bounds()).name;
-      body = html`<div class="nc-txt"><b>${big}</b><span class="nc-v">${watts}</span><span class="nc-v">${fmtTime(n.duration)} min</span>${rpm && html`<span class="nc-v nc-rpm">${rpm}</span>`}</div>`;
+      body = html`<div class="nc-txt"><b class="${n.p0 !== null && n.erg !== false && wa !== wb ? 'range' : ''}">${big}</b><span class="nc-v">${sub}</span><span class="nc-v">${fmtTime(n.duration)} min</span>${rpm && html`<span class="nc-v nc-rpm">${rpm}</span>`}</div>`;
     } else {
       // last segment: "Finish strong", or after a failed ramp test the result hint
       const note = this.cooling ? tHtml('pressStopResult') : tHtml('noMoreChanges');

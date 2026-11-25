@@ -269,6 +269,8 @@ body.riding {
 .nc-txt {
   flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0;
   & b { font: 700 40px/1 var(--num); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* a ramp's watt range ("120 → 180 W") is longer than one value */
+  & b.range { font-size: 32px; }
 }
 .nc-v { font: 700 22px/1.1 var(--num); color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nc-rpm { color: var(--cad); }
@@ -279,6 +281,7 @@ body.riding {
   .ride .stat b { font-size: clamp(26px, 1.857vw, 42px); }
   .ride .seg-stats .stat b { font-size: clamp(30px, 2.1vw, 50px); }
   .ride .nc-txt b { font-size: clamp(40px, 2.8vw, 64px); }
+  .ride .nc-txt b.range { font-size: clamp(32px, 2.24vw, 51px); }
   .ride .nc-v { font-size: clamp(22px, 1.53vw, 36px); }
   .ride .live .gauge { max-width: clamp(190px, 13vw, 320px); }
   .ride .seg-left { width: clamp(210px, 14.6vw, 340px); }
