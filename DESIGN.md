@@ -165,8 +165,8 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 
 ```
 ┌ ● LIVE ∿   CONNECTED ┐ ┌ ◎ CURRENT SEGMENT                       STEADY STATE ┐ ┌ ◇ NEXT SEGMENT ──┐
-│     (watt gauge)     │ │   ╭─ 90% ─╮    ⚡ TARGET POWER   ⟳ TARGET CADENCE    │ │ ▌ 55%            │
-│        244           │ │   │ 239 W │       239 W            90 rpm           │ │ ▌ 146 W          │
+│     (watt gauge)     │ │   ╭ 239 W ╮    ⚡ TARGET POWER   ⟳ TARGET CADENCE    │ │ ▌ 146 W          │
+│        244           │ │   │  90%  │       239 W            90 rpm           │ │ ▌ 55%            │
 │       239 W          │ │   ╰───────╯    ⏱ SEGMENT         ⚑ REMAINING         │ │ ▌ 5:00 min       │
 │ ⚡ POWER   ⟳ CADENCE  │ │                   12:00 ▬▬          5:50            │ │ ▌ 85 rpm         │
 │  244 W     86 / 90   │ │                                                     │ │                  │
@@ -181,12 +181,12 @@ The workout clock (elapsed and remaining in the chart header) uses `clamp(22px, 
 - **Panel header** `.ph`: 19 px accent icon · 13 px (`--fs-sm`) uppercase label (letter-spacing .09em; grows to 16 px on wide windows) · optional status on the right (`.ph-status`, 11 px uppercase; green `ok` when connected). LIVE has a status dot (green when a trainer is connected).
 - **LIVE** `.live-body`: the watt gauge on top (centred), the four metrics below in a 2 × 2 grid. `.metric`: 19 px icon · uppercase label · value (`--num`, 22 px) + unit + muted extra (`/ 90` cadence target, `69%`) · 5 px bar (`.mbar`). Power shows only the live value (the target is on the gauge); its bar runs 0…1.5× target, coloured by the zone you're riding in. Speed: 0–60 km/h, green. Heart rate: % of max HR.
 - **Cadence target:** only when the segment has one, the cadence row shows `86 / 90 rpm` (or `/ 85–95`); the bar spans 40–130 rpm with a marker (or band, for ranges) at the target and turns **green** on target, **amber** 5–10 rpm off, **red** beyond 10 rpm — the value itself turns red too. CURRENT shows it as *Target cadence* (in `--cad`), the next-segment card as its last line.
-- **Current-segment ring** `ProgressRing`: a single progress arc in the zone colour (it reuses `Gauge` but removes the inner "actual power" track, the FTP tick and the actual arc — only the LIVE watt gauge has two arcs: outer = target, inner = actual).
+- **Current-segment ring** `ProgressRing`: a single progress arc in the zone colour (it reuses `Gauge` but removes the inner "actual power" track, the FTP tick and the actual arc — only the LIVE watt gauge has two arcs: outer = target, inner = actual). The centre shows the target in **watts** as the big number (zone ink; a ramp shows its range `119–199 W` with an en dash, smaller via `b.range`) and % of FTP on the line below (`45–75%`).
 - **Current segment** `.seg-body`: the ring on the left (`.seg-left`, 210 px, gear box below it in free-ride segments), a 2 × 2 `.seg-stats` grid on the right: target power (zone ink) · target cadence (`--cad`, `–` without a target) · segment duration with a progress bar in the zone colour · remaining (pulses in the last 5 s). Icon · label · 30 px value. Below 1180 px the ring stacks above the grid.
 - **Coach line** `.coach-line` under `.seg-body`: one message at a time, icon + 18 px semibold text, centred in a tinted box (`--cc`: accent for workout text events, `--warn`/`--danger` for cadence and pacing, `--ok` for "Back on target", the zone ink for hard-segment cues). Its height is always reserved; it fades in and out (opacity, 4 px slide) so nothing in the panel moves.
 - **Test pacing** (all-out test efforts ≥ 5 min): the ring centre shows the running effort average in zone ink, the line below it "avg · aim ~263 W" (or "too fast · ease off" in `--warn` after 1 min at > 110 % of the aim), and the first stat becomes **Est. FTP** (8/20-min efforts) or **Effort avg**. Keep both lines short so they fit inside the ring.
 - **Power ranges in stat values** (e.g. `150–113`) drop the unit and use `.stat b.range` (20 px) so they fit their column.
-- **Next-segment card** `.nx-card`: 6 px stripe in the zone colour (zone name as tooltip) and the values only, no labels or icons: `55%` (40 px), then `146 W`, `5:00 min` and, if set, `85 rpm` (22 px, `--text-2`; rpm in `--cad`).
+- **Next-segment card** `.nx-card`: 6 px stripe in the zone colour (zone name as tooltip) and the values only, no labels or icons: `146 W` (40 px; a ramp `73 → 219 W` at 32 px via `b.range`), then `55%`, `5:00 min` and, if set, `85 rpm` (22 px, `--text-2`; rpm in `--cad`).
 - **Controls row:** buttons centred horizontally and on one centre line (`align-items: center`), the larger play button in the middle. After a divider: **intensity** (`.int-group`: label + value, `--warn` when ≠ 100 %, then − / + as 48 px `.ctl` buttons; Shift-click ±10 %). It scales the whole workout, so it lives with the ride controls, not in a panel.
 - **Chart:**
   - Bars stretch (SVG `preserveAspectRatio="none"`), but **all text is HTML layered on top** (`.dg-labels`, `.dg-free`), never SVG text, so it keeps its proportions at any size.
