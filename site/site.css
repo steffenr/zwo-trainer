@@ -24,7 +24,7 @@
     --bg: #000000; --bg-2: #0b0c0d; --card: #0e0f10; --line: #1d1f22; --line-2: #2a2d31;
     --text: #f4f5f6; --muted: #a2a8af; --faint: #868c93;
     --accent: #1cc4e6; --accent-ink: #001014; --accent-soft: rgba(28, 196, 230, .12);
-    --shadow: 0 0 0 1px rgba(255,255,255,.06), 0 30px 80px -30px rgba(28, 196, 230, .25);
+    --shadow: 0 0 0 1px rgba(255,255,255,.06), 0 30px 80px -30px rgba(0, 0, 0, .8);
     color-scheme: dark;
   }
 }
@@ -32,7 +32,7 @@
   --bg: #000000; --bg-2: #0b0c0d; --card: #0e0f10; --line: #1d1f22; --line-2: #2a2d31;
   --text: #f4f5f6; --muted: #a2a8af; --faint: #868c93;
   --accent: #1cc4e6; --accent-ink: #001014; --accent-soft: rgba(28, 196, 230, .12);
-  --shadow: 0 0 0 1px rgba(255,255,255,.06), 0 30px 80px -30px rgba(28, 196, 230, .25);
+  --shadow: 0 0 0 1px rgba(255,255,255,.06), 0 30px 80px -30px rgba(0, 0, 0, .8);
   color-scheme: dark;
 }
 
@@ -341,8 +341,6 @@ html.theme-anim *, html.theme-anim *::before, html.theme-anim *::after { transit
   .howto.in li { border-top-color: transparent; background: linear-gradient(var(--c, var(--accent)), var(--c, var(--accent))) 0 0 / 0 3px no-repeat;
     background-origin: border-box;
     animation-name: mo-settle, mo-line; animation-duration: .3s, .5s; animation-fill-mode: both, forwards; }
-  /* the recommended download gets one soft accent glow, like the gauge on target */
-  .plat.featured.in { animation: mo-glow 1.4s .5s ease-out; }
   /* FAQ answers fade in when opened; theme icon turns in */
   details.faq[open] p { animation: mo-view .22s ease-out; }
   .theme-btn.swap svg { animation: mo-turn .3s var(--ease); }
@@ -355,7 +353,6 @@ html.theme-anim *, html.theme-anim *::before, html.theme-anim *::after { transit
 @keyframes mo-pop { from { opacity: 0; translate: 0 24px; } }
 @keyframes mo-strike { from { text-decoration-color: transparent; } to { text-decoration-color: var(--z5); } }
 @keyframes mo-line { to { background-size: 100% 3px; } }
-@keyframes mo-glow { 0% { box-shadow: 0 0 0 1px var(--accent) inset; } 35% { box-shadow: 0 0 0 1px var(--accent) inset, 0 0 0 6px var(--accent-soft), 0 18px 50px -20px var(--accent); } 100% { box-shadow: 0 0 0 1px var(--accent) inset; } }
 @keyframes mo-turn { from { opacity: 0; transform: rotate(-60deg) scale(.7); } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; transition-duration: .01ms !important; transition-delay: 0s !important; }
