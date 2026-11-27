@@ -19,6 +19,13 @@ No video courses, workout builder, music or subscription. You get a workout disp
 
 Built with **Tauri 2**: a Rust core and a plain HTML/CSS/JS interface, with no Node and no bundler. Zone colours follow the classic Zwift / WhatsOnZwift palette.
 
+## Support
+
+zwoTrainer is a spare-time project and stays free software. If it is useful to you:
+
+<a href="https://buymeacoffee.com/steffenr"><img
+  src="https://camo.githubusercontent.com/c28781810ec561314c0480f2a773391df0006ce9f6fc92c1e36dee408ab2869e/68747470733a2f2f63646e2e6275796d6561636f666665652e636f6d2f627574746f6e732f76322f64656661756c742d79656c6c6f772e706e67"
+  alt="Buy Me a Coffee" width="150" height="42"></a>
 ---
 
 ## Contents
